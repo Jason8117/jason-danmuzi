@@ -1,0 +1,1 @@
+{"timestamp":"2026-11-20T10:28:44Z","event_key":"tool_failure:Bash:UnknownFailure","summary":"Exit code 128\na7b5244\nmain\nAuthor identity unknown\n\n*** Please tell me who you are.\n\nRun\n\n  git config --global user.email \"you@example.com\"\n  git config --global user.name \"Your Name\"\n\nto set your ac…","source":"tool:Bash"}
