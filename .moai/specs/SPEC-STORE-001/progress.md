@@ -44,7 +44,27 @@ AssertionError: expected 0 to be greater than 0
 
 RED reason as observed: the current `open()` has no injection point, so the injected failing layer was never called (writes counted 0). The literal crash (unhandled `EACCES`) is reproduced on the real file system by AC-002 in M4.
 
-GREEN (full suite, exit 0; log `m1-green.txt`): `Test Files 4 passed (4)`, `Tests 36 passed (36)`; `npm run typecheck` exit 0.
+GREEN (full suite, exit 0; log `m1-green.txt`): `Test Files 4 passed (4)`, `Tests 36 passed (36)`; `npm run typecheck` exit 0. Commit `4f1272b`.
+
+### M2 — retry and recovery (AC-005 … AC-010)
+
+RED (`npm --prefix server test -- src/store/taskStore.test.ts`, after M1, exit 1; log `m2-red.txt`):
+
+```
+     × logs each failed write once with path, code and count 26ms
+     × retries with capped exponential backoff 24ms
+     × the next successful write persists the full current state 23ms
+     × logs recovery once and resets the backoff 23ms
+AssertionError: expected undefined to be 'Store write failed' // Object.is equality
+AssertionError: expected 1 to be 2 // Object.is equality
+AssertionError: expected 2 to be 3 // Object.is equality
+AssertionError: expected 2 to be 3 // Object.is equality
+      Tests  4 failed | 5 passed (9)
+```
+
+Not RED on the M1 code, as observed: "coalesces saves while a retry is pending" (AC-007; with no retry yet, the debounce already merged the five saves into one write) and "a failed write leaves the previous file intact" (AC-010; acceptance.md marks it protective — the temp-file + rename write already preserved the file). Both are kept as guards.
+
+GREEN (full suite, exit 0; log `m2-green.txt`): `Test Files 4 passed (4)`, `Tests 42 passed (42)`; `npm run typecheck` exit 0.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

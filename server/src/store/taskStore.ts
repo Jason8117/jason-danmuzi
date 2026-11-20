@@ -3,6 +3,9 @@ import { dirname } from "node:path";
 import type { CallTask } from "../domain/types.js";
 import { logger as defaultLogger, type Logger } from "../logger.js";
 
+export const STORE_WRITE_FAILED = "Store write failed";
+export const STORE_WRITE_RECOVERED = "Store write recovered";
+
 /** The file system calls the store needs; injectable so tests can simulate disk failures. */
 export interface StoreFs {
   readFile(path: string, encoding: "utf8"): Promise<string>;
@@ -15,6 +18,10 @@ export interface JsonFileTaskStoreOptions {
   fs?: StoreFs;
   logger?: Logger;
   debounceMs?: number;
+  /** Delay before the first retry after a failed write; doubles per failure up to `retryMaxMs`. */
+  retryInitialMs?: number;
+  retryMultiplier?: number;
+  retryMaxMs?: number;
 }
 
 export interface TaskStore {
@@ -58,6 +65,10 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   private readonly fs: StoreFs;
   private readonly logger: Logger;
   private readonly debounceMs: number;
+  private readonly retryInitialMs: number;
+  private readonly retryMultiplier: number;
+  private readonly retryMaxMs: number;
+  private consecutiveFailures = 0;
 
   private constructor(
     private readonly path: string,
@@ -67,6 +78,9 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
     this.fs = options.fs ?? nodeFs;
     this.logger = options.logger ?? defaultLogger;
     this.debounceMs = options.debounceMs ?? 300;
+    this.retryInitialMs = options.retryInitialMs ?? 1000;
+    this.retryMultiplier = options.retryMultiplier ?? 2;
+    this.retryMaxMs = options.retryMaxMs ?? 30_000;
   }
 
   static async open(path: string, options: JsonFileTaskStoreOptions = {}): Promise<JsonFileTaskStore> {
@@ -94,7 +108,34 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   override async flush(): Promise<void> {
     clearTimeout(this.timer);
     this.timer = undefined;
-    await this.write();
+    try {
+      await this.write();
+    } catch (error) {
+      this.retryLater(error);
+      throw error;
+    }
+    if (this.consecutiveFailures > 0) {
+      this.logger.info({ path: this.path, consecutiveFailures: this.consecutiveFailures }, STORE_WRITE_RECOVERED);
+      this.consecutiveFailures = 0;
+    }
+  }
+
+  /**
+   * Logs the failure and schedules the next attempt with capped exponential backoff.
+   * Attempts never stop while changes are unsaved; the retry timer absorbs further saves.
+   */
+  private retryLater(error: unknown): void {
+    this.consecutiveFailures++;
+    const code = (error as NodeJS.ErrnoException).code;
+    this.logger.error({ path: this.path, code, consecutiveFailures: this.consecutiveFailures }, STORE_WRITE_FAILED);
+    const delay = Math.min(this.retryInitialMs * this.retryMultiplier ** (this.consecutiveFailures - 1), this.retryMaxMs);
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.flushInBackground(), delay);
+  }
+
+  /** Timer-started flushes have no caller to report to; failures are already logged and retried. */
+  private flushInBackground(): void {
+    this.flush().catch(() => {});
   }
 
   /** Queues one write; the snapshot is taken when the write starts, so it holds the latest state. */
@@ -112,6 +153,6 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
 
   private schedule(): void {
     if (this.timer) return;
-    this.timer = setTimeout(() => void this.flush().catch(() => {}), this.debounceMs);
+    this.timer = setTimeout(() => this.flushInBackground(), this.debounceMs);
   }
 }
