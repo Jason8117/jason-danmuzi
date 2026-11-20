@@ -1,6 +1,21 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import * as nodeFs from "node:fs/promises";
 import { dirname } from "node:path";
 import type { CallTask } from "../domain/types.js";
+import { logger as defaultLogger, type Logger } from "../logger.js";
+
+/** The file system calls the store needs; injectable so tests can simulate disk failures. */
+export interface StoreFs {
+  readFile(path: string, encoding: "utf8"): Promise<string>;
+  writeFile(path: string, data: string, encoding: "utf8"): Promise<void>;
+  rename(from: string, to: string): Promise<void>;
+  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
+}
+
+export interface JsonFileTaskStoreOptions {
+  fs?: StoreFs;
+  logger?: Logger;
+  debounceMs?: number;
+}
 
 export interface TaskStore {
   list(): CallTask[];
@@ -38,16 +53,26 @@ export class InMemoryTaskStore implements TaskStore {
  */
 export class JsonFileTaskStore extends InMemoryTaskStore {
   private timer: NodeJS.Timeout | undefined;
+  /** Serializes writes. Never rejects, so one failed write cannot fail the next one. */
   private writing: Promise<void> = Promise.resolve();
+  private readonly fs: StoreFs;
+  private readonly logger: Logger;
+  private readonly debounceMs: number;
 
-  private constructor(private readonly path: string) {
+  private constructor(
+    private readonly path: string,
+    options: JsonFileTaskStoreOptions,
+  ) {
     super();
+    this.fs = options.fs ?? nodeFs;
+    this.logger = options.logger ?? defaultLogger;
+    this.debounceMs = options.debounceMs ?? 300;
   }
 
-  static async open(path: string): Promise<JsonFileTaskStore> {
-    const store = new JsonFileTaskStore(path);
+  static async open(path: string, options: JsonFileTaskStoreOptions = {}): Promise<JsonFileTaskStore> {
+    const store = new JsonFileTaskStore(path, options);
     try {
-      const raw = await readFile(path, "utf8");
+      const raw = await store.fs.readFile(path, "utf8");
       for (const task of JSON.parse(raw) as CallTask[]) store.tasks.set(task.id, { ...task, version: task.version ?? 0 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -69,18 +94,24 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   override async flush(): Promise<void> {
     clearTimeout(this.timer);
     this.timer = undefined;
-    const snapshot = JSON.stringify(this.list(), null, 2);
-    this.writing = this.writing.then(async () => {
-      await mkdir(dirname(this.path), { recursive: true });
+    await this.write();
+  }
+
+  /** Queues one write; the snapshot is taken when the write starts, so it holds the latest state. */
+  private write(): Promise<void> {
+    const run = this.writing.then(async () => {
+      const snapshot = JSON.stringify(this.list(), null, 2);
+      await this.fs.mkdir(dirname(this.path), { recursive: true });
       const tmp = `${this.path}.tmp`;
-      await writeFile(tmp, snapshot, "utf8");
-      await rename(tmp, this.path);
+      await this.fs.writeFile(tmp, snapshot, "utf8");
+      await this.fs.rename(tmp, this.path);
     });
-    await this.writing;
+    this.writing = run.catch(() => {});
+    return run;
   }
 
   private schedule(): void {
     if (this.timer) return;
-    this.timer = setTimeout(() => void this.flush(), 300);
+    this.timer = setTimeout(() => void this.flush().catch(() => {}), this.debounceMs);
   }
 }
