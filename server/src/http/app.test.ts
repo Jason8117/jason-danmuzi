@@ -115,4 +115,50 @@ describe("CallMate API", () => {
     const deleted = await app.inject({ method: "DELETE", url: `/v1/tasks/${id}`, headers: auth });
     expect(deleted.statusCode).toBe(204);
   });
+
+  it("stores an optional approval comment and rejects duplicate decisions", async () => {
+    const { id } = (await createTask()).json<CallTask>();
+    await waitFor(app, id, (t) => t.status === "awaiting_approval");
+    await app.inject({ method: "POST", url: `/v1/tasks/${id}/approve-plan`, headers: auth, payload: {} });
+
+    const waiting = await waitFor(app, id, (t) => t.approvals.some((a) => a.status === "pending"));
+    const approval = waiting.approvals[0]!;
+
+    const decided = await app.inject({
+      method: "POST",
+      url: `/v1/tasks/${id}/approvals/${approval.id}`,
+      headers: auth,
+      payload: { decision: "approve", comment: "  1만 원까지만  " },
+    });
+    expect(decided.statusCode).toBe(200);
+    const stored = decided.json<CallTask>().approvals[0];
+    expect(stored?.status).toBe("approved");
+    expect(stored?.userComment).toBe("1만 원까지만");
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: `/v1/tasks/${id}/approvals/${approval.id}`,
+      headers: auth,
+      payload: { decision: "reject" },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error).toBe("approval_closed");
+  });
+
+  it("rejects approval comments longer than 500 characters", async () => {
+    const { id } = (await createTask()).json<CallTask>();
+    await waitFor(app, id, (t) => t.status === "awaiting_approval");
+    await app.inject({ method: "POST", url: `/v1/tasks/${id}/approve-plan`, headers: auth, payload: {} });
+    const waiting = await waitFor(app, id, (t) => t.approvals.some((a) => a.status === "pending"));
+    const approval = waiting.approvals[0]!;
+
+    const tooLong = "가".repeat(501);
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/tasks/${id}/approvals/${approval.id}`,
+      headers: auth,
+      payload: { decision: "approve", comment: tooLong },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

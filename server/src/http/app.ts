@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { timingSafeEqual } from "node:crypto";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
@@ -8,7 +9,7 @@ import type { AppConfig } from "../config.js";
 import { isBlockedNumber, normalizePhoneNumber } from "../domain/phone.js";
 import { InvalidTransitionError } from "../domain/stateMachine.js";
 import type { EventBus } from "../events/eventBus.js";
-import type { TwilioCallProvider } from "../providers/twilio/twilioProvider.js";
+import type { KatCallProvider } from "../providers/kat/katProvider.js";
 import { type CallService, ServiceError } from "../services/callService.js";
 import { ApprovalDecisionBody, ApprovalParams, ApprovePlanBody, CreateTaskBody, TaskParams } from "./schemas.js";
 
@@ -16,9 +17,11 @@ export interface AppDeps {
   config: Pick<AppConfig, "API_TOKEN" | "CORS_ORIGINS" | "provider" | "llm">;
   calls: CallService;
   bus: EventBus;
-  twilio?: TwilioCallProvider;
+  kat?: KatCallProvider;
   logger?: boolean;
 }
+
+type RequestWithRawBody = FastifyRequest & { rawBody?: string };
 
 function tokenMatches(expected: string, provided: string | undefined): boolean {
   if (!provided) return false;
@@ -36,7 +39,7 @@ function providedToken(request: FastifyRequest): string | undefined {
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { config, calls, bus, twilio } = deps;
+  const { config, calls, bus, kat } = deps;
   const app = Fastify({
     logger:
       deps.logger === false
@@ -61,6 +64,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       methods: ["GET", "POST", "DELETE"],
     });
   }
+
+  // KAT webhook signatures are computed over the exact raw body bytes.
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    if (!request.url.startsWith("/kat/")) return payload;
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const raw = Buffer.concat(chunks);
+    (request as RequestWithRawBody).rawBody = raw.toString("utf8");
+    return Readable.from(raw);
+  });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
@@ -92,7 +107,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/v1/config", async () => ({
     provider: config.provider,
     brain: config.llm,
-    realCalls: config.provider === "twilio",
+    realCalls: config.provider === "kat",
   }));
 
   app.get("/v1/tasks", async () => ({ tasks: calls.list() }));
@@ -119,8 +134,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.post("/v1/tasks/:id/approvals/:approvalId", async (request) => {
     const { id, approvalId } = ApprovalParams.parse(request.params);
-    const { decision } = ApprovalDecisionBody.parse(request.body);
-    return calls.respondToApproval(id, approvalId, decision === "approve");
+    const { decision, comment } = ApprovalDecisionBody.parse(request.body ?? {});
+    return calls.respondToApproval(id, approvalId, {
+      approve: decision === "approve",
+      comment,
+    });
   });
 
   app.delete("/v1/tasks/:id", async (request, reply) => {
@@ -141,18 +159,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   });
 
-  if (twilio) {
-    app.post("/twilio/status/:id", async (request, reply) => {
-      const params = request.body as Record<string, string>;
-      const signature = request.headers["x-twilio-signature"] as string | undefined;
-      if (!twilio.isValidSignature(signature, request.url, params)) {
-        return reply.status(403).send({ error: "invalid_signature" });
+  if (kat) {
+    app.post("/kat/status", async (request, reply) => {
+      const rawBody = (request as RequestWithRawBody).rawBody ?? "";
+      if (!kat.isValidHttpWebhook(request.headers, rawBody)) {
+        return reply.status(401).send({ error: "invalid_signature" });
       }
-      twilio.handleStatusCallback(TaskParams.parse(request.params).id, params);
+      kat.handleStatusWebhook(request.body as { data?: Record<string, unknown> });
       return reply.status(204).send();
     });
 
-    app.get("/twilio/media", { websocket: true }, (socket) => twilio.attachMediaStream(socket));
+    app.get("/kat/media", { websocket: true }, (socket, request) => {
+      kat.attachMediaStream(socket, request.raw);
+    });
   }
 
   return app;

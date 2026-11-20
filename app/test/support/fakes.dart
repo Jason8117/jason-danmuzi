@@ -42,7 +42,7 @@ Map<String, dynamic> taskJson({
   };
 }
 
-Map<String, dynamic> approvalJson({String status = 'pending'}) {
+Map<String, dynamic> approvalJson({String status = 'pending', String? userComment}) {
   final now = DateTime.now().toUtc();
   return {
     'id': 'approval-1',
@@ -50,6 +50,7 @@ Map<String, dynamic> approvalJson({String status = 'pending'}) {
     'status': status,
     'requestedAt': now.toIso8601String(),
     'expiresAt': now.add(const Duration(seconds: 90)).toIso8601String(),
+    if (userComment != null) 'userComment': userComment,
   };
 }
 
@@ -76,7 +77,7 @@ class FakeCallsRepository extends CallsRepository {
   FakeCallsRepository(this.tasks) : super(ApiClient(baseUrl: 'http://fake.invalid', token: ''));
 
   List<CallTask> tasks;
-  final decisions = <({String approvalId, bool approve})>[];
+  final decisions = <({String approvalId, bool approve, String? comment})>[];
   final live = FakeLiveConnection();
   CallTask? nextCreated;
 
@@ -90,9 +91,15 @@ class FakeCallsRepository extends CallsRepository {
   Future<ServerInfo> serverInfo() async => const ServerInfo(realCalls: false, brain: 'heuristic');
 
   @override
-  Future<CallTask> decide(String taskId, String approvalId, {required bool approve}) async {
-    decisions.add((approvalId: approvalId, approve: approve));
-    return CallTask.fromJson(taskJson(approvals: [approvalJson(status: approve ? 'approved' : 'rejected')]));
+  Future<CallTask> decide(String taskId, String approvalId, {required bool approve, String? comment}) async {
+    decisions.add((approvalId: approvalId, approve: approve, comment: comment));
+    return CallTask.fromJson(
+      taskJson(
+        approvals: [
+          approvalJson(status: approve ? 'approved' : 'rejected', userComment: comment),
+        ],
+      ),
+    );
   }
 
   @override

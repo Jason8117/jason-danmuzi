@@ -4,10 +4,10 @@ AI가 대신 전화를 걸어 주는 개인 비서 앱입니다. 식당 예약, 
 
 - **앱**: Flutter (iOS · Android), `app/`
 - **서버**: Node.js + TypeScript (Fastify), `server/`
-- **실제 통화**: Twilio(발신) + OpenAI Realtime(음성 AI)
+- **실제 통화**: KAT Cloud(발신·070) + OpenAI Realtime(음성 AI)
 - **키가 없을 때**: 통화 시뮬레이터로 전체 흐름을 그대로 체험 가능
 
-설계 문서는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
+설계 문서는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 제품 고도화·개인 비서 로드맵은 [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md)에 있습니다.
 
 ## 사용 흐름
 
@@ -42,20 +42,24 @@ flutter run            # iOS 시뮬레이터 또는 Android 에뮬레이터 선�
 - 빌드할 때 서버 주소를 고정하려면 `--dart-define=CALLMATE_SERVER_URL=https://...`를 쓰세요.
 - 웹에서 확인하려면 서버를 `CORS_ORIGINS=http://localhost:<포트>`로 실행한 뒤 `flutter run -d chrome --web-port <포트>`를 실행하세요.
 
-## 실제 전화 걸기
+## 실제 전화 걸기 (KAT Cloud)
 
-`server/.env.example`을 `server/.env`로 복사하고 아래 값을 채우면 서버가 자동으로 실제 통화 모드로 바뀝니다.
+1. [KAT Cloud](https://katcloud.kr/)에 가입해 070 번호와 API 키를 받습니다.
+2. `GET /group`으로 `groupId`를, `GET /webhook/secret`으로 `whsec_…` 서명을 확인합니다.
+3. `server/.env.example`을 `server/.env`로 복사하고 아래 값을 채웁니다.
+4. 서버가 한국에서 도달 가능한 `PUBLIC_BASE_URL`(https, 예: Cloudflare Tunnel)을 켭니다. KAT API는 **한국 IP**에서만 호출됩니다.
 
 | 변수 | 설명 |
 | --- | --- |
 | `API_TOKEN` | 앱이 서버에 접근할 때 쓰는 토큰(실제 통화 모드에서는 필수). 앱 설정에 같은 값을 입력 |
 | `OPENAI_API_KEY` | 통화 계획·요약과 음성 AI에 사용 |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` | Twilio 계정과 발신 번호 |
-| `PUBLIC_BASE_URL` | Twilio가 서버에 접근할 공개 https 주소(예: ngrok, Cloudflare Tunnel) |
+| `KAT_API_KEY` | KAT Cloud 콘솔 API 키 (`x-api-key`) |
+| `KAT_GROUP_ID` | `GET /group`으로 확인한 그룹 ID |
+| `KAT_FROM_NUMBER` | 발신에 쓸 070 번호 (그룹 번호) |
+| `KAT_WEBHOOK_SECRET` | `GET /webhook/secret` 값 (`whsec_…`) |
+| `PUBLIC_BASE_URL` | KAT가 서버에 접근할 공개 https 주소 |
 
 `OPENAI_API_KEY`만 넣으면, 통화는 시뮬레이션이지만 계획과 요약은 LLM이 만듭니다.
-
-> 한국 번호로 발신할 때는 발신번호가 해외 번호로 표시될 수 있습니다. 자세한 내용은 설계 문서의 "한국에서 실제 통화를 걸 때의 과제"를 참고하세요.
 
 ## 테스트
 
@@ -69,7 +73,7 @@ cd app && flutter analyze && flutter test
 ```text
 server/src
   brain/        통화 계획·요약 (OpenAI / 규칙 기반), 음성 AI 지시문
-  providers/    통화 공급자 (시뮬레이터, Twilio + OpenAI Realtime)
+  providers/    통화 공급자 (시뮬레이터, KAT Cloud + OpenAI Realtime)
   services/     CallService: 상태 머신, 통화 중 승인, 한도
   http/         REST · WebSocket API
 app/lib

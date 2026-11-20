@@ -4,8 +4,8 @@ import type { CallBrain } from "./brain/types.js";
 import type { AppConfig } from "./config.js";
 import { EventBus } from "./events/eventBus.js";
 import type { Logger } from "./logger.js";
+import { KatCallProvider } from "./providers/kat/katProvider.js";
 import { SimulatedCallProvider } from "./providers/simulatedProvider.js";
-import { TwilioCallProvider } from "./providers/twilio/twilioProvider.js";
 import type { CallProvider } from "./providers/types.js";
 import { CallService } from "./services/callService.js";
 import type { TaskStore } from "./store/taskStore.js";
@@ -13,7 +13,7 @@ import type { TaskStore } from "./store/taskStore.js";
 export interface Container {
   calls: CallService;
   bus: EventBus;
-  twilio?: TwilioCallProvider;
+  kat?: KatCallProvider;
 }
 
 /** Wires concrete implementations from configuration. The only place that knows which ones exist. */
@@ -25,15 +25,17 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
       ? new OpenAiBrain(config.OPENAI_API_KEY, config.OPENAI_MODEL, log)
       : new HeuristicBrain();
 
-  let twilio: TwilioCallProvider | undefined;
+  let kat: KatCallProvider | undefined;
   let provider: CallProvider;
-  if (config.provider === "twilio") {
-    twilio = new TwilioCallProvider(
+  if (config.provider === "kat") {
+    kat = new KatCallProvider(
       {
-        accountSid: config.TWILIO_ACCOUNT_SID!,
-        authToken: config.TWILIO_AUTH_TOKEN!,
-        fromNumber: config.TWILIO_FROM_NUMBER!,
+        apiKey: config.KAT_API_KEY!,
+        groupId: config.KAT_GROUP_ID!,
+        fromNumber: config.KAT_FROM_NUMBER!,
+        webhookSecret: config.KAT_WEBHOOK_SECRET!,
         publicBaseUrl: config.PUBLIC_BASE_URL!,
+        apiBaseUrl: config.KAT_API_BASE_URL,
         realtime: {
           apiKey: config.OPENAI_API_KEY!,
           model: config.OPENAI_REALTIME_MODEL,
@@ -42,7 +44,7 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
       },
       log,
     );
-    provider = twilio;
+    provider = kat;
   } else {
     provider = new SimulatedCallProvider(config.SIMULATION_SPEED);
   }
@@ -54,5 +56,5 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
     maxCallDurationMs: config.MAX_CALL_DURATION_SEC * 1000,
   });
 
-  return { calls, bus, twilio };
+  return { calls, bus, kat };
 }

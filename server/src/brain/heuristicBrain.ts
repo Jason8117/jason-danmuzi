@@ -35,9 +35,16 @@ export class HeuristicBrain implements CallBrain {
     const rejected = task.approvals.filter((a) => a.status === "rejected" || a.status === "expired");
 
     if (calleeLines.length === 0) {
+      const answeredButSilent = Boolean(task.connectedAt);
       return {
         result: "failed",
-        summary: ko ? "상대방과 연결되지 않았습니다." : "The call did not connect.",
+        summary: ko
+          ? answeredButSilent
+            ? "상대가 전화를 받았지만 대화가 기록되지 않았습니다. 음성 스트림/AI 연결을 확인해 주세요."
+            : "상대방과 연결되지 않았습니다."
+          : answeredButSilent
+            ? "The callee answered but no conversation was recorded. Check the media/AI bridge."
+            : "The call did not connect.",
         keyFacts: [],
         followUps: [ko ? "잠시 후 다시 시도해 보세요." : "Try again later."],
       };

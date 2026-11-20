@@ -1,4 +1,4 @@
-import type { CallTask, Speaker } from "../domain/types.js";
+import type { ApprovalDecision, CallTask, Speaker } from "../domain/types.js";
 
 export interface EndOptions {
   /** Set when the call could not be completed (no answer, busy, provider error). */
@@ -18,13 +18,16 @@ export interface CallSession {
   markRinging(): void;
   markConnected(): void;
   appendTranscript(speaker: Speaker, text: string): void;
-  /** Pauses for the user's decision. Resolves false on rejection, timeout or hang-up. */
-  requestApproval(question: string): Promise<boolean>;
+  /**
+   * Pauses for the user's decision. Resolves with approved=false on rejection,
+   * timeout, or hang-up. Optional comment is user guidance for the agent.
+   */
+  requestApproval(question: string): Promise<ApprovalDecision>;
   end(options?: EndOptions): void;
 }
 
 export interface CallProvider {
-  readonly name: "simulated" | "twilio";
+  readonly name: "simulated" | "kat";
   /** Starts dialing. Resolves once the call is initiated, not when it ends. */
   start(session: CallSession): Promise<void>;
   /** Hangs up an active call. Must be safe to call more than once. */

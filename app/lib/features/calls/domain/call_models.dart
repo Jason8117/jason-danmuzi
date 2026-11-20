@@ -114,6 +114,7 @@ class ApprovalRequest {
     required this.status,
     required this.requestedAt,
     required this.expiresAt,
+    this.userComment,
   });
 
   factory ApprovalRequest.fromJson(Map<String, dynamic> json) => ApprovalRequest(
@@ -122,6 +123,7 @@ class ApprovalRequest {
         status: _enumByName(ApprovalStatus.values, json['status'], ApprovalStatus.expired),
         requestedAt: _date(json['requestedAt']) ?? DateTime.now(),
         expiresAt: _date(json['expiresAt']) ?? DateTime.now(),
+        userComment: json['userComment'] as String?,
       );
 
   final String id;
@@ -129,6 +131,8 @@ class ApprovalRequest {
   final ApprovalStatus status;
   final DateTime requestedAt;
   final DateTime expiresAt;
+  /// Optional guidance the user attached when approving or rejecting.
+  final String? userComment;
 
   bool get isPending => status == ApprovalStatus.pending;
 }
@@ -195,7 +199,7 @@ class CallTask {
             .toList(growable: false),
         outcome: json['outcome'] == null ? null : CallOutcome.fromJson(json['outcome'] as Map<String, dynamic>),
         error: json['error'] as String?,
-        isSimulated: json['provider'] != 'twilio',
+        isSimulated: json['provider'] == 'simulated',
         createdAt: _date(json['createdAt']) ?? DateTime.now(),
         updatedAt: _date(json['updatedAt']) ?? DateTime.now(),
         connectedAt: _date(json['connectedAt']),

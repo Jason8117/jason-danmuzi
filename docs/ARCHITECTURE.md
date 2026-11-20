@@ -29,7 +29,7 @@ iOS와 Android 모두 앱이 일반 전화 통화의 음성을 가로채거나 A
 그래서 Pickle, Google Duplex 같은 서비스도 모두 **서버에서 전화망(PSTN)으로 발신**합니다.
 
 ```text
-[Flutter 앱] ──REST/WebSocket──> [CallMate 서버] ──Twilio──> 전화망 ──> 상대방 전화기
+[Flutter 앱] ──REST/WebSocket──> [CallMate 서버] ──KAT Cloud──> 한국 전화망 ──> 상대방 전화기
                                        │
                                        └──WebSocket──> OpenAI Realtime (음성 AI)
 ```
@@ -43,7 +43,7 @@ iOS와 Android 모두 앱이 일반 전화 통화의 음성을 가로채거나 A
 | 구현 | 언제 | 역할 |
 | --- | --- | --- |
 | `SimulatedCallProvider` | 키가 없을 때(기본값) | 시나리오 기반 가상 통화. 개발·데모·테스트용 |
-| `TwilioCallProvider` | Twilio + OpenAI 키가 모두 있을 때 | 실제 발신 + 음성 AI 연결 |
+| `KatCallProvider` | KAT Cloud + OpenAI 키가 모두 있을 때 | 실제 발신(070) + 음성 AI 연결 |
 
 국내 통신사 기반 CPaaS로 바꾸고 싶다면 `CallProvider`만 새로 구현하면 됩니다. 상태 관리·승인·요약 로직은 그대로 재사용됩니다.
 
@@ -90,8 +90,8 @@ flowchart LR
 
   REPO -- REST --> HTTP
   HTTP -- WebSocket 스냅샷 --> REPO
-  PROV -- 발신 / 상태 콜백 --> TW[Twilio]
-  TW -- Media Stream μ-law --> PROV
+  PROV -- 발신 / 상태 웹훅 --> KAT[KAT Cloud]
+  KAT -- Media Stream μ-law --> PROV
   PROV -- 음성 + 도구 호출 --> RT[OpenAI Realtime]
   BRAIN --> LLM[OpenAI Chat]
 ```
@@ -129,8 +129,8 @@ flowchart LR
 | `brain/` | 계획·요약(`OpenAiBrain`, `HeuristicBrain`), 음성 AI 지시문(`prompts.ts`) | domain |
 | `providers/types.ts` | `CallProvider` / `CallSession` 계약 | domain |
 | `providers/simulatedProvider.ts` | 시나리오 기반 가상 통화 | brain/scenario |
-| `providers/twilio/twilioProvider.ts` | Twilio 발신, 상태 콜백 서명 검증, Media Stream 인증 | twilio SDK |
-| `providers/twilio/realtimeBridge.ts` | Twilio 오디오 ↔ OpenAI Realtime 중계, 도구 호출 처리, 끼어들기(barge-in) | ws |
+| `providers/kat/katProvider.ts` | KAT Cloud 발신, 상태·스트림 서명 검증, Media Stream 인증 | fetch |
+| `providers/realtimeBridge.ts` | G.711 미디어 스트림 ↔ OpenAI Realtime 중계, 도구 호출, 끼어들기(barge-in) | ws |
 | `services/callService.ts` | 작업 생명주기, 승인 대기/만료, 한도, 요약 트리거, 재시작 복구 | 위 전부(인터페이스로) |
 | `store/taskStore.ts` | 메모리 + JSON 파일 원자적 저장(임시 파일 → rename) | - |
 | `events/eventBus.ts` | 작업 스냅샷 발행/구독 | - |
@@ -238,18 +238,18 @@ sequenceDiagram
   S-->>A: 스냅샷 (completed + 요약)
 ```
 
-### 7.2 실제 통화의 음성 경로 (Twilio + OpenAI Realtime)
+### 7.2 실제 통화의 음성 경로 (KAT Cloud + OpenAI Realtime)
 
-1. 서버가 Twilio REST API로 발신하면서 TwiML `<Connect><Stream>`을 넘깁니다.
-2. 상대방이 받으면 Twilio가 서버의 `/twilio/media` WebSocket으로 8kHz μ-law 오디오를 보냅니다.
-   - Twilio는 스트림 URL의 쿼리를 버리므로, 작업 ID와 **1회용 토큰**을 `<Parameter>`로 보내고 서버가 상수 시간 비교로 검증합니다.
-3. 서버는 같은 μ-law 형식으로 OpenAI Realtime에 그대로 전달합니다(변환 없음 → 지연 최소화).
-4. AI 음성은 반대 방향으로 Twilio에 전달되고, 상대방이 말을 시작하면 `clear`로 AI 음성을 즉시 멈춥니다(끼어들기).
+1. 서버가 KAT Cloud `POST /group/{groupId}/media-stream/calls`로 발신하며 `streamUrl`(wss)과 `statusCallbackUrl`을 넘깁니다.
+2. 상대방이 받으면 KAT가 서버의 `/kat/media` WebSocket으로 연결하고 8kHz μ-law(PCMU) 오디오를 보냅니다.
+   - 업그레이드 요청의 `X-Webhook-Signature`를 검증하고, `metadata`의 작업 ID·1회용 토큰을 `start.customParameters`로 다시 확인합니다.
+3. 서버는 같은 μ-law 형식으로 OpenAI Realtime에 그대로 전달합니다(변환 없음 → 지연 최소화). KAT 프레임은 Twilio Media Streams와 호환됩니다.
+4. AI 음성은 반대 방향으로 KAT에 전달되고, 상대방이 말을 시작하면 `clear`로 AI 음성을 즉시 멈춥니다(끼어들기).
 5. 양쪽 발화의 텍스트 변환 결과가 자막으로 저장·방송됩니다.
 6. AI는 두 개의 도구만 쓸 수 있습니다.
    - `request_user_approval(question)`: 사용자 승인 대기 → 결과를 AI에 돌려줌
    - `end_call(reason)`: 작별 인사 음성이 전달될 시간을 두고 통화 종료
-7. Twilio 상태 콜백(`/twilio/status/:id`)은 `X-Twilio-Signature` 서명을 검증한 뒤에만 처리합니다.
+7. 상태 웹훅(`/kat/status`)은 `X-Webhook-Signature`(원문 body HMAC)를 검증한 뒤에만 처리합니다.
 
 ---
 
@@ -300,7 +300,7 @@ interface CallTask {
   approvals: ApprovalRequest[];
   outcome?: CallOutcome;
   error?: string;
-  provider: "simulated" | "twilio";
+  provider: "simulated" | "kat";
   createdAt: string;
   startedAt?: string;
   connectedAt?: string;
@@ -329,21 +329,25 @@ interface CallTask {
 
 ---
 
-## 11. 한국에서 실제 통화를 걸 때의 과제
+## 11. 한국에서 실제 통화를 걸 때
 
-- Twilio로 한국 번호에 발신은 가능하지만, 발신번호가 해외 번호로 표시되어 상대방이 받지 않거나 스팸으로 분류될 수 있습니다.
-- 한국 발신번호(070/1588 등)를 쓰려면 국내 통신사 기반 CPaaS가 필요할 수 있습니다. 어떤 업체가 실시간 오디오 스트리밍을 지원하는지는 **추가 조사가 필요**합니다.
-- 구조상 `CallProvider`만 새로 구현하면 되므로, 나머지 코드는 바꿀 필요가 없습니다.
+- 실제 발신은 **KAT Cloud**(한국에이아이통신) 미디어 스트림 API를 사용합니다. 발신번호는 그룹의 **070** 번호입니다.
+- KAT REST API는 **한국 IP**에서만 호출됩니다(`403 GL011`). 로컬 개발 시에도 서버 프로세스는 한국 네트워크에 있어야 합니다.
+- `PUBLIC_BASE_URL`은 KAT가 WebSocket·웹훅으로 도달할 수 있는 공개 https/wss 주소여야 합니다.
+- 다른 국내 CPaaS로 바꾸려면 `CallProvider`만 새로 구현하면 됩니다.
 
 ---
 
 ## 12. 로드맵
 
+제품·개인 비서 확장(승인 코멘트, 커넥터, Pickle 벤치마크 등)의 상세는 **[PRODUCT_ROADMAP.md](./PRODUCT_ROADMAP.md)** 를 본다. 아래는 통화 코어 기준의 짧은 기술 백로그다.
+
 | 단계 | 내용 | 변경 범위 |
 | --- | --- | --- |
-| 1 | 푸시 알림(FCM/APNs): 앱이 백그라운드여도 승인 요청을 받음 | 서버 알림 모듈 + 앱 `firebase_messaging` |
-| 2 | 사용자 계정·다중 사용자, Postgres 저장소 | `TaskStore` 구현 교체, 인증 미들웨어, 작업 소유자 검사 |
-| 3 | 연락처에서 상대 선택, 장소 검색으로 번호 자동 입력 | 앱 권한 + 검색 API |
-| 4 | ARS 메뉴 탐색(DTMF), 자동응답기 감지 | `realtimeBridge` 도구 추가, Twilio AMD |
-| 5 | 예약 통화, 캘린더 연동, 결과를 캘린더에 등록 | 스케줄러 + Google Calendar OAuth |
-| 6 | 국내 CPaaS 공급자 | 새 `CallProvider` 구현 |
+| 1 | 승인 시 사용자 코멘트·추가 정보 | API + ApprovalCard + Realtime tool 결과 |
+| 2 | 푸시 알림(FCM/APNs): 백그라운드에서도 승인 요청 | 서버 알림 모듈 + 앱 `firebase_messaging` |
+| 3 | 사용자 계정·다중 사용자, Postgres 저장소 | `TaskStore` 구현 교체, 인증 미들웨어, 작업 소유자 검사 |
+| 4 | 연락처·자주 쓰는 상대·음성으로 부탁 입력 | 앱 권한 + 설정/홈 UX |
+| 5 | ARS 메뉴 탐색(DTMF), 자동응답기 감지 | `realtimeBridge` 도구 추가 |
+| 6 | 예약 통화, 캘린더 커넥터 | 스케줄러 + OAuth 커넥터 |
+| 7 | 수신(스트림 인바운드) 지원 | KAT inbound webhook + 앱 UX |

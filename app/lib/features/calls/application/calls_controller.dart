@@ -83,8 +83,13 @@ class CallsController extends AsyncNotifier<Map<String, CallTask>> {
 
   Future<CallTask> cancel(String id) async => _upsert(await _repo.cancel(id));
 
-  Future<CallTask> decide(String taskId, String approvalId, {required bool approve}) async =>
-      _upsert(await _repo.decide(taskId, approvalId, approve: approve));
+  Future<CallTask> decide(
+    String taskId,
+    String approvalId, {
+    required bool approve,
+    String? comment,
+  }) async =>
+      _upsert(await _repo.decide(taskId, approvalId, approve: approve, comment: comment));
 
   Future<void> delete(String id) async {
     await _repo.delete(id);

@@ -31,6 +31,15 @@ export interface CallPlan {
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "expired";
 
+export type ApprovalDecisionReason = "user_approved" | "user_rejected" | "expired" | "canceled";
+
+/** Result of a mid-call approval pause (user decision or timeout). */
+export interface ApprovalDecision {
+  approved: boolean;
+  comment?: string;
+  reason: ApprovalDecisionReason;
+}
+
 export interface ApprovalRequest {
   id: string;
   question: string;
@@ -38,6 +47,8 @@ export interface ApprovalRequest {
   requestedAt: string;
   resolvedAt?: string;
   expiresAt: string;
+  /** Optional guidance the user attached when approving or rejecting. */
+  userComment?: string;
 }
 
 export type OutcomeResult = "success" | "partial" | "failed";
@@ -69,7 +80,7 @@ export interface CallTask extends CallTaskInput {
   approvals: ApprovalRequest[];
   outcome?: CallOutcome;
   error?: string;
-  provider: "simulated" | "twilio";
+  provider: "simulated" | "kat";
   createdAt: string;
   updatedAt: string;
   startedAt?: string;

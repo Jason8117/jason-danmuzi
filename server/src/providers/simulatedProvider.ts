@@ -74,12 +74,15 @@ export class SimulatedCallProvider implements CallProvider {
       if (index === 1 && template.approvalAsk) {
         await pause(1000);
         session.appendTranscript("agent", lines.hold);
-        const approved = await session.requestApproval(template.approvalAsk);
+        const decision = await session.requestApproval(template.approvalAsk);
         if (signal.aborted) return;
-        session.appendTranscript("agent", approved ? lines.approved : lines.rejected);
+        session.appendTranscript("agent", decision.approved ? lines.approved : lines.rejected);
+        if (decision.comment) {
+          session.appendTranscript("system", `사용자 안내: ${decision.comment}`);
+        }
         await pause(1200);
         session.appendTranscript("callee", lines.acknowledge);
-        if (!approved) break;
+        if (!decision.approved) break;
       }
     }
 

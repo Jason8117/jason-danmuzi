@@ -455,12 +455,16 @@ class _ApprovalHistory extends StatelessWidget {
                 color: a.status == ApprovalStatus.approved ? scheme.primary : scheme.error,
               ),
               title: Text(a.question),
-              subtitle: Text(switch (a.status) {
-                ApprovalStatus.approved => '승인함',
-                ApprovalStatus.rejected => '거절함',
-                ApprovalStatus.expired => '시간 초과로 진행 안 함',
-                ApprovalStatus.pending => '대기 중',
-              }),
+              subtitle: Text([
+                switch (a.status) {
+                  ApprovalStatus.approved => '승인함',
+                  ApprovalStatus.rejected => '거절함',
+                  ApprovalStatus.expired => '시간 초과로 진행 안 함',
+                  ApprovalStatus.pending => '대기 중',
+                },
+                if (a.userComment != null && a.userComment!.isNotEmpty) '안내: ${a.userComment}',
+              ].join('\n')),
+              isThreeLine: a.userComment != null && a.userComment!.isNotEmpty,
             ),
         ],
       ),

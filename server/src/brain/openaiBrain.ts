@@ -49,7 +49,11 @@ export class OpenAiBrain implements CallBrain {
     const user = JSON.stringify({
       language: task.language,
       goal: task.goal,
-      approvals: task.approvals.map((a) => ({ question: a.question, status: a.status })),
+      approvals: task.approvals.map((a) => ({
+        question: a.question,
+        status: a.status,
+        userComment: a.userComment,
+      })),
       transcript: task.transcript.map((t) => `${t.speaker}: ${t.text}`),
     });
     return this.completeJson(SUMMARY_SYSTEM_PROMPT, user, OutcomeSchema, () => this.fallback.summarize(task));

@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { CallBrain } from "../brain/types.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
+  type ApprovalDecision,
+  type ApprovalDecisionReason,
   type ApprovalRequest,
+  type ApprovalStatus,
   type CallPlan,
   type CallTask,
   type CallTaskInput,
@@ -34,8 +37,13 @@ export interface CallServiceOptions {
 
 interface PendingApproval {
   taskId: string;
-  resolve: (approved: boolean) => void;
+  resolve: (decision: ApprovalDecision) => void;
   timer: NodeJS.Timeout;
+}
+
+export interface ApprovalResponseInput {
+  approve: boolean;
+  comment?: string;
 }
 
 interface RunningSession {
@@ -135,14 +143,18 @@ export class CallService {
     return this.get(id);
   }
 
-  respondToApproval(taskId: string, approvalId: string, approve: boolean): CallTask {
+  respondToApproval(taskId: string, approvalId: string, input: ApprovalResponseInput): CallTask {
     const task = this.get(taskId);
     const approval = task.approvals.find((a) => a.id === approvalId);
     const pending = this.pendingApprovals.get(approvalId);
     if (!approval || !pending || approval.status !== "pending") {
       throw new ServiceError(409, "approval_closed", "This approval is no longer pending");
     }
-    this.resolveApproval(approvalId, approve ? "approved" : "rejected");
+    this.resolveApproval(approvalId, {
+      status: input.approve ? "approved" : "rejected",
+      reason: input.approve ? "user_approved" : "user_rejected",
+      comment: input.comment,
+    });
     return this.get(taskId);
   }
 
@@ -221,9 +233,10 @@ export class CallService {
     };
   }
 
-  private requestApproval(taskId: string, question: string, signal: AbortSignal): Promise<boolean> {
+  private requestApproval(taskId: string, question: string, signal: AbortSignal): Promise<ApprovalDecision> {
+    const declined: ApprovalDecision = { approved: false, reason: "canceled" };
     const task = this.store.get(taskId);
-    if (!task || !isActiveCall(task.status) || signal.aborted) return Promise.resolve(false);
+    if (!task || !isActiveCall(task.status) || signal.aborted) return Promise.resolve(declined);
 
     const requestedAt = new Date();
     const approval: ApprovalRequest = {
@@ -236,14 +249,24 @@ export class CallService {
     task.approvals.push(approval);
     this.persist(task);
 
-    return new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => this.resolveApproval(approval.id, "expired"), this.options.approvalTimeoutMs);
+    return new Promise<ApprovalDecision>((resolve) => {
+      const timer = setTimeout(
+        () => this.resolveApproval(approval.id, { status: "expired", reason: "expired" }),
+        this.options.approvalTimeoutMs,
+      );
       this.pendingApprovals.set(approval.id, { taskId, resolve, timer });
-      signal.addEventListener("abort", () => this.resolveApproval(approval.id, "expired"), { once: true });
+      signal.addEventListener(
+        "abort",
+        () => this.resolveApproval(approval.id, { status: "expired", reason: "canceled" }),
+        { once: true },
+      );
     });
   }
 
-  private resolveApproval(approvalId: string, status: "approved" | "rejected" | "expired"): void {
+  private resolveApproval(
+    approvalId: string,
+    input: { status: Extract<ApprovalStatus, "approved" | "rejected" | "expired">; reason: ApprovalDecisionReason; comment?: string },
+  ): void {
     const pending = this.pendingApprovals.get(approvalId);
     if (!pending) return;
     this.pendingApprovals.delete(approvalId);
@@ -251,12 +274,17 @@ export class CallService {
 
     const task = this.store.get(pending.taskId);
     const approval = task?.approvals.find((a) => a.id === approvalId);
-    if (task && approval) {
-      approval.status = status;
+    if (task && approval && approval.status === "pending") {
+      approval.status = input.status;
       approval.resolvedAt = now();
+      if (input.comment) approval.userComment = input.comment;
       this.persist(task);
     }
-    pending.resolve(status === "approved");
+    pending.resolve({
+      approved: input.status === "approved",
+      comment: input.comment,
+      reason: input.reason,
+    });
   }
 
   private endSession(taskId: string, options: EndOptions): void {
@@ -278,13 +306,19 @@ export class CallService {
   private async summarize(taskId: string): Promise<void> {
     const task = this.store.get(taskId);
     if (!task) return;
-    const connected = task.transcript.some((t) => t.speaker === "callee");
+    const hadSpeech = task.transcript.some((t) => t.speaker === "callee" || t.speaker === "agent");
+    // Answered-but-silent (no media / Realtime) used to become status=completed with empty transcript.
+    if (!hadSpeech && !task.error) {
+      task.error = task.connectedAt
+        ? "상대가 전화를 받았지만 대화가 기록되지 않았습니다. 음성 AI/미디어 스트림 연결을 확인해 주세요."
+        : "통화가 연결되지 않았습니다.";
+    }
     try {
       task.outcome = await this.brain.summarize(task);
     } catch (error) {
       task.error ??= `요약에 실패했습니다: ${(error as Error).message}`;
     }
-    this.transition(task, task.error && !connected ? "failed" : "completed");
+    this.transition(task, task.error && !hadSpeech ? "failed" : "completed");
   }
 
   private finishWithoutCall(task: CallTask, status: "canceled" | "failed"): void {

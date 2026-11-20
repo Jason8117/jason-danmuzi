@@ -50,9 +50,20 @@ class CallsRepository {
 
   Future<CallTask> cancel(String id) async => _task(await _api.post('/v1/tasks/$id/cancel'));
 
-  Future<CallTask> decide(String taskId, String approvalId, {required bool approve}) async => _task(
-        await _api.post('/v1/tasks/$taskId/approvals/$approvalId', {'decision': approve ? 'approve' : 'reject'}),
-      );
+  Future<CallTask> decide(
+    String taskId,
+    String approvalId, {
+    required bool approve,
+    String? comment,
+  }) async {
+    final trimmed = comment?.trim();
+    return _task(
+      await _api.post('/v1/tasks/$taskId/approvals/$approvalId', {
+        'decision': approve ? 'approve' : 'reject',
+        if (trimmed != null && trimmed.isNotEmpty) 'comment': trimmed,
+      }),
+    );
+  }
 
   Future<void> delete(String id) => _api.delete('/v1/tasks/$id');
 

@@ -23,9 +23,33 @@ export const ApprovePlanBody = z
   })
   .default({});
 
-export const ApprovalDecisionBody = z.object({
-  decision: z.enum(["approve", "reject"]),
-});
+const MAX_APPROVAL_COMMENT_CHARS = 500;
+
+export const ApprovalDecisionBody = z
+  .object({
+    decision: z.enum(["approve", "reject"]),
+    /** Optional user guidance; empty/whitespace becomes undefined. */
+    comment: z.string().optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.comment === undefined) return;
+    const trimmed = body.comment.trim();
+    if (!trimmed) return;
+    if ([...trimmed].length > MAX_APPROVAL_COMMENT_CHARS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["comment"],
+        message: `comment must be at most ${MAX_APPROVAL_COMMENT_CHARS} characters`,
+      });
+    }
+  })
+  .transform((body) => {
+    const trimmed = body.comment?.trim();
+    return {
+      decision: body.decision,
+      comment: trimmed ? trimmed : undefined,
+    };
+  });
 
 export const TaskParams = z.object({ id: z.uuid() });
 export const ApprovalParams = z.object({ id: z.uuid(), approvalId: z.uuid() });
