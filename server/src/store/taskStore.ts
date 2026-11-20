@@ -6,6 +6,8 @@ import { logger as defaultLogger, type Logger } from "../logger.js";
 export const STORE_WRITE_FAILED = "Store write failed";
 export const STORE_WRITE_RECOVERED = "Store write recovered";
 /** Logged once by the shutdown path when the final flush fails; the process then exits with code 1. */
+// @MX:NOTE: [AUTO] Operators and SPEC-STORE-001 AC-013 count this exact "msg" value; keep the string stable.
+// @MX:SPEC: SPEC-STORE-001
 export const FINAL_STORE_FLUSH_FAILED = "Final store flush failed";
 
 export type FinalFlushResult = { ok: true } | { ok: false; reason: "error" | "timeout"; error?: unknown };
@@ -134,6 +136,8 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
    * Shutdown path: cancels pending timers, makes one last write within the deadline,
    * and reports the outcome instead of rejecting or hanging.
    */
+  // @MX:NOTE: [AUTO] The 5 s default deadline is the last stage of the 9 s shutdown budget owned by SPEC-LIFECYCLE-001.
+  // @MX:SPEC: SPEC-STORE-001
   async finalFlush(): Promise<FinalFlushResult> {
     this.closed = true;
     clearTimeout(this.timer);

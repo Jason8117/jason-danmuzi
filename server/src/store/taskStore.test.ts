@@ -1,5 +1,5 @@
 import * as realFs from "node:fs/promises";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -340,6 +340,68 @@ describe("JsonFileTaskStore final flush", () => {
     const healthy = await JsonFileTaskStore.open(dataFile, { fs: makeFs(), logger: makeLogger() });
     healthy.save(task("a"));
     await expect(healthy.finalFlush()).resolves.toEqual({ ok: true });
+    expect(unhandled).toHaveLength(0);
+  });
+});
+
+describe("JsonFileTaskStore startup and real file system", () => {
+  it("keeps current startup behavior: corrupt or unreadable files fail, legacy entries load", async () => {
+    // (1) Corrupt JSON: open rejects and leaves the directory untouched.
+    await writeFile(dataFile, "{not json", "utf8");
+    const listingBefore = await readdir(dir);
+    await expect(JsonFileTaskStore.open(dataFile, { logger: makeLogger() })).rejects.toThrow(SyntaxError);
+    expect(await readdir(dir)).toEqual(listingBefore);
+    expect(await readFile(dataFile, "utf8")).toBe("{not json");
+
+    // (2) Read error other than ENOENT: open rejects and writes nothing.
+    const unreadable = makeFs();
+    unreadable.readFile = async () => {
+      throw errno("EACCES");
+    };
+    await expect(JsonFileTaskStore.open(dataFile, { fs: unreadable, logger: makeLogger() })).rejects.toMatchObject({
+      code: "EACCES",
+    });
+    expect(unreadable.writes).toBe(0);
+    expect(await readdir(dir)).toEqual(listingBefore);
+
+    // (3) Legacy entries without `version` load as version 0.
+    const { version: _omitted, ...legacy } = task("legacy");
+    await writeFile(dataFile, JSON.stringify([legacy]), "utf8");
+    const loaded = await JsonFileTaskStore.open(dataFile, { logger: makeLogger() });
+    expect(loaded.get("legacy")).toMatchObject({ id: "legacy", version: 0 });
+
+    // (4) Missing file opens an empty store.
+    const missing = await JsonFileTaskStore.open(join(dir, "absent.json"), { logger: makeLogger() });
+    expect(missing.list()).toEqual([]);
+  });
+
+  const canChmod = process.platform !== "win32" && process.getuid?.() !== 0;
+  (canChmod ? it : it.skip)("survives a read-only data directory (regression)", async () => {
+    const store = await JsonFileTaskStore.open(dataFile, {
+      logger: makeLogger(),
+      debounceMs: 10,
+      retryInitialMs: 100,
+      retryMultiplier: 1,
+      retryMaxMs: 100,
+    });
+    await chmod(dir, 0o555);
+    try {
+      store.save(task("a"));
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      await chmod(dir, 0o755);
+    }
+
+    const deadline = Date.now() + 2000;
+    let written: CallTask[] = [];
+    while (Date.now() < deadline) {
+      written = JSON.parse(await readFile(dataFile, "utf8").catch(() => "[]")) as CallTask[];
+      if (written.length > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(written.map((t) => t.id)).toEqual(["a"]);
+    await expect(store.finalFlush()).resolves.toEqual({ ok: true });
     expect(unhandled).toHaveLength(0);
   });
 });
