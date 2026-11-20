@@ -3,6 +3,14 @@ import { openingLine } from "./prompts.js";
 import { detectScenario, SCENARIO_TEMPLATES } from "./scenario.js";
 import type { CallBrain } from "./types.js";
 
+const FILLER =
+  /^(네|예|아|yes|yeah|ok|okay|sure|hello|hi)?[\s,.!]*(말씀하세요|말씀해\s?주세요|알겠습니다|감사합니다|go ahead|understood|thank you|thanks|bye)?[\s,.!]*(bye)?[\s,.!]*$/i;
+
+/** Acknowledgements like "네, 알겠습니다" carry no information worth reporting. */
+export function isFiller(text: string): boolean {
+  return FILLER.test(text.trim());
+}
+
 /** Rule-based brain used when no LLM key is configured. Deterministic, so it also backs tests. */
 export class HeuristicBrain implements CallBrain {
   readonly name = "heuristic" as const;
@@ -43,7 +51,7 @@ export class HeuristicBrain implements CallBrain {
     return {
       result,
       summary,
-      keyFacts: calleeLines.slice(1),
+      keyFacts: calleeLines.slice(1).filter((line) => !isFiller(line)),
       followUps: rejected.map((a) => (ko ? `미승인 항목 재검토: ${a.question}` : `Revisit declined item: ${a.question}`)),
     };
   }

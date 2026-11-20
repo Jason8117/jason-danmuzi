@@ -154,6 +154,7 @@ class CallOutcome {
 class CallTask {
   const CallTask({
     required this.id,
+    required this.version,
     required this.targetName,
     required this.phoneNumber,
     required this.goal,
@@ -176,6 +177,7 @@ class CallTask {
 
   factory CallTask.fromJson(Map<String, dynamic> json) => CallTask(
         id: json['id'] as String,
+        version: json['version'] as int? ?? 0,
         targetName: json['targetName'] as String,
         phoneNumber: json['phoneNumber'] as String,
         goal: json['goal'] as String,
@@ -201,6 +203,9 @@ class CallTask {
       );
 
   final String id;
+
+  /// Server-side change counter; a lower value is an older snapshot of the same task.
+  final int version;
   final String targetName;
   final String phoneNumber;
   final String goal;

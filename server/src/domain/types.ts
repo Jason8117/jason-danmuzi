@@ -61,6 +61,8 @@ export interface CallTaskInput {
 
 export interface CallTask extends CallTaskInput {
   id: string;
+  /** Increments on every change. HTTP responses and stream events can arrive out of order; clients keep the highest. */
+  version: number;
   status: TaskStatus;
   plan?: CallPlan;
   transcript: TranscriptEntry[];

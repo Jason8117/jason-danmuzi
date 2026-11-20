@@ -18,8 +18,9 @@ final liveStatusProvider = NotifierProvider<LiveStatusController, LiveStatus>(Li
 /// Source of truth for every call task on screen.
 ///
 /// Loads once over REST, then keeps itself current from the server's live
-/// stream. Every server message is a full task snapshot, so applying one is a
-/// plain replace and repeated or out-of-order delivery is harmless.
+/// stream. Every message is a full task snapshot carrying a version, and an
+/// HTTP response can land after a newer stream event, so the higher version
+/// always wins.
 class CallsController extends AsyncNotifier<Map<String, CallTask>> {
   CallsRepository get _repo => ref.read(callsRepositoryProvider);
 
@@ -43,16 +44,23 @@ class CallsController extends AsyncNotifier<Map<String, CallTask>> {
     channel.connect();
 
     final tasks = await repo.list();
-    return {for (final t in tasks) t.id: t};
+    return _merge(state.value, tasks);
   }
+
+  static CallTask _newer(CallTask? existing, CallTask incoming) =>
+      existing != null && existing.version > incoming.version ? existing : incoming;
+
+  /// A snapshot defines which tasks exist; for each one, keep the newer copy.
+  static Map<String, CallTask> _merge(Map<String, CallTask>? current, List<CallTask> snapshot) =>
+      {for (final t in snapshot) t.id: _newer(current?[t.id], t)};
 
   void _apply(CallsEvent event) {
     final current = state.value;
     switch (event) {
       case TasksSnapshot(:final tasks):
-        state = AsyncData({for (final t in tasks) t.id: t});
+        state = AsyncData(_merge(current, tasks));
       case TaskUpdated(:final task):
-        if (current != null) state = AsyncData({...current, task.id: task});
+        if (current != null) state = AsyncData({...current, task.id: _newer(current[task.id], task)});
       case TaskDeleted(:final taskId):
         if (current != null) state = AsyncData(Map.of(current)..remove(taskId));
     }

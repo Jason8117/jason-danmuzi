@@ -48,7 +48,7 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
     const store = new JsonFileTaskStore(path);
     try {
       const raw = await readFile(path, "utf8");
-      for (const task of JSON.parse(raw) as CallTask[]) store.tasks.set(task.id, task);
+      for (const task of JSON.parse(raw) as CallTask[]) store.tasks.set(task.id, { ...task, version: task.version ?? 0 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }

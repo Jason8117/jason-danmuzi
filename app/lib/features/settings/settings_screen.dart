@@ -126,6 +126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         labelText: 'API 토큰',
                         helperText: '서버의 API_TOKEN 값. 로컬 시뮬레이션 서버는 비워둬도 돼요.',
                         suffixIcon: IconButton(
+                          tooltip: _obscureToken ? '토큰 보기' : '토큰 숨기기',
                           icon: Icon(_obscureToken ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                           onPressed: () => setState(() => _obscureToken = !_obscureToken),
                         ),

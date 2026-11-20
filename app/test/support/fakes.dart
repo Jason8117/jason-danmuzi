@@ -7,6 +7,7 @@ import 'package:callmate/features/calls/domain/call_models.dart';
 
 Map<String, dynamic> taskJson({
   String id = 'task-1',
+  int version = 1,
   String status = 'in_progress',
   List<Map<String, dynamic>> approvals = const [],
   Map<String, dynamic>? outcome,
@@ -14,6 +15,7 @@ Map<String, dynamic> taskJson({
   final now = DateTime.now().toUtc();
   return {
     'id': id,
+    'version': version,
     'targetName': '라 파스타',
     'phoneNumber': '+8221234567',
     'goal': '금요일 저녁 7시 2명 예약',
@@ -52,6 +54,8 @@ Map<String, dynamic> approvalJson({String status = 'pending'}) {
 }
 
 class FakeLiveConnection implements LiveConnection {
+  void emit(Map<String, dynamic> message) => _messages.add(message);
+
   final _messages = StreamController<Map<String, dynamic>>.broadcast();
   final _status = StreamController<LiveStatus>.broadcast();
 
@@ -73,6 +77,11 @@ class FakeCallsRepository extends CallsRepository {
 
   List<CallTask> tasks;
   final decisions = <({String approvalId, bool approve})>[];
+  final live = FakeLiveConnection();
+  CallTask? nextCreated;
+
+  @override
+  Future<CallTask> create(NewCallRequest request) async => nextCreated!;
 
   @override
   Future<List<CallTask>> list() async => tasks;
@@ -87,5 +96,5 @@ class FakeCallsRepository extends CallsRepository {
   }
 
   @override
-  LiveConnection openLiveChannel() => FakeLiveConnection();
+  LiveConnection openLiveChannel() => live;
 }

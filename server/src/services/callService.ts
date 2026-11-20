@@ -85,6 +85,7 @@ export class CallService {
     const task: CallTask = {
       ...input,
       id: randomUUID(),
+      version: 0,
       status: "planning",
       transcript: [],
       approvals: [],
@@ -305,6 +306,7 @@ export class CallService {
   }
 
   private persist(task: CallTask): void {
+    task.version += 1;
     task.updatedAt = now();
     this.store.save(task);
     this.bus.publish({ type: "task.updated", task });

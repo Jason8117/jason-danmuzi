@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isFiller } from "../brain/heuristicBrain.js";
 import { isBlockedNumber, maskPhoneNumber, normalizePhoneNumber } from "./phone.js";
 import { assertTransition, canTransition } from "./stateMachine.js";
 
@@ -23,6 +24,16 @@ describe("normalizePhoneNumber", () => {
 
   it("masks all but the last four digits", () => {
     expect(maskPhoneNumber("+821012345678")).toBe("+82••••••5678");
+  });
+});
+
+describe("isFiller", () => {
+  it.each(["네, 말씀하세요.", "네, 알겠습니다.", "네, 감사합니다.", "Sure, go ahead.", "Thank you, bye."])("treats %s as filler", (line) => {
+    expect(isFiller(line)).toBe(true);
+  });
+
+  it.each(["네, 그 시간에 자리 있습니다.", "1인당 1만 원 예약금이 있습니다.", "Yes, we have a table."])("keeps %s", (line) => {
+    expect(isFiller(line)).toBe(false);
   });
 });
 

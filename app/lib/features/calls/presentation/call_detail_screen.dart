@@ -36,8 +36,15 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
     super.dispose();
   }
 
-  /// Follows new transcript lines during a live call unless the user scrolled up to read.
+  /// Follows new transcript lines during a live call unless the user scrolled up to read,
+  /// and jumps back to the result summary at the top once the call is over.
   void _followTranscript(CallTask? previous, CallTask? next) {
+    if (next != null && next.status.isTerminal && (previous?.status.isOngoing ?? false)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+      });
+      return;
+    }
     if (next == null || !next.status.isOngoing) return;
     if ((previous?.transcript.length ?? 0) == next.transcript.length) return;
     if (!_scroll.hasClients) return;
@@ -124,7 +131,15 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _ActionBar(children: _actions(task)),
+      // A pending approval is pinned here rather than in the scrolling list, so
+      // following the live transcript can never push it off screen.
+      bottomNavigationBar: _ActionBar(
+        top: switch (task.pendingApproval) {
+          final approval? => ApprovalCard(key: ValueKey(approval.id), taskId: task.id, approval: approval),
+          null => null,
+        },
+        children: _actions(task),
+      ),
     );
   }
 
@@ -165,10 +180,6 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
         ];
       case TaskStatus.dialing || TaskStatus.ringing || TaskStatus.inProgress || TaskStatus.summarizing:
         return [
-          if (task.pendingApproval case final approval?) ...[
-            ApprovalCard(key: ValueKey(approval.id), taskId: task.id, approval: approval),
-            const SizedBox(height: 12),
-          ],
           if (task.status == TaskStatus.summarizing) ...[
             const SectionCard(
               child: Row(
@@ -245,16 +256,27 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
 }
 
 class _ActionBar extends StatelessWidget {
-  const _ActionBar({required this.children});
+  const _ActionBar({required this.children, this.top});
+
   final List<Widget> children;
+  final Widget? top;
 
   @override
   Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
+    if (children.isEmpty && top == null) return const SizedBox.shrink();
     return SafeArea(
       child: ResponsiveBody(
         shrinkHeight: true,
-        child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: Row(children: children)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (top != null) ...[top!, const SizedBox(height: 10)],
+              if (children.isNotEmpty) Row(children: children),
+            ],
+          ),
+        ),
       ),
     );
   }
