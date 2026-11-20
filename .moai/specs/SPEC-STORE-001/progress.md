@@ -64,7 +64,45 @@ AssertionError: expected 2 to be 3 // Object.is equality
 
 Not RED on the M1 code, as observed: "coalesces saves while a retry is pending" (AC-007; with no retry yet, the debounce already merged the five saves into one write) and "a failed write leaves the previous file intact" (AC-010; acceptance.md marks it protective — the temp-file + rename write already preserved the file). Both are kept as guards.
 
-GREEN (full suite, exit 0; log `m2-green.txt`): `Test Files 4 passed (4)`, `Tests 42 passed (42)`; `npm run typecheck` exit 0.
+GREEN (full suite, exit 0; log `m2-green.txt`): `Test Files 4 passed (4)`, `Tests 42 passed (42)`; `npm run typecheck` exit 0. Commit `69e8585`.
+
+### M3 — final flush and exit code (AC-011, AC-012, AC-013)
+
+RED (`npm --prefix server test -- src/store/taskStore.test.ts`, after M2, exit 1; log `m3-red.txt`):
+
+```
+     × final flush cancels pending debounce and retry timers 24ms
+     × final flush reports success or failure and never hangs 25ms
+TypeError: first.finalFlush is not a function
+AssertionError: expected undefined to be 'Final store flush failed' // Object.is equality
+      Tests  2 failed | 9 passed (11)
+```
+
+GREEN (store tests): `Tests 11 passed (11)` (log `m3-store-green.txt`).
+
+AC-013 process check — intermediate RED (store fixed, `index.ts` still calling `await store.flush()`; log `ac013-red-log.txt`). Procedure from acceptance.md adapted to the worktree: absolute `tsx` path, `PORT=8798`, `API_TOKEN=t0k` (POST sends `authorization: Bearer t0k`), `unset OPENAI_API_KEY KAT_API_KEY CALL_PROVIDER` (simulation mode), `DATA_FILE=$(mktemp -d)/tasks.json`:
+
+```
+POST=201
+health=200
+exit=1
+final_fail_count=0
+```
+
+The server survived the failed writes, but the shutdown `flush()` rejected and crashed the process (`Error: EACCES: permission denied, open '…/tasks.json.tmp'` in the log) with no fixed message, so the third condition failed.
+
+AC-013 GREEN (after `index.ts` uses `finalFlush()`; log `ac013-green-log.txt`):
+
+```
+POST=201
+health=200
+exit=1
+final_fail_count=1
+```
+
+Log line: `{"level":"error",…,"msg":"Final store flush failed","path":"…/tasks.json","reason":"error","code":"EACCES"}`. Phone number occurrences in the log: `phone_in_log=0`. Success path (writable directory, same procedure without `chmod 555`; log `ac013-success-log.txt`): `POST=201`, `exit=0`, `final_fail_count=0`, `tasks_in_file=1`.
+
+GREEN (full suite, exit 0; log `m3-green.txt`): `Test Files 4 passed (4)`, `Tests 44 passed (44)`; `npm run typecheck` exit 0.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

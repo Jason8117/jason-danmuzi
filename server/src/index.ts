@@ -2,10 +2,10 @@ import { loadConfig } from "./config.js";
 import { createContainer } from "./container.js";
 import { buildApp } from "./http/app.js";
 import { logger } from "./logger.js";
-import { JsonFileTaskStore } from "./store/taskStore.js";
+import { FINAL_STORE_FLUSH_FAILED, JsonFileTaskStore } from "./store/taskStore.js";
 
 const config = loadConfig();
-const store = await JsonFileTaskStore.open(config.DATA_FILE);
+const store = await JsonFileTaskStore.open(config.DATA_FILE, { logger });
 const { calls, bus, kat } = createContainer(config, store, logger);
 calls.recoverInterruptedTasks();
 
@@ -30,7 +30,11 @@ logger.info(
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     await app.close();
-    await store.flush();
-    process.exit(0);
+    const result = await store.finalFlush();
+    if (!result.ok) {
+      const code = (result.error as NodeJS.ErrnoException | undefined)?.code;
+      logger.error({ path: config.DATA_FILE, reason: result.reason, code }, FINAL_STORE_FLUSH_FAILED);
+    }
+    process.exit(result.ok ? 0 : 1);
   });
 }

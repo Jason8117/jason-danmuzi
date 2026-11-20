@@ -5,6 +5,10 @@ import { logger as defaultLogger, type Logger } from "../logger.js";
 
 export const STORE_WRITE_FAILED = "Store write failed";
 export const STORE_WRITE_RECOVERED = "Store write recovered";
+/** Logged once by the shutdown path when the final flush fails; the process then exits with code 1. */
+export const FINAL_STORE_FLUSH_FAILED = "Final store flush failed";
+
+export type FinalFlushResult = { ok: true } | { ok: false; reason: "error" | "timeout"; error?: unknown };
 
 /** The file system calls the store needs; injectable so tests can simulate disk failures. */
 export interface StoreFs {
@@ -22,6 +26,8 @@ export interface JsonFileTaskStoreOptions {
   retryInitialMs?: number;
   retryMultiplier?: number;
   retryMaxMs?: number;
+  /** Deadline for the final flush on shutdown (the last stage of the overall shutdown budget). */
+  finalFlushTimeoutMs?: number;
 }
 
 export interface TaskStore {
@@ -68,7 +74,10 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   private readonly retryInitialMs: number;
   private readonly retryMultiplier: number;
   private readonly retryMaxMs: number;
+  private readonly finalFlushTimeoutMs: number;
   private consecutiveFailures = 0;
+  /** Set by finalFlush(); no timer is scheduled afterwards. */
+  private closed = false;
 
   private constructor(
     private readonly path: string,
@@ -81,6 +90,7 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
     this.retryInitialMs = options.retryInitialMs ?? 1000;
     this.retryMultiplier = options.retryMultiplier ?? 2;
     this.retryMaxMs = options.retryMaxMs ?? 30_000;
+    this.finalFlushTimeoutMs = options.finalFlushTimeoutMs ?? 5000;
   }
 
   static async open(path: string, options: JsonFileTaskStoreOptions = {}): Promise<JsonFileTaskStore> {
@@ -121,6 +131,29 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   }
 
   /**
+   * Shutdown path: cancels pending timers, makes one last write within the deadline,
+   * and reports the outcome instead of rejecting or hanging.
+   */
+  async finalFlush(): Promise<FinalFlushResult> {
+    this.closed = true;
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    let deadline: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<FinalFlushResult>((resolve) => {
+      deadline = setTimeout(() => resolve({ ok: false, reason: "timeout" }), this.finalFlushTimeoutMs);
+    });
+    const written = this.write().then(
+      (): FinalFlushResult => ({ ok: true }),
+      (error: unknown): FinalFlushResult => ({ ok: false, reason: "error", error }),
+    );
+    try {
+      return await Promise.race([written, timedOut]);
+    } finally {
+      clearTimeout(deadline);
+    }
+  }
+
+  /**
    * Logs the failure and schedules the next attempt with capped exponential backoff.
    * Attempts never stop while changes are unsaved; the retry timer absorbs further saves.
    */
@@ -130,7 +163,7 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
     this.logger.error({ path: this.path, code, consecutiveFailures: this.consecutiveFailures }, STORE_WRITE_FAILED);
     const delay = Math.min(this.retryInitialMs * this.retryMultiplier ** (this.consecutiveFailures - 1), this.retryMaxMs);
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.flushInBackground(), delay);
+    this.timer = this.closed ? undefined : setTimeout(() => this.flushInBackground(), delay);
   }
 
   /** Timer-started flushes have no caller to report to; failures are already logged and retried. */
@@ -152,7 +185,7 @@ export class JsonFileTaskStore extends InMemoryTaskStore {
   }
 
   private schedule(): void {
-    if (this.timer) return;
+    if (this.timer || this.closed) return;
     this.timer = setTimeout(() => this.flushInBackground(), this.debounceMs);
   }
 }

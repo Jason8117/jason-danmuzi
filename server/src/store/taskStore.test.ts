@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallTask } from "../domain/types.js";
-import { JsonFileTaskStore, STORE_WRITE_FAILED, STORE_WRITE_RECOVERED } from "./taskStore.js";
+import {
+  FINAL_STORE_FLUSH_FAILED,
+  JsonFileTaskStore,
+  STORE_WRITE_FAILED,
+  STORE_WRITE_RECOVERED,
+} from "./taskStore.js";
 
 const RETRY = { retryInitialMs: 1000, retryMultiplier: 2, retryMaxMs: 30_000 };
 
@@ -280,5 +285,61 @@ describe("JsonFileTaskStore retry and recovery", () => {
     const after = await readFile(dataFile, "utf8");
     expect(after).toBe(before);
     expect((JSON.parse(after) as CallTask[]).map((t) => t.id)).toEqual(["a"]);
+  });
+});
+
+describe("JsonFileTaskStore final flush", () => {
+  it("final flush cancels pending debounce and retry timers", async () => {
+    vi.useFakeTimers();
+
+    // Pending debounce timer.
+    const debounced = makeFs();
+    const first = await JsonFileTaskStore.open(dataFile, { fs: debounced, logger: makeLogger(), ...RETRY });
+    first.save(task("a"));
+    expect(vi.getTimerCount()).toBe(1);
+    await expect(first.finalFlush()).resolves.toEqual({ ok: true });
+    expect(vi.getTimerCount()).toBe(0);
+    expect(debounced.writes).toBe(1);
+
+    // Pending retry timer.
+    const retried = makeFs((attempt) => (attempt === 1 ? "fail" : "ok"));
+    const second = await JsonFileTaskStore.open(dataFile, { fs: retried, logger: makeLogger(), ...RETRY });
+    second.save(task("b"));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(retried.writes).toBe(1);
+    expect(vi.getTimerCount()).toBe(1);
+    await expect(second.finalFlush()).resolves.toEqual({ ok: true });
+    expect(vi.getTimerCount()).toBe(0);
+    expect(retried.writes).toBe(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(retried.writes).toBe(2);
+  });
+
+  it("final flush reports success or failure and never hangs", async () => {
+    expect(FINAL_STORE_FLUSH_FAILED).toBe("Final store flush failed");
+    vi.useFakeTimers();
+
+    const failing = await JsonFileTaskStore.open(dataFile, { fs: makeFs(() => "fail"), logger: makeLogger() });
+    failing.save(task("a"));
+    await expect(failing.finalFlush()).resolves.toMatchObject({ ok: false, reason: "error" });
+
+    const hanging = await JsonFileTaskStore.open(dataFile, {
+      fs: makeFs(() => "hang"),
+      logger: makeLogger(),
+      finalFlushTimeoutMs: 100,
+    });
+    hanging.save(task("a"));
+    let settled: unknown;
+    const pending = hanging.finalFlush().then((result) => (settled = result));
+    await vi.advanceTimersByTimeAsync(99);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(settled).toMatchObject({ ok: false, reason: "timeout" });
+
+    const healthy = await JsonFileTaskStore.open(dataFile, { fs: makeFs(), logger: makeLogger() });
+    healthy.save(task("a"));
+    await expect(healthy.finalFlush()).resolves.toEqual({ ok: true });
+    expect(unhandled).toHaveLength(0);
   });
 });
