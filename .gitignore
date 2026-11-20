@@ -105,6 +105,8 @@ ehthumbs.db
 *.log
 logs/*
 !logs/.gitkeep
+.moai/logs/*
+!.moai/logs/.gitkeep
 *.tmp
 *.temp
 *.bak
