@@ -1,14 +1,22 @@
 {
   "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/.mcp.schema.json",
   "mcpServers": {
+    "dart": {
+      "args": [
+        "mcp-server"
+      ],
+      "command": "dart"
+    },
     "moai": {
-      "command": "moai",
-      "args": ["mcp-server"]
+      "args": [
+        "mcp-server"
+      ],
+      "command": "moai"
     }
   },
   "staggeredStartup": {
-    "enabled": true,
+    "connectionTimeout": 15000,
     "delayMs": 500,
-    "connectionTimeout": 15000
+    "enabled": true
   }
 }

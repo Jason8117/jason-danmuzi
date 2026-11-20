@@ -1,0 +1,26 @@
+# .moai/project/harness-spec.yaml — machine-readable harness generation input
+# Emitted by /moai project Phase 8 from .moai/project/interview.md (regenerated on every run).
+
+domain: ai-agent-task-completion
+goal: >-
+  Kolbi (formerly CallMate) acts for a customer toward enterprise customer centers and
+  completes the business task end to end, as the outbound agent of a hub platform,
+  shipped as a standalone app and as an add-on/SDK for other apps (target direction is
+  not implemented; only the Flutter app and the Fastify server exist today).
+constraints:
+  - "KAT Cloud is reachable only from Korean IPs (needs a Korea-reachable HTTPS tunnel for PUBLIC_BASE_URL)"
+  - "Emergency and short codes (112, 119, 113, 114, 117, 118, 122, 125, 182) are blocked from dialing"
+  - "Default limits: 2 concurrent calls, 30 calls per day, 600 s per call, 90 s approval timeout"
+  - "Persistence is a single JSON file (no database)"
+  - "No push notifications; approval alerts arrive only while the app is open and connected"
+  - "Authentication today is one shared Bearer API_TOKEN (no accounts, tenants, OAuth, JWT, A2A or MCP endpoints)"
+scope: >-
+  In scope: app/ (Flutter) and server/ (Fastify/TypeScript) as implemented, plus a clearly
+  separated, unimplemented target-direction section. Out of scope: the hub platform and the
+  enterprise inbound agent (another project) and any detailed protocol design.
+verification: "server: npm test (vitest) and npm run typecheck; app: flutter analyze and flutter test; no CI runs these"
+external_systems:
+  - "OpenAI (Chat Completions, Realtime WebSocket)"
+  - "KAT Cloud (outbound 070 dialing, status webhook, media stream)"
+ui_surface: has-ui
+team_sharing: solo
