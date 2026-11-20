@@ -204,7 +204,9 @@ export class CallService {
         }),
       markConnected: () =>
         updateActive((task) => {
-          if (task.status !== "in_progress") this.transition(task, "in_progress");
+          if (task.status === "in_progress") return;
+          task.connectedAt = now();
+          this.transition(task, "in_progress");
         }),
       appendTranscript: (speaker: Speaker, text: string) =>
         updateActive((task) => {

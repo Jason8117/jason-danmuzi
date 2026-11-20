@@ -71,6 +71,7 @@ export interface CallTask extends CallTaskInput {
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
+  connectedAt?: string;
   endedAt?: string;
 }
 
