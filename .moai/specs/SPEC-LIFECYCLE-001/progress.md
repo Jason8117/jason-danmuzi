@@ -154,9 +154,74 @@ GREEN (`npm --prefix server test -- src/providers/kat/katProvider.test.ts`, exit
 
 **발견 사항 (AC-014 (c))**: `verifyKatStreamSignature`(`webhook.ts`, 이 SPEC 범위 밖)는 `x-kat-call-id` 헤더가 없으면 항상 `false`를 돌려준다. 따라서 "유효 서명 + 헤더 통화 ID 없음" 연결은 실제 검증기로는 만들 수 없고, 운영 환경에서 (c) 경로는 도달하지 않는다. (c) 테스트는 서명 검사(`isValidStreamUpgrade`)만 `vi.spyOn`으로 대체해 start 프레임 경로를 검증했다. 기존 코드도 `headerCallId || start.callId` 대체 경로를 이미 두고 있었으므로, (c)는 그 대체 경로에 종료 요청을 더한 방어 코드다.
 
-## §E.3 Run-phase Audit-Ready Signal
+커밋: `165efcd`
 
-_<pending run-phase>_
+#### M6 — 연결과 회귀 확인 (AC-015, AC-016)
+
+`index.ts`의 신호 처리를 `createShutdownHandler`로 위임했다(`process.once` → `process.on`, 두 번째 신호가 처리기에 닿도록).
+
+AC-015 RED — M5 커밋(`165efcd`, 연결 전 코드)에서 acceptance.md 절차를 실행(worktree 서버 경로, `cd` 없이 `bash .moai/state/verify/run-lifecycle/lifecycle/ac015.sh`):
+
+```
+approve=200
+exit=0 elapsed=0s
+"status": "dialing"
+dialing | undefined
+```
+
+AC-015 GREEN — 연결 후 같은 절차:
+
+```
+approve=200
+exit=0 elapsed=0s
+"status": "failed"
+failed | 서버가 종료되어 통화를 끊었습니다.
+--- server log (마지막 줄) ---
+{"level":"info","time":"2026-11-21T00:21:54.593Z","msg":"Shutting down","signal":"SIGTERM"}
+```
+
+AC-016 전체 회귀:
+
+```
+$ npm --prefix server test -- --reporter=verbose   → exit 0
+ Test Files  6 passed (6)
+      Tests  81 passed (81)        (기준선 46 + 신규 35, 기존 테스트 수정 없음)
+ ✓ src/http/app.test.ts > CallMate API > plans, calls, pauses for approval and summarizes 140ms
+$ npm --prefix server run typecheck → exit 0
+$ (app) flutter --suppress-analytics test → exit 0, "00:01 +13: All tests passed!"   (기준선 12 + 1)
+$ (app) flutter --suppress-analytics analyze → exit 1, "1 issue found." — info 1건 test/support/fakes.dart:53:5 (기준선과 동일, 증가 없음)
+```
+
+### AC 판정표 (이 트리, M6 기준 전체 실행 `final-npm-test.txt`)
+
+| AC | 판정 | 검증 명령 | 실제 출력 (발췌 원문) | RED 관찰 |
+|----|------|-----------|------------------------|----------|
+| AC-001 (a)(b)(c) | PASS | `npm --prefix server test -- --reporter=verbose` | `✓ … CallService shutdown flag (AC-001) > rejects new work and new approvals while shutting down 12ms` | M2 RED `TypeError: calls.beginShutdown is not a function` |
+| AC-001 (d) | PASS | 같음 | `✓ … approvePlan checks shutting_down before state and limits 1ms` | M2 RED 같음 |
+| AC-002 | PASS | 같음 | `✓ src/shutdown.test.ts > shutdown (AC-002) > terminates calls before app.close and moves on when app.close hangs 5ms` | M2 RED `Cannot find module './shutdown.js'` |
+| AC-003 | PASS | 같음 | `✓ … the termination step is bounded to its deadline 3ms` | M2 RED |
+| AC-004 | PASS | 같음 | `✓ … closed as failed without a summary (hangup completes) 2ms` / `(hangup hangs past the 3 s deadline) 1ms` | M2 RED |
+| AC-005 (a)~(e) | PASS | 같음 | `✓ runs the steps in order`, `✓ finishes within 9 s + 500 ms when every step hangs`, `✓ maps the final flush result to the exit code (failure)/(success)`, `✓ a second signal exits immediately`, `✓ treats a hanging final flush as a failure and exits 1 within the budget`, `✓ … when every step hangs (9 s)` | M2 RED |
+| AC-006 | PASS | 같음 | `✓ … stores the provider call id on the task 3ms` / `✓ … reports the KAT callId to the session 12ms` | M1 RED `expected undefined to be 'c-1'` / `getaddrinfo ENOTFOUND kat.test` |
+| AC-007 (a)(b)(c) | PASS | 같음 | `✓ recovery terminates a still-running provider call (a: …)/(b: …)/(c: termination never finishes)` | M4 RED `Cannot read properties of undefined (reading 'then')` |
+| AC-008 (a)(b) | PASS | 같음 | `✓ recovery without a call id or with a different provider only marks the task failed 1ms` | M4 RED `expected [] to have a length of 1 but got +0` |
+| AC-009 | PASS | `flutter --suppress-analytics test test/unit_test.dart` | `CallTask.fromJson ignores providerCallId when parsing tasks` / `All tests passed!` | 없음 — 보호 테스트(설계상 첫 실행부터 통과) |
+| AC-010 | PASS | `npm --prefix server test -- --reporter=verbose` | `✓ … every KAT request carries an abort signal and times out 105ms` | M3 RED `TestTimeoutError: Test timed out in 2000ms.` |
+| AC-011 | PASS | 같음 | `✓ … a hung provider start fails the task promptly and frees the slot 102ms` / `✓ … maps a KAT timeout to a readable Korean error 52ms` | M3 RED `TestTimeoutError` |
+| AC-012 | PASS | 같음 | `✓ hangup never throws on timeout or error (timeout) 51ms` / `(HTTP 500) 1ms` | M3 RED (timeout) `TestTimeoutError`; 500 경우는 RED 전부터 통과 |
+| AC-013 (a)(b) | PASS | 같음 | `✓ derives timeLimit … (600 s -> 630)/(5 s -> 35)/(1 s -> 31)/(20000 s -> 14400)`, `✓ clamps an injected duration below the floor to 10` | M3 RED `expected 900 to be 630` 등 |
+| AC-014 (a)(b)(d) | PASS | 같음 | `✓ … (a: header call id, non-JSON first frame)`, `✓ … (b: header call id, no frame for 10 s)`, `✓ … (d: invalid signature)` | M5 RED `expected [] to deeply equal [ Array(1) ]` ((d)는 RED 전부터 통과) |
+| AC-014 (c) | PASS-WITH-DEBT | 같음 | `✓ … (c: no header call id, start frame call id) 2ms` | M5 RED 같음. 서명 검사를 스텁으로 대체해 검증 — 실제 검증기로는 도달 불가(M5 발견 사항) |
+| AC-015 | PASS | `bash .moai/state/verify/run-lifecycle/lifecycle/ac015.sh` | `approve=200` / `exit=0 elapsed=0s` / `"status": "failed"` / `failed \| 서버가 종료되어 통화를 끊었습니다.` | M5 커밋에서 `"status": "dialing"` |
+| AC-016 | PASS | 위 회귀 명령 4개 | `Tests  81 passed (81)`, typecheck exit 0, flutter `+13: All tests passed!`, analyze 기준선 info 1건 유지 | 해당 없음 |
+
+### 검증하지 않은 것 (Gaps)
+
+- 실제 KAT Cloud·OpenAI Realtime 호출 없음. KAT 응답 형식, 종료 API의 실제 동작(이미 끝난 통화 응답 등), `timeLimit` 기준 시점은 확인되지 않았다.
+- AC-015는 시뮬레이션 모드 프로세스로 1회만 확인했다. 실제 프로세스에서 두 번째 신호(REQ-007), 단계가 멈출 때의 9 s 상한, 종료 중 HTTP `503` 응답은 확인하지 않았다(모두 가짜 타이머 단위 테스트로만 검증). `elapsed`는 초 단위 측정이다.
+- AC-014 (c)는 실제 서명 검증기로는 재현할 수 없다(스텁 사용).
+- 커버리지는 측정하지 않았다(`@vitest/coverage-v8` 미설치, 의존성 추가는 범위 밖). 린터 설정이 없어 lint도 실행하지 않았다.
+- SIGTERM 수신 후 실제 플랫폼 유예 시간(10 s 가정)은 확인되지 않았다.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 

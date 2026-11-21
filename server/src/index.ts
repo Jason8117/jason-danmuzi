@@ -2,7 +2,8 @@ import { loadConfig } from "./config.js";
 import { createContainer } from "./container.js";
 import { buildApp } from "./http/app.js";
 import { logger } from "./logger.js";
-import { FINAL_STORE_FLUSH_FAILED, JsonFileTaskStore } from "./store/taskStore.js";
+import { createShutdownHandler } from "./shutdown.js";
+import { JsonFileTaskStore } from "./store/taskStore.js";
 
 const config = loadConfig();
 const store = await JsonFileTaskStore.open(config.DATA_FILE, { logger });
@@ -28,14 +29,16 @@ logger.info(
   "CallMate server ready",
 );
 
+// Live calls are hung up before app.close(), which also closes the media sockets; total budget 9 s.
+const onSignal = createShutdownHandler({
+  calls,
+  app,
+  store,
+  logger,
+  exit: (code) => process.exit(code),
+  dataFile: config.DATA_FILE,
+});
+// `on`, not `once`: the second signal must reach the handler so it can exit 1 immediately.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, async () => {
-    await app.close();
-    const result = await store.finalFlush();
-    if (!result.ok) {
-      const code = (result.error as NodeJS.ErrnoException | undefined)?.code;
-      logger.error({ path: config.DATA_FILE, reason: result.reason, code }, FINAL_STORE_FLUSH_FAILED);
-    }
-    process.exit(result.ok ? 0 : 1);
-  });
+  process.on(signal, () => onSignal(signal));
 }
