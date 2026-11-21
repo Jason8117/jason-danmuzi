@@ -186,6 +186,50 @@ describe("OpenAiBrain (SPEC-OUTCOME-001)", () => {
   });
 });
 
+// Live-call fix: a real summary fell back with schema_mismatch. Empty lists are normalized; the result value is not.
+describe("OpenAiBrain summary schema tolerance (SPEC-OUTCOME-001 live-call fix)", () => {
+  const valid = { result: "partial", summary: "영업시간은 확인하지 못했습니다.", keyFacts: ["주말 영업"], followUps: ["다시 전화"] };
+
+  it.each([
+    { name: "missing keyFacts", body: { result: "partial", summary: "요약", followUps: [] } },
+    { name: "missing followUps", body: { result: "partial", summary: "요약", keyFacts: [] } },
+    { name: "null keyFacts and followUps", body: { result: "partial", summary: "요약", keyFacts: null, followUps: null } },
+  ])("treats $name as empty lists", async ({ body }) => {
+    stubFetch(async () => completion(JSON.stringify(body)));
+    const { brain, log } = setup();
+
+    const outcome = await brain.summarize(task);
+
+    expect(outcome).toEqual({ result: "partial", summary: "요약", keyFacts: [], followUps: [], source: "llm" });
+    expect(log.warns).toHaveLength(0);
+  });
+
+  it("drops unknown keys and keeps the validated fields", async () => {
+    stubFetch(async () => completion(JSON.stringify({ ...valid, confidence: 0.9, source: "llm-claimed" })));
+    const { brain, log } = setup();
+
+    expect(await brain.summarize(task)).toEqual({ ...valid, source: "llm" });
+    expect(log.warns).toHaveLength(0);
+  });
+
+  it.each(["Success", "SUCCESS", "done", null])("still falls back when result is %s", async (result) => {
+    stubFetch(async () => completion(JSON.stringify({ ...valid, result })));
+    const { brain, log } = setup();
+
+    const outcome = await brain.summarize(task);
+
+    expect(outcome.source).toBe("heuristic");
+    expect(log.warns[0]!.obj).toMatchObject({ reason: "schema_mismatch" });
+  });
+
+  it("still falls back when keyFacts holds non-strings", async () => {
+    stubFetch(async () => completion(JSON.stringify({ ...valid, keyFacts: [{ fact: "주말 영업" }] })));
+    const { brain } = setup();
+
+    expect((await brain.summarize(task)).source).toBe("heuristic");
+  });
+});
+
 // Audit finding F4: a 200 response whose JSON body is not an object used to throw instead of falling back.
 describe("OpenAiBrain with a non-object JSON body (SPEC-OUTCOME-001 audit F4)", () => {
   it.each(["null", "5", '"text"', "[]"])("summarize falls back on a %s body", async (body) => {

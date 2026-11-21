@@ -12,11 +12,19 @@ const PlanSchema = z.object({
   fallback: z.string(),
 });
 
+/** A list the model may omit or send as null when it has nothing to report; both mean "none". */
+const OptionalList = z
+  .array(z.string())
+  .nullish()
+  .transform((items) => items ?? []);
+
+// @MX:NOTE: [AUTO] Lenient only where the meaning is unambiguous: missing/null lists become [] and unknown keys
+// are stripped. `result` stays strict (no casing or synonym mapping) so nothing unvalidated becomes "success".
 const OutcomeSchema = z.object({
   result: z.enum(["success", "partial", "failed"]),
   summary: z.string(),
-  keyFacts: z.array(z.string()),
-  followUps: z.array(z.string()),
+  keyFacts: OptionalList,
+  followUps: OptionalList,
 });
 
 interface Logger {
