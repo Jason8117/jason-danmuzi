@@ -6,6 +6,9 @@ import type { CallBrain } from "./types.js";
 const FILLER =
   /^(네|예|아|yes|yeah|ok|okay|sure|hello|hi)?[\s,.!]*(말씀하세요|말씀해\s?주세요|알겠습니다|감사합니다|go ahead|understood|thank you|thanks|bye)?[\s,.!]*(bye)?[\s,.!]*$/i;
 
+/** Leads every heuristic summary so a reader never mistakes it for a verified result (OD-2 default wording). */
+const UNVERIFIED_PREFIX = { ko: "자동 요약(검증되지 않음):", en: "Automatic summary (unverified):" } as const;
+
 /** Acknowledgements like "네, 알겠습니다" carry no information worth reporting. */
 export function isFiller(text: string): boolean {
   return FILLER.test(text.trim());
@@ -35,9 +38,11 @@ export class HeuristicBrain implements CallBrain {
     const rejected = task.approvals.filter((a) => a.status === "rejected" || a.status === "expired");
 
     if (calleeLines.length === 0) {
+      // A missing callee transcript is itself evidence, so this is a verified failure.
       const answeredButSilent = Boolean(task.connectedAt);
       return {
         result: "failed",
+        source: "heuristic",
         summary: ko
           ? answeredButSilent
             ? "상대가 전화를 받았지만 대화가 기록되지 않았습니다. 음성 스트림/AI 연결을 확인해 주세요."
@@ -50,13 +55,17 @@ export class HeuristicBrain implements CallBrain {
       };
     }
 
-    const result = rejected.length > 0 ? "partial" : "success";
+    // @MX:NOTE: [AUTO] Nothing here checks the transcript against task.goal, so the heuristic may report what
+    // happened (who answered, which terms were declined) but never whether the goal was met.
+    // @MX:SPEC: SPEC-OUTCOME-001 REQ-002, REQ-003, REQ-005
+    const declined = rejected.length > 0;
     const summary = ko
-      ? `${task.targetName}과(와) 통화했습니다. ${result === "success" ? "요청한 내용을 확인했습니다." : "일부 조건은 승인하지 않아 진행하지 않았습니다."}`
-      : `Spoke with ${task.targetName}. ${result === "success" ? "The request was handled." : "Some terms were declined, so they were not accepted."}`;
+      ? `${UNVERIFIED_PREFIX.ko} ${task.targetName}과(와) 통화했습니다.${declined ? " 일부 조건은 승인하지 않아 진행하지 않았습니다." : ""}`
+      : `${UNVERIFIED_PREFIX.en} Spoke with ${task.targetName}.${declined ? " Some terms were declined, so they were not accepted." : ""}`;
 
     return {
-      result,
+      result: "unverified",
+      source: "heuristic",
       summary,
       keyFacts: calleeLines.slice(1).filter((line) => !isFiller(line)),
       followUps: rejected.map((a) => (ko ? `미승인 항목 재검토: ${a.question}` : `Revisit declined item: ${a.question}`)),

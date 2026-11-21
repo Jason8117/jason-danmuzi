@@ -114,7 +114,8 @@ describe("CallMate API", () => {
     expect(decided.json<CallTask>().approvals[0]?.status).toBe("approved");
 
     const done = await waitFor(app, id, (t) => t.status === "completed");
-    expect(done.outcome?.result).toBe("success");
+    expect(done.outcome?.result).toBe("unverified");
+    expect(done.outcome?.source).toBe("heuristic");
     expect(done.transcript.some((t) => t.speaker === "callee")).toBe(true);
   });
 

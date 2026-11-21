@@ -14,7 +14,31 @@
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+- run_start_sha: b3528db9866edc2d32ea6907f81cc86190138671
+- cycle_type: tdd, harness: standard
+- worktree: `.claude/worktrees/agent-ad15f0afc701df87f` (branch `worktree-agent-ad15f0afc701df87f`, fast-forwarded to b3528db)
+- evidence dir (gitignored, on disk in the worktree): `.moai/state/verify/outcome-run/outcome/`
+
+### Baseline (this run, HEAD b3528db)
+
+| Check | Command | Observed |
+|-------|---------|----------|
+| server tests | `npm --prefix server test` | `Test Files  6 passed (6)` / `Tests  111 passed (111)` |
+| server typecheck | `npm --prefix server run typecheck` | exit 0 |
+| app tests | `flutter --suppress-analytics test` (in `app/`) | `00:00 +13: All tests passed!` |
+| app analyze | `flutter --suppress-analytics analyze app` | `info • Use the null-aware marker '?' … • app/test/support/fakes.dart:53:5 • use_null_aware_elements` / `1 issue found.` (exit 1, info only) |
+
+### Milestone log
+
+_(appended per milestone below)_
+
+#### M1 — domain types + heuristic (includes the M3 integration assertion, see deviation note)
+
+- RED `npm --prefix server test -- src/brain/heuristicBrain.test.ts` (exit 1): `Tests  7 failed (7)`; e.g. `AssertionError: expected undefined to be 'heuristic'`, `AssertionError: expected 'success' not to be 'success'`, `Expected: "unverified" / Received: "partial"`, `AssertionError: expected false to be true` (prefix check).
+- RED AC-011 — `app.test.ts` two-line change run against the base `heuristicBrain.ts` (temporarily restored from HEAD): `npm --prefix server test -- src/http/app.test.ts -t "plans, calls"` (exit 1): `× plans, calls, pauses for approval and summarizes` / `Expected: "unverified"` / `Received: "success"` / `Tests  1 failed | 8 skipped (9)`.
+- GREEN `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/http/app.test.ts` (exit 0): `Tests  16 passed (16)`; full `npm --prefix server test` (exit 0): `Test Files  7 passed (7)` / `Tests  118 passed (118)`; typecheck exit 0.
+- Deviation: the AC-011 assertion change (plan M3) is committed with M1, because M1 GREEN makes the old `"success"` assertion fail and a separate commit would leave the suite red. RED for AC-011 was still observed before GREEN (above).
+- Interim: `openaiBrain.ts` `summarize` got an explicit `completeJson<CallOutcome>` type argument so M1 typechecks; M2 replaces it.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

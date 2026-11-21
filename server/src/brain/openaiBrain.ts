@@ -56,7 +56,7 @@ export class OpenAiBrain implements CallBrain {
       })),
       transcript: task.transcript.map((t) => `${t.speaker}: ${t.text}`),
     });
-    return this.completeJson(SUMMARY_SYSTEM_PROMPT, user, OutcomeSchema, () => this.fallback.summarize(task));
+    return this.completeJson<CallOutcome>(SUMMARY_SYSTEM_PROMPT, user, OutcomeSchema, () => this.fallback.summarize(task));
   }
 
   private async completeJson<T>(

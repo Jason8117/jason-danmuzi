@@ -51,10 +51,16 @@ export interface ApprovalRequest {
   userComment?: string;
 }
 
-export type OutcomeResult = "success" | "partial" | "failed";
+/** `unverified`: a summary no LLM checked against the goal, so it must not claim success (SPEC-OUTCOME-001). */
+export type OutcomeResult = "success" | "partial" | "failed" | "unverified";
+
+/** How the outcome was produced. The server attaches it; the LLM is never asked for it. */
+export type OutcomeSource = "llm" | "heuristic";
 
 export interface CallOutcome {
   result: OutcomeResult;
+  /** Always set on new outcomes. Optional only because tasks saved before this field existed lack it. */
+  source?: OutcomeSource;
   summary: string;
   keyFacts: string[];
   followUps: string[];
