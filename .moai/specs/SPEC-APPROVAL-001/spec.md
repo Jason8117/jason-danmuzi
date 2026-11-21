@@ -1,7 +1,7 @@
 ---
 id: SPEC-APPROVAL-001
 title: "통화 중 승인에 조건 한 줄 — 빠른 답, 민감정보 보호, 사용자 안내 기록"
-version: "0.1.0"
+version: "0.2.0"
 status: draft
 created: 2026-11-21
 updated: 2026-11-21
@@ -23,6 +23,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-ARCH-001, SPEC-LIFECYCLE
 | 버전 | 날짜 | 작성 | 변경 |
 |------|------|------|------|
 | 0.1.0 | 2026-11-21 | jason (manager-spec) | 최초 작성 (draft). 에픽 EPIC-ASSISTANT-UX의 첫 SPEC |
+| 0.2.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 1 반영: D1 만료 결정의 `comment`는 키 유무가 아니라 값(`undefined`)으로 고정, D2 민감 숫자열을 "구분자로 이어진 최대 사슬 전체의 숫자 수"로 정의하고 벡터 2개 추가, D3 줄 번호 정정, D4 로그 검사 근거 보강. REQ/AC 수 불변 |
 
 ## 1. 배경과 목적
 
@@ -56,7 +57,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-ARCH-001, SPEC-LIFECYCLE
 
 - **REQ-001** [Ubiquitous] 승인 응답 API(`POST /v1/tasks/:id/approvals/:approvalId`)의 본문은 `decision`(`approve`/`reject`)과 선택 필드 `comment`를 가져야 한다(**shall**). `comment`는 앞뒤 공백을 지운 뒤 비어 있으면 없는 것으로 보고, 공백을 지운 값이 500 코드 포인트를 넘으면 400 `invalid_request`다(정제 전 길이 기준). `comment`가 없는 요청의 동작과 응답 형식은 지금과 같다(현행 고정).
 - **REQ-002** [Event-driven] **When** 서비스가 코멘트가 있는 결정을 받으면, `CallService`는 저장·전달 전에 코멘트를 정제해야 한다(**shall**): (a) 제어 문자 U+0000–U+0008, U+000B, U+000C, U+000E–U+001F, U+007F–U+009F 삭제, (b) 탭(U+0009)은 공백 하나로, (c) CRLF와 CR은 LF로, (d) 연속된 LF 3개 이상은 LF 2개로, (e) 다시 앞뒤 공백 제거. 결과가 비면 코멘트가 없는 결정으로 처리한다. 정제 규칙은 `server/src/domain/`의 함수 하나에 있다.
-- **REQ-003** [Event-driven] **When** 정제된 코멘트에 민감 숫자열(숫자 13~19개가 사이에 공백 하나 또는 하이픈 하나만 끼고 이어진 부분: 카드번호·주민등록번호 형태)이 있으면, 서비스는 그 부분마다 `[민감정보 삭제]`로 바꿔야 한다(**shall**)(OD-1 DEFAULT). 저장되는 `userComment`, 제공자에 전달되는 결정의 `comment`, Realtime 도구 결과의 `user_comment`·`instruction`, 대화 기록의 안내 줄은 모두 바뀐 값을 쓴다. 숫자 12개 이하(예: 휴대전화 번호 11자리, 주문번호)는 바꾸지 않는다.
+- **REQ-003** [Event-driven] **When** 정제된 코멘트에 민감 숫자열이 있으면, 서비스는 그 사슬 전체를 `[민감정보 삭제]`로 바꿔야 한다(**shall**)(OD-1 DEFAULT). 민감 숫자열의 정의: 숫자 사이에 공백 하나 또는 하이픈 하나만 끼어 이어진 **최대 사슬**(앞뒤로 더 늘릴 수 없는 범위)을 먼저 잡고, 그 사슬 전체의 숫자 개수가 13~19개일 때만 해당한다(카드번호·주민등록번호 형태). 사슬의 일부만 가리는 일은 없다: 숫자가 20개 이상인 사슬(예: 전화번호 두 개를 공백으로 이은 `010-1234-5678 010-9876-5432`)은 통째로 그대로 둔다. 저장되는 `userComment`, 제공자에 전달되는 결정의 `comment`, Realtime 도구 결과의 `user_comment`·`instruction`, 대화 기록의 안내 줄은 모두 바뀐 값을 쓴다. 숫자 12개 이하(예: 휴대전화 번호 11자리, 주문번호)는 바꾸지 않는다.
 - **REQ-004** [Unwanted] 서버는 승인 코멘트의 원문과 정제·마스킹된 값을 어떤 로그에도 남겨서는 안 된다(**shall not**).
 
 ### 3.2 결정 전달과 기록 (서버)
@@ -68,7 +69,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-ARCH-001, SPEC-LIFECYCLE
 
 ### 3.3 만료와 닫힌 승인 (서버)
 
-- **REQ-009** [Event-driven] **When** 승인 제한 시간(`APPROVAL_TIMEOUT_SEC`)이 지나면, 서비스는 승인을 `expired`로 저장하고 결정을 `{ approved: false, reason: "expired" }`(코멘트 없음)로 끝내야 하며(**shall**), 안내 줄을 추가하지 않는다. 앱에 입력 중이던 글은 전송되지 않았으므로 어디에도 전달되지 않는다(현행 고정, 만료 = 거절).
+- **REQ-009** [Event-driven] **When** 승인 제한 시간(`APPROVAL_TIMEOUT_SEC`)이 지나면, 서비스는 승인을 `expired`로 저장하고 결정을 `approved: false`, `reason: "expired"`, `comment` 값 `undefined`(현재 `resolveApproval`은 키를 늘 넣고 값만 비운다, `callService.ts:453-457`)로 끝내야 하며(**shall**), 안내 줄을 추가하지 않는다. 앱에 입력 중이던 글은 전송되지 않았으므로 어디에도 전달되지 않는다(현행 고정, 만료 = 거절).
 - **REQ-010** [Event-driven] **When** 이미 결정되었거나 만료된 승인에 결정이 다시 도착하면, 서비스는 409 `approval_closed`를 돌려줘야 하며(**shall**), 저장된 `userComment`와 대화 기록은 바뀌지 않는다.
 
 ### 3.4 승인 카드 (앱)

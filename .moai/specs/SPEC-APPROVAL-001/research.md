@@ -40,8 +40,8 @@
 
 ## 3. 영향받는 기존 테스트
 
-- `app/test/approval_flow_test.dart:59` `expect(find.text('조건·안내 (선택)'), findsOneWidget);` — 라벨 변경으로 바뀐다(AC-014).
-- `approval_flow_test.dart:60` `tester.enterText(find.byType(TextField), …)` — 입력칸이 하나로 유지되므로 그대로 통과해야 한다.
+- `app/test/approval_flow_test.dart:55` `expect(find.text('조건·안내 (선택)'), findsOneWidget);` — 라벨 변경으로 바뀐다(AC-014).
+- `approval_flow_test.dart:56` `tester.enterText(find.byType(TextField), …)` — 입력칸이 하나로 유지되므로 그대로 통과해야 한다.
 - `server/src/http/app.test.ts:135-164` "plans, calls, pauses for approval and summarizes" — 코멘트 없이 승인하므로 안내 줄이 생기지 않아 영향 없다.
 - `server/src/brain/prompts.test.ts:25-53` — 규칙 5·6 문구를 단언한다. 규칙 7 추가는 기존 문구를 바꾸지 않는다.
 

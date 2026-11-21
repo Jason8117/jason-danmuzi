@@ -68,6 +68,10 @@ flutter --suppress-analytics analyze
 | `12345678901234567890` (20자리) | 그대로 |
 | `1234--5678-9012-3456` (하이픈 두 개가 끊음) | 그대로 |
 | `카드 1111 2222 3333 4444, 다른 카드 5555-6666-7777-8888` | `카드 [민감정보 삭제], 다른 카드 [민감정보 삭제]` |
+| `010-1234-5678 010-9876-5432` (공백으로 이은 최대 사슬 22자리) | 그대로 |
+| `1234 5678 9012 3456 7890` (최대 사슬 20자리) | 그대로 |
+
+같은 표의 모든 행을 앱 쪽 판정(AC-011의 경고 규칙)에도 쓴다: 결과가 바뀌는 행은 경고가 보이고, "그대로"인 행은 경고가 없다(`app/test/unit_test.dart` — "detects sensitive digit runs like the server").
 
 - 테스트: `approvalComment.test.ts` — "masks card- and ID-shaped digit runs" (`it.each`)
 - RED: 함수가 없다.
@@ -86,7 +90,7 @@ flutter --suppress-analytics analyze
 - **When** 승인 요청 → 결정(코멘트 포함) → 통화 종료까지 실행하면
 - **Then** 가짜 로거가 받은 모든 객체와 메시지를 `JSON.stringify`한 문자열 어디에도 `비밀안내문구-XYZ`, `1234 5678 9012 3456`, `[민감정보 삭제]`가 없다
 - 테스트: `callService.test.ts` — "never logs approval comments"
-- 참고: 현재 코드에서도 통과할 수 있다(보호 테스트). 정제·안내 줄 추가가 로그를 새로 만들지 않음을 고정한다.
+- 참고: 현재 코드에서도 통과할 수 있다(보호 테스트). 정제·안내 줄 추가가 로그를 새로 만들지 않음을 고정한다. HTTP 계층 요청 로그는 직렬화기가 `method`와 `url`만 남기므로(`server/src/http/app.ts:102-107`) 본문(코멘트)이 들어가지 않는다. 이 직렬화기는 이 SPEC에서 바꾸지 않으며, `git diff <run_start_sha> -- server/src/http/app.ts`가 비어 있음을 함께 기록한다.
 
 ### AC-006 — 안내 줄은 제공자와 무관하게 한 줄 (REQ-006, REQ-009, REQ-010)
 
@@ -94,7 +98,7 @@ flutter --suppress-analytics analyze
 - **When / Then**
   1. 작업 언어 `ko`, 코멘트 `1만 원까지만`으로 승인 → `system` 줄이 정확히 하나이고 `사용자 안내: 1만 원까지만`이며, 그 줄이 `확인했습니다` 줄보다 앞에 있다
   2. 작업 언어 `en`, 코멘트 `up to 10,000 won` → `User guidance: up to 10,000 won`
-  3. 가짜 타이머로 `approvalTimeoutMs`만큼 진행(만료) → 안내 줄 없음, 결정 `{ approved: false, reason: "expired" }`이고 `comment` 키 없음, 승인 `status: "expired"`
+  3. 가짜 타이머로 `approvalTimeoutMs`만큼 진행(만료) → 안내 줄 없음, 결정의 `approved`가 `false`, `reason`이 `"expired"`, `comment`가 `undefined`(`expect(decision.comment).toBeUndefined()` — 키 유무는 단언하지 않음, 현재 `callService.ts:453-457`은 키를 넣고 값만 비움), 승인 `status: "expired"`, `userComment` 없음
   4. (1) 뒤 같은 승인에 `{ approve: false, comment: "취소" }`를 다시 보냄 → `ServiceError` 409 `approval_closed`, `userComment`는 `1만 원까지만` 그대로, `system` 줄 수 그대로(1)
   5. 코멘트 없이 승인 → 안내 줄 없음
   6. 시뮬레이션 서버 전체 흐름(`app.test.ts`)에서 코멘트 `1만 원까지만`으로 승인한 작업이 `completed`가 되면 `사용자 안내: 1만 원까지만` 줄이 정확히 하나다(시뮬레이션 제공자 중복 제거 확인)
