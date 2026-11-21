@@ -3,6 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../../../../core/widgets/common.dart';
 import '../../domain/call_models.dart';
 
+/// OD-2 default wording (pending owner review).
+const _unverifiedNotice = '자동 요약이라 목표를 이뤘는지 확인하지 못했어요. 대화 기록을 직접 확인해 주세요.';
+
 class OutcomeCard extends StatelessWidget {
   const OutcomeCard({super.key, required this.task});
 
@@ -25,6 +28,8 @@ class OutcomeCard extends StatelessWidget {
     final (IconData icon, Color color) = switch (outcome?.result) {
       OutcomeResult.success => (Icons.check_circle_rounded, scheme.primary),
       OutcomeResult.partial => (Icons.timelapse_rounded, Colors.orange.shade700),
+      // Neutral: neither a success claim nor a failure verdict (SPEC-OUTCOME-001 REQ-012).
+      OutcomeResult.unverified => (Icons.help_outline_rounded, scheme.onSurfaceVariant),
       _ => (Icons.error_rounded, scheme.error),
     };
 
@@ -47,6 +52,13 @@ class OutcomeCard extends StatelessWidget {
             outcome?.summary ?? task.error ?? '통화를 완료하지 못했어요.',
             style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
           ),
+          if (outcome?.result == OutcomeResult.unverified) ...[
+            const SizedBox(height: 8),
+            Text(
+              _unverifiedNotice,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
           if (task.error != null && outcome != null) ...[
             const SizedBox(height: 8),
             Text(task.error!, style: theme.textTheme.bodySmall?.copyWith(color: scheme.error)),
