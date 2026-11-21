@@ -3,7 +3,7 @@
 ## §E.1 Plan-phase Audit-Ready Signal
 
 - plan_status: revised after plan-audit iteration 1 (PASS-with-fixes 0.86; D1, D2 fixed, D3, D4 applied) — re-audit pending
-- spec_version: 0.2.0
+- spec_version: 0.3.0 (plan-audit iteration 2: PASS 0.92; N1 fixed — sensitive chains of 13+ digits masked with no upper bound, hyphenated domestic phone tokens exempt)
 - plan_complete_at: 2026-11-21
 - base_sha: c664596
 - tier: M, harness: standard (recommended)
