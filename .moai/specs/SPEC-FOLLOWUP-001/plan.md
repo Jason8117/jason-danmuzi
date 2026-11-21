@@ -16,7 +16,7 @@
 
 ### A.2 새 의존성 (OD-1)
 
-- `app/pubspec.yaml`에 `share_plus` 추가, `pubspec.lock` 갱신(`flutter pub get`). 버전은 run-phase에서 `sdk: ^3.14.0`과 맞는 최신 안정판을 패키지 문서로 확인해 정한다. 파일 공유는 메모리 바이트로 만든 파일 객체를 쓴다(임시 파일 경로용 `path_provider` 추가 없음 — 필요하면 blocker로 보고).
+- `app/pubspec.yaml`에 `share_plus` 추가, `pubspec.lock` 갱신(`flutter pub add share_plus`). 이 명령의 출력(해결된 버전, 새로 생긴 전이 패키지)을 M2 첫 증거로 `progress.md`에 원문 기록한다(직접 의존성은 하나, 전이 의존성은 기록으로 드러냄 — plan-audit D17). 버전은 run-phase에서 `sdk: ^3.14.0`과 맞는 최신 안정판을 패키지 문서로 확인해 정한다. 파일 공유는 메모리 바이트로 만든 파일 객체를 쓴다(임시 파일 경로용 `path_provider` 추가 없음 — 필요하면 blocker로 보고).
 - 공유·클립보드 호출은 `FollowUpService`(이름은 RED에서 확정) 한 곳에 모으고 Riverpod 공급자로 주입한다. 기본 구현: 클립보드는 `flutter/services.dart`의 `Clipboard`, 공유는 `share_plus`. 테스트는 기록용 가짜로 바꾼다.
 
 ### A.3 결과 화면 (REQ-005 ~ REQ-010, REQ-012)
@@ -28,7 +28,7 @@
 
 ### A.4 신뢰 안내 (REQ-013 ~ REQ-015)
 
-- `trust_notice.dart`(새): 다섯 문장 상수, 안내 시트(확인 버튼), "한 번만" 판정 함수.
+- `trust_notice.dart`(새): 여섯 문장 상수, 안내 시트(확인 버튼), "한 번만" 판정 함수.
 - `app_settings.dart`: 안내 확인 기록(불리언 하나)을 읽고 저장하는 메서드. 기존 네 설정 키는 그대로.
 - `plan_card_screen.dart`([이대로 시작])와 `call_detail_screen.dart`("이대로 전화 걸기") 앞에 안내 판정을 둔다.
 - `settings_screen.dart`: "AI 비서와 기록" 묶음.
@@ -66,7 +66,7 @@
 | `app/test/unit_test.dart` | 수정 | AC-005 |
 | `app/test/plan_card_test.dart`, `app/test/intake_flow_test.dart` | 수정 | AC-016 의도된 준비 줄 변경 |
 
-합계 20개(서버 5, 앱 15 — 그중 테스트 5, 잠금 파일 1). Tier 판단: 제품 코드는 서버 3·앱 9로, 새 코드는 순수 함수 하나와 작은 위젯 둘이다. 파일 수는 Tier M 안내치(5~15)를 넘지만 크기는 Tier M 범위(300~1000 LOC)로 보고 M을 유지한다. plan-auditor가 Tier L이 맞다고 보면 design.md를 더해 올린다.
+합계 21개(서버 5, 앱 16 — 앱은 신규 5·수정 11이며, 그중 테스트 5개, `pubspec.yaml`·`pubspec.lock` 2개, 제품 코드 9개). Tier 판단: 제품 코드는 서버 3·앱 9로, 새 코드는 순수 함수 하나와 작은 위젯 둘이다. 파일 수는 Tier M 안내치(5~15)를 넘지만 크기는 Tier M 범위(300~1000 LOC)로 보고 M을 유지한다. plan-auditor가 Tier L이 맞다고 보면 design.md를 더해 올린다.
 
 ## C. 마일스톤 (우선순위 순, 하나씩 순서대로)
 
@@ -115,7 +115,7 @@ SPEC-INTAKE-001과 `call_models.dart`, `intake_models.dart`, `plan_card_screen.d
 |------|-----|
 | Tier | M (파일 수 초과 사유는 §B) |
 | 도메인 수 | 2 (server brain, app UI·모델) |
-| 변경 파일 수 | 20 (서버 수정 5, 앱 신규 5·수정 10) |
+| 변경 파일 수 | 21 (서버 수정 5, 앱 신규 5·수정 11) |
 | REQ / AC | 16 / 16 |
 | 외부 연동 | OpenAI(가짜 `fetch`), 기기 공유 시트(가짜 서비스) |
 | 새 의존성 | `share_plus` (앱, OD-1) |

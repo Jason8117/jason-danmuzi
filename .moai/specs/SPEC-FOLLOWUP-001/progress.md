@@ -2,14 +2,15 @@
 
 ## §E.1 Plan-phase Audit-Ready Signal
 
-- plan_status: audit-ready (plan-audit not yet run)
+- plan_status: revised after plan-audit iteration 1 (FAIL 0.83; D13-D15 fixed, D16, D17 applied) — re-audit pending
+- spec_version: 0.2.0
 - plan_complete_at: 2026-11-21
 - base_sha: c664596
-- tier: M (file count 20 exceeds the M guidance; rationale in plan.md §B), harness: standard (recommended)
+- tier: M (file count 21 exceeds the M guidance; rationale in plan.md §B; auditor D23 accepted M), harness: standard (recommended)
 - artifacts: spec.md, plan.md, acceptance.md, research.md, progress.md
 - counts: 16 REQ / 16 AC
 - depends_on: SPEC-INTAKE-001
-- open_decisions: OD-1 ~ OD-5 DEFAULT (pending owner review); OD-1 adds one app dependency (`share_plus`)
+- open_decisions: OD-1 ~ OD-6 DEFAULT (pending owner review); OD-1 adds one direct app dependency (`share_plus`); OD-6 calendar label depends on a manual device check
 - note: test-fixture lines in two SPEC-INTAKE-001 widget tests change by design (trust-notice acknowledgement key) — AC-016
 - release note: server and app ship in the same release
 - run-entry note: manager-develop records `run_start_sha` (HEAD at run entry) and the measured test baseline as the first lines of §E.2

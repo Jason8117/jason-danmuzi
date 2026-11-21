@@ -36,13 +36,16 @@
 
 | 문장 | 근거(코드) |
 |------|-----------|
-| (1) AI라고 먼저 밝힘 | `server/src/brain/prompts.ts:38` "Always say you are an AI assistant in your first sentence." 첫 인사 템플릿도 AI 비서라고 밝힘(`prompts.ts:3-7`) |
+| (1) AI라고 먼저 밝히도록 정해져 있음(지시) | `server/src/brain/prompts.ts:38` "Always say you are an AI assistant in your first sentence." 첫 인사 템플릿도 AI 비서라고 밝힘(`prompts.ts:3-7`) |
 | (2) 중요한 결정은 먼저 물어봄 | `prompts.ts:39-42` 규칙 2(결제·가입·약정 전 `request_user_approval`) |
 | (3) 대화가 글로 서버에 저장, 끝난 통화는 지울 수 있음 | `CallTask.transcript`(`domain/types.ts:91`), 저장소 `store/taskStore.ts`, 삭제 `http/app.ts:182-185`, 끝난·계획 대기 작업만 삭제(`callService.ts:300-307`), 앱 삭제 버튼(`call_detail_screen.dart:119-120`) |
 | (4) 음성은 서버에 저장하지 않음, 실통화 음성은 KAT·OpenAI를 거침 | `domain/types.ts`에 audio 필드 없음(`grep -ci audio` → 0), 서버에서 파일을 쓰는 곳은 `store/taskStore.ts`뿐(`grep -rln "writeFile\|createWriteStream\|appendFile" server/src`, 테스트 제외). 브리지는 음성 조각을 그대로 넘기기만 함(`providers/realtimeBridge.ts:191-193, 289-290`) |
-| (5) 카드번호·비밀번호를 말하지 않음 | `prompts.ts:43-44` 규칙 3 |
+| (5) 카드번호·비밀번호를 말하지 않도록 정해져 있음(지시) | `prompts.ts:43-44` 규칙 3 |
+| (6) 부탁 내용·승인 코멘트·대화 글이 OpenAI로 전송됨(LLM이 연결된 경우) | `server/src/brain/openaiBrain.ts:59-68`(계획 요청: 요청자 이름, 상대 이름, `goal`, `shareableInfo`), `:72-90`(요약 요청: `goal`, 승인 질문·상태·`userComment`, 대화 기록), `:113`(전송 주소 `api.openai.com/v1/chat/completions`). LLM 키가 없으면 `HeuristicBrain`만 쓰므로 전송하지 않는다(`container.ts`). 의뢰 해석 글은 SPEC-INTAKE-001 REQ-007·008(번호 모양을 가린 뒤 전송) |
 
-KAT Cloud나 OpenAI가 자기 쪽에서 음성을 보관하는지는 이 저장소로 알 수 없다. 그래서 (4)는 "이 앱의 서버"로 범위를 한정한다.
+KAT Cloud나 OpenAI가 자기 쪽에서 음성·글을 보관하는지는 이 저장소로 알 수 없다. 그래서 (4)는 "이 앱의 서버"로 범위를 한정하고, (6)은 "전송된다"는 사실만 말한다.
+
+(1)(2)(5)는 모델 행동에 관한 문장이며 근거는 지시문 문자열뿐이다. 모델이 늘 따른다는 것은 이 저장소에서 검증할 수 없으므로(SPEC-APPROVAL-001 잔여 위험과 같음) 문장을 "…하도록 정해져 있어요"로 쓴다(plan-audit D14).
 
 지금 신뢰 안내는 양식 화면의 한 문단뿐이다(`new_call_screen.dart:162-182`, "AI 비서는 통화 시작 때 AI임을 밝혀요 …"). SPEC-INTAKE-001 뒤 기본 흐름은 양식을 거치지 않는다.
 

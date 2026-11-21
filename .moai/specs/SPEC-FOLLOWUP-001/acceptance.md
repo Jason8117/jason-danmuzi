@@ -23,7 +23,7 @@ flutter --suppress-analytics analyze
 
 규칙: 테스트 먼저(RED) → 구현(GREEN). 실제 OpenAI 호출 없음. 공유·클립보드는 주입한 가짜 서비스로 호출만 기록한다(실제 공유 시트를 띄우지 않음). 시계는 주입해 고정한다. 문구 기대값은 OD-3·OD-4 DEFAULT.
 
-공통 고정값: 작업 `id "task-1"`, `targetName "라 파스타"`, `endedAt "2026-11-21T10:05:00Z"`(한국 시각 오후 7:05), 생성 시각(DTSTAMP용) `2026-11-21T10:06:00Z`.
+공통 고정값: 작업 `id "task-1"`, `targetName "라 파스타"`, `endedAt "2026-11-21T10:05:00Z"`(+09:00 기준 오후 7:05), 생성 시각(DTSTAMP용) `2026-11-21T10:06:00Z`. 공유 문구 함수에는 표시 시간대 오프셋을 인자로 넘기며(기본 +09:00), 테스트 결과는 실행 기기의 시간대(`TZ`)와 무관하다.
 
 ## 서버
 
@@ -121,7 +121,7 @@ flutter --suppress-analytics analyze
 
 ### AC-009 — 공유 문구 (REQ-009)
 
-- **Given** 문구 생성 함수, 위 공통 고정값
+- **Given** 문구 생성 함수, 위 공통 고정값, 표시 시간대 인자 `+09:00`(Asia/Seoul)을 명시해 넘김
 - **When / Then**
   1. 결과 `success`, 요약 `금요일 7시 2명 예약을 확정했어요.`, 알아낸 내용 `["7시 2명", "예약금 없음"]`, 해야 할 일 `["10분 전 도착"]` → 정확히
 
@@ -148,7 +148,9 @@ flutter --suppress-analytics analyze
      ※ 자동 요약이라 목표를 이뤘는지 확인하지 못했어요.
      ```
   3. 작업 번호 `+8221234567`, 요청자 `김민수`, 대화 기록 `네, 라 파스타입니다.`, 승인 코멘트 `1만 원까지만`이 있어도 (1)의 결과 문자열에 `02-123-4567`, `+8221234567`, `김민수`, `네, 라 파스타입니다.`, `1만 원까지만`이 없다
-- 테스트: `follow_up_test.dart` — "builds the share text" (1~3)
+  4. (1)과 같은 입력에 표시 시간대 인자 `+00:00`을 넘기면 둘째 줄이 `2026년 11월 21일 오전 10:05`다. 인자를 생략하면 (1)과 같다(기본 +09:00)
+  5. 시간대 결정성: 같은 테스트 파일을 `TZ=UTC`와 `TZ=Asia/Seoul`로 각각 실행해도(`TZ=UTC flutter --suppress-analytics test test/follow_up_test.dart`) 둘 다 통과한다 — run-phase가 두 실행 결과를 기록한다
+- 테스트: `follow_up_test.dart` — "builds the share text" (1~4)
 - 참고: 라벨은 기존 `OutcomeResult.label`(`call_models.dart:51-58`)을 쓴다.
 
 ### AC-010 — 캘린더 노출 조건 (REQ-010)
@@ -181,7 +183,7 @@ flutter --suppress-analytics analyze
 
 - **Given** 신뢰 안내 문구 상수
 - **When** 단위 테스트에서 문구 목록을 읽고, 서버 근거를 명령으로 확인하면
-- **Then** 목록이 REQ-013의 다섯 문장과 순서·글자까지 같다. 그리고 다음 명령이 모두 기대 결과를 낸다(근거가 사라지면 문구가 거짓이 되므로 sync-phase에서도 다시 실행한다)
+- **Then** 목록이 REQ-013의 여섯 문장과 순서·글자까지 같고, (1)(2)(5)는 "정해져 있어요"로 끝난다(지시 수준 표현). 그리고 다음 명령이 모두 기대 결과를 낸다(근거가 사라지면 문구가 거짓이 되므로 sync-phase에서도 다시 실행한다). (1)(2)(5)의 근거는 지시문이 있다는 것까지이며 모델이 지시를 따르는지는 검증하지 않는다(OD-3 수용 위험)
 
 | 항목 | 명령 | 기대 |
 |------|------|------|
@@ -190,14 +192,15 @@ flutter --suppress-analytics analyze
 | (3) | `grep -c 'app.delete("/v1/tasks/:id"' server/src/http/app.ts` | `1` |
 | (4) | `grep -ci "audio" server/src/domain/types.ts` 그리고 `grep -rln "writeFile\|createWriteStream\|appendFile" server/src \| grep -v "\.test\.ts"` | `0`, 그리고 `server/src/store/taskStore.ts` 한 줄 |
 | (5) | `grep -c "Never give card numbers, passwords" server/src/brain/prompts.ts` | `1` |
+| (6) | `grep -c 'api.openai.com/v1/chat/completions' server/src/brain/openaiBrain.ts`, `grep -c 'goal: input.goal' server/src/brain/openaiBrain.ts`, `grep -c 'userComment: a.userComment' server/src/brain/openaiBrain.ts`, `grep -c 'transcript: task.transcript' server/src/brain/openaiBrain.ts` | 각각 `1` 이상(계획 입력 `openaiBrain.ts:59-68`, 요약 입력 `:72-90`; 의뢰 해석 입력은 SPEC-INTAKE-001 REQ-008) |
 
-- 테스트: `app/test/trust_notice_test.dart`(새 파일) — "trust statements are exactly the agreed five"; 명령 표는 run-phase 증거로 `progress.md`에 원문 기록
+- 테스트: `app/test/trust_notice_test.dart`(새 파일) — "trust statements are exactly the agreed six"; 명령 표는 run-phase 증거로 `progress.md`에 원문 기록
 
 ### AC-014 — 첫 통화 전 한 번 (REQ-014)
 
 - **Given** 기기 저장값에 안내 확인 기록이 없는 앱, 계획 카드(SPEC-INTAKE-001 AC-021의 초안), 생성 요청을 기록하는 가짜 저장소
 - **When / Then**
-  1. [이대로 시작] → 안내(다섯 문장, [확인했어요])가 보이고 생성 요청 0건
+  1. [이대로 시작] → 안내(여섯 문장, [확인했어요])가 보이고 생성 요청 0건
   2. 바깥을 눌러 닫음 → 계획 카드에 남고 생성 요청 0건
   3. 다시 [이대로 시작] → 안내가 다시 보임 → [확인했어요] → 생성 요청 1건, 상세 화면으로 이동
   4. 앱을 다시 띄워(같은 기기 저장값) 새 계획 카드에서 [이대로 시작] → 안내 없이 생성 요청 1건
@@ -209,7 +212,7 @@ flutter --suppress-analytics analyze
 
 - **Given** (1) 설정 화면, (2) `in_progress` 작업의 상세 화면, (3) `completed` 작업의 상세 화면
 - **When** 렌더링하면
-- **Then** (1) "AI 비서와 기록" 제목과 다섯 문장이 보인다. (2) "AI 비서가 AI임을 밝히고 통화해요 · 대화는 글로 기록돼요"가 보인다. (3) 그 한 줄이 없다
+- **Then** (1) "AI 비서와 기록" 제목과 여섯 문장이 보인다. (2) "AI 비서는 AI임을 밝히도록 정해져 있어요 · 대화는 글로 기록돼요"가 보인다. (3) 그 한 줄이 없다
 - 테스트: `trust_notice_test.dart` — "shows trust statements in settings and during calls"
 
 ### AC-016 — 호환·회귀·의존성 (REQ-016)
@@ -217,22 +220,24 @@ flutter --suppress-analytics analyze
 - 서버 `npm --prefix server test` 전체 통과(기존 테스트 무수정), typecheck 0.
 - 앱 `flutter test` 전체 통과, `flutter analyze`가 run-phase 기준선보다 늘지 않음.
 - 의도된 변경: SPEC-INTAKE-001이 만든 `app/test/plan_card_test.dart`와 `app/test/intake_flow_test.dart`의 기기 저장값 준비(`SharedPreferences.setMockInitialValues({...})`)에 안내 확인 기록 키 한 항목을 더한다. `git diff <run_start_sha> -- app/test/plan_card_test.dart app/test/intake_flow_test.dart`가 그 준비 줄의 변경만 보여 준다.
-- 의존성: `git diff <run_start_sha> -- app/pubspec.yaml`의 `dependencies:` 추가 줄이 `share_plus` 하나이고, `server/package.json`은 바뀌지 않는다.
+- 의존성: `git diff <run_start_sha> -- app/pubspec.yaml`의 `dependencies:` 추가 줄이 `share_plus` 하나이고(직접 의존성 기준), `server/package.json`은 바뀌지 않는다. M2 첫 단계의 `flutter pub add share_plus` 출력(해결된 버전, `pubspec.lock`에 새로 생긴 전이 패키지 목록)을 `progress.md`에 원문으로 기록한다. 해결이 실패하거나 SDK 제약과 맞지 않으면 blocker로 보고한다.
 
 ## 엣지 케이스
 
-- 시간대가 다른 사용자: 앱은 `.ics`를 UTC로 쓰므로 캘린더 앱이 기기 시간대로 보여 준다. 공유 문구의 시각은 기기 시간대로 표시된다.
+- 시간대가 다른 사용자: 앱은 `.ics`를 UTC로 쓰므로 캘린더 앱이 기기 시간대로 보여 준다. 공유 문구의 시각은 항상 Asia/Seoul(+09:00)로 표시된다(REQ-009, 받는 사람이 한국 시각 기준으로 읽도록).
 - `endedAt`이 없는 결과(예전 데이터): 공유 문구 둘째 줄은 `updatedAt`을 쓴다.
 - 결과 화면에서 작업이 삭제되면 후속 행동 줄도 사라진다(기존 "통화를 찾을 수 없어요" 화면).
 
 ## 잔여 위험
 
 - LLM이 대화를 잘못 이해해 틀린 일정을 낼 수 있다. 초안 문구(REQ-011)와 캘린더 앱에서의 저장 전 확인으로 막으며, 자동 검증하지 않는다.
-- `share_plus`의 파일 공유 동작은 플랫폼마다 다르다(웹은 브라우저의 공유 기능에 따름). run-phase에서 패키지 문서로 확인하고, 기기 수동 확인은 이 SPEC의 자동 인수 기준 밖이다.
+- `share_plus`의 파일 공유 동작은 플랫폼마다 다르다(웹은 브라우저의 공유 기능에 따름). run-phase에서 패키지 문서로 확인한다.
+- Android·iOS 기본 캘린더가 공유 시트로 `.ics`를 받는지는 확인되지 않은 가설이다. 아래 완료 정의의 기기 수동 확인으로 판정하고, 받지 못하면 OD-6에 따라 라벨을 바꾼다.
 - 신뢰 안내 문구는 법률 검토 전 기본값이다(OD-3).
 - 공유 문구의 요약·알아낸 내용에 상대가 말한 번호(예: 예약 번호)가 들어 있으면 그대로 나간다. 공유는 사용자가 직접 고르는 행동이다.
 
 ## 완료 정의 (Definition of Done)
 
 - AC-001 ~ AC-016 충족, RED/GREEN 원문과 AC-013 명령 표 결과를 `progress.md` §E.2에 기록.
-- OD-1 ~ OD-5 DEFAULT 구현과 소유자 검토 대기를 sync-phase 문서에 기록. 새 의존성 `share_plus`를 `.moai/project/tech.md`에 반영할 항목으로 남김.
+- OD-1 ~ OD-6 DEFAULT 구현과 소유자 검토 대기를 sync-phase 문서에 기록. 새 의존성 `share_plus`를 `.moai/project/tech.md`에 반영할 항목으로 남김.
+- **기기 수동 확인(사람이 판정, 자동 AC 아님)**: Android 기기 1대와 iOS 기기 1대에서 결과 화면의 캘린더 행동을 눌러 (a) 공유 시트에 기본 캘린더 앱이 보이는지, (b) 고르면 일정 초안이 열리는지 확인해 결과(기기·OS 버전·예/아니오)를 `progress.md`에 적는다. 하나라도 "아니오"이면 OD-6에 따라 라벨을 "캘린더 파일 보내기"로 바꾼다. 기기를 쓸 수 없으면 이 항목을 "확인 못 함"으로 적고 라벨을 "캘린더 파일 보내기"로 둔다.
