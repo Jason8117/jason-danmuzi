@@ -278,6 +278,80 @@ describe("CallService terminateActiveCalls (AC-003, AC-004)", () => {
   });
 });
 
+describe("CallService restart recovery (AC-007, AC-008)", () => {
+  it.each([
+    { name: "a: termination succeeds", terminate: () => Promise.resolve(), warns: 0, waitMs: 0 },
+    { name: "b: termination is rejected", terminate: () => Promise.reject(new Error("KAT 500")), warns: 1, waitMs: 0 },
+    { name: "c: termination never finishes", terminate: () => new Promise<void>(() => {}), warns: 1, waitMs: 10_000 },
+  ])("recovery terminates a still-running provider call ($name)", async ({ terminate, warns, waitMs }) => {
+    vi.useFakeTimers();
+    const provider = new FakeCallIdProvider("kat");
+    const { calls, store, log } = setup({
+      provider,
+      tasks: [makeTask({ id: "live", status: "in_progress", provider: "kat", providerCallId: "c-2" })],
+    });
+    const statusAtTerminate: string[] = [];
+    provider.terminateImpl = (callId) => {
+      statusAtTerminate.push(`${callId}:${store.get("live")!.status}`);
+      return terminate();
+    };
+
+    let returned = false;
+    const recovery = calls.recoverInterruptedTasks().then(() => {
+      returned = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    if (waitMs > 0) {
+      await vi.advanceTimersByTimeAsync(waitMs - 1);
+      expect(returned).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+    }
+    await recovery;
+
+    expect(returned).toBe(true);
+    expect(provider.terminated).toEqual(["c-2"]);
+    expect(statusAtTerminate).toEqual(["c-2:in_progress"]);
+    expect(calls.get("live").status).toBe("failed");
+    expect(log.warns()).toHaveLength(warns);
+  });
+
+  it("recovery without a call id or with a different provider only marks the task failed", async () => {
+    // (a) no providerCallId (saved before the field existed), (c) summarizing/planning, (d) awaiting_approval
+    const kat = new FakeCallIdProvider("kat");
+    const first = setup({
+      provider: kat,
+      tasks: [
+        makeTask({ id: "no-id", status: "in_progress", provider: "kat" }),
+        makeTask({ id: "summarizing", status: "summarizing", provider: "kat" }),
+        makeTask({ id: "planning", status: "planning", provider: "kat" }),
+        makeTask({ id: "waiting", status: "awaiting_approval", provider: "kat" }),
+      ],
+    });
+    await first.calls.recoverInterruptedTasks();
+
+    expect(kat.terminated).toEqual([]);
+    expect(first.calls.get("no-id").status).toBe("failed");
+    expect(first.calls.get("summarizing").status).toBe("failed");
+    expect(first.calls.get("planning").status).toBe("failed");
+    expect(first.calls.get("waiting").status).toBe("awaiting_approval");
+    expect(first.log.warns()).toHaveLength(1);
+    expect(first.log.warns()[0]!.obj).toMatchObject({ taskId: "no-id", reason: "no_provider_call_id" });
+
+    // (b) the task was placed through KAT, but the server now runs the simulated provider
+    const simulated = new FakeCallIdProvider("simulated");
+    const second = setup({
+      provider: simulated,
+      tasks: [makeTask({ id: "other", status: "in_progress", provider: "kat", providerCallId: "c-3" })],
+    });
+    await second.calls.recoverInterruptedTasks();
+
+    expect(simulated.terminated).toEqual([]);
+    expect(second.calls.get("other").status).toBe("failed");
+    expect(second.log.warns()).toHaveLength(1);
+    expect(second.log.warns()[0]!.obj).toMatchObject({ taskId: "other", reason: "provider_mismatch" });
+  });
+});
+
 describe("CallService with a hung KAT call creation (AC-011)", () => {
   it(
     "a hung provider start fails the task promptly and frees the slot",

@@ -7,7 +7,8 @@ import { FINAL_STORE_FLUSH_FAILED, JsonFileTaskStore } from "./store/taskStore.j
 const config = loadConfig();
 const store = await JsonFileTaskStore.open(config.DATA_FILE, { logger });
 const { calls, bus, kat } = createContainer(config, store, logger);
-calls.recoverInterruptedTasks();
+// Before listen(): hangs up calls a previous process left behind (bounded to 10 s).
+await calls.recoverInterruptedTasks();
 
 const app = await buildApp({ config, calls, bus, kat });
 

@@ -160,12 +160,17 @@ export class KatCallProvider implements CallProvider {
     await this.terminateCall(active.callId, taskId);
   }
 
-  private async terminateCall(callId: string, taskId: string): Promise<void> {
+  /** Used by restart recovery: no in-memory call exists, only the callId saved on the task. Never throws. */
+  async terminateByProviderCallId(providerCallId: string): Promise<void> {
+    await this.terminateCall(providerCallId);
+  }
+
+  private async terminateCall(callId: string, taskId?: string): Promise<void> {
     if (!callId) return;
     try {
       await this.api("POST", `/group/${this.options.groupId}/media-stream/calls/${callId}/termination`);
     } catch (error) {
-      this.log.warn({ taskId, err: (error as Error).message }, "Hangup request failed");
+      this.log.warn({ taskId, callId, err: (error as Error).message }, "Hangup request failed");
     }
   }
 

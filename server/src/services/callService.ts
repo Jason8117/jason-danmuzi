@@ -57,6 +57,8 @@ interface RunningSession {
 const now = () => new Date().toISOString();
 
 export const SHUTDOWN_CALL_ERROR = "서버가 종료되어 통화를 끊었습니다.";
+/** Upper bound on how long startup waits for restart-recovery hang-ups. */
+const RECOVERY_DEADLINE_MS = 10_000;
 
 export interface TerminateActiveCallsOptions {
   /** The termination step's share of the shutdown budget; unfinished hang-ups are abandoned after it. */
@@ -79,16 +81,66 @@ export class CallService {
     this.log = options.logger ?? defaultLogger;
   }
 
-  /** Calls interrupted by a server restart cannot be resumed; mark them so the user is not left waiting. */
-  recoverInterruptedTasks(): void {
+  /**
+   * Calls interrupted by a server restart cannot be resumed; mark them so the user is not left waiting.
+   * A call that may still be ringing or talking at the provider is hung up first (bounded by `deadlineMs`),
+   * so nobody is left on a line without an agent.
+   */
+  // @MX:WARN: [AUTO] Hangs up live provider calls found in DATA_FILE; assumes one server process per DATA_FILE.
+  // @MX:REASON: Two instances sharing a DATA_FILE (e.g. blue/green) would cut the other's healthy calls (SPEC-LIFECYCLE-001 §4).
+  // @MX:SPEC: SPEC-LIFECYCLE-001
+  async recoverInterruptedTasks({ deadlineMs = RECOVERY_DEADLINE_MS }: { deadlineMs?: number } = {}): Promise<void> {
+    const toHangUp: CallTask[] = [];
     for (const task of this.store.list()) {
       if (isTerminal(task.status) || task.status === "awaiting_approval") continue;
-      task.status = "failed";
-      task.error = "서버가 재시작되어 작업이 중단되었습니다.";
-      task.endedAt ??= now();
-      for (const approval of task.approvals) if (approval.status === "pending") approval.status = "expired";
-      this.persist(task);
+      if (!isActiveCall(task.status)) {
+        this.markInterrupted(task);
+      } else if (!task.providerCallId) {
+        this.log.warn({ taskId: task.id, reason: "no_provider_call_id" }, "Recovery cannot hang up the call");
+        this.markInterrupted(task);
+      } else if (task.provider !== this.provider.name || !this.provider.terminateByProviderCallId) {
+        this.log.warn(
+          { taskId: task.id, reason: "provider_mismatch", taskProvider: task.provider, activeProvider: this.provider.name },
+          "Recovery cannot hang up the call",
+        );
+        this.markInterrupted(task);
+      } else {
+        toHangUp.push(task);
+      }
     }
+
+    const pending = new Set(toHangUp.map((task) => task.id));
+    const hangups = toHangUp.map((task) =>
+      Promise.resolve()
+        .then(() => this.provider.terminateByProviderCallId!(task.providerCallId!))
+        .catch((error: unknown) =>
+          this.log.warn({ taskId: task.id, err: (error as Error).message }, "Recovery hangup failed"),
+        )
+        .finally(() => pending.delete(task.id)),
+    );
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, deadlineMs);
+    });
+    try {
+      if (hangups.length > 0) await Promise.race([Promise.all(hangups), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (pending.size > 0) {
+      this.log.warn({ taskIds: [...pending], deadlineMs }, "Recovery hangup did not finish in time");
+    }
+
+    // Marked failed whether or not the hang-up went through.
+    for (const task of toHangUp) this.markInterrupted(task);
+  }
+
+  private markInterrupted(task: CallTask): void {
+    task.status = "failed";
+    task.error = "서버가 재시작되어 작업이 중단되었습니다.";
+    task.endedAt ??= now();
+    for (const approval of task.approvals) if (approval.status === "pending") approval.status = "expired";
+    this.persist(task);
   }
 
   /** Shutdown step 0: from now on no new task, no new call and no new mid-call approval. */

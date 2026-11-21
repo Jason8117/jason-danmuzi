@@ -107,6 +107,33 @@ GREEN (같은 명령, exit 0): `Test Files  2 passed (2)` / `Tests  22 passed (2
 
 마일스톤 배치 차이: `KatOptions.maxCallDurationSec`를 필수 필드로 두었기 때문에 typecheck를 유지하려고 `container.ts`의 전달 한 줄을 M6 대신 M3 커밋에 넣었다(파일 범위는 plan.md §B 그대로).
 
+커밋: `0341ed9`
+
+#### M4 — 재기동 복구 (AC-007, AC-008)
+
+RED (`npm --prefix server test -- src/services/callService.test.ts`, exit 1):
+
+```
+     × recovery terminates a still-running provider call (a: termination succeeds) 3ms
+     × recovery terminates a still-running provider call (b: termination is rejected) 1ms
+     × recovery terminates a still-running provider call (c: termination never finishes) 1ms
+     × recovery without a call id or with a different provider only marks the task failed 3ms
+TypeError: Cannot read properties of undefined (reading 'then')
+AssertionError: expected [] to have a length of 1 but got +0
+ Test Files  1 failed (1)
+      Tests  4 failed | 7 passed (11)
+```
+
+RED, KAT 쪽 `terminateByProviderCallId` (`… katProvider.test.ts -t "terminate by call id"`, exit 1):
+
+```
+     × terminates a call it has no session for, without throwing on failure 3ms
+TypeError: kat.terminateByProviderCallId is not a function
+      Tests  1 failed | 15 skipped (16)
+```
+
+GREEN (`npm --prefix server test -- src/providers/kat/katProvider.test.ts src/services/callService.test.ts`, exit 0): `Test Files  2 passed (2)` / `Tests  27 passed (27)`; typecheck exit 0. `index.ts`는 `await calls.recoverInterruptedTasks()`로 바꿨다(비동기화에 따른 필수 변경).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

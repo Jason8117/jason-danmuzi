@@ -211,6 +211,19 @@ describe("KatCallProvider request timeout (AC-010 ~ AC-012)", () => {
   );
 });
 
+describe("KatCallProvider terminate by call id (AC-007 support)", () => {
+  it("terminates a call it has no session for, without throwing on failure", async () => {
+    const { fn, calls } = fakeFetch(() => json({ message: "gone" }, 404));
+    const { log, warns } = recordingLog();
+    const kat = new KatCallProvider(katOptions(fn), log);
+
+    await expect(kat.terminateByProviderCallId("c-2")).resolves.toBeUndefined();
+
+    expect(calls.map((c) => c.url)).toEqual(["https://kat.test/v1/group/g-1/media-stream/calls/c-2/termination"]);
+    expect(warns).toHaveLength(1);
+  });
+});
+
 describe("KatCallProvider timeLimit (AC-013)", () => {
   const timeLimitFor = async (maxCallDurationSec: number) => {
     const { fn, calls } = fakeFetch(() => json({ result: { callId: "c-1" } }));
