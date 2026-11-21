@@ -1,6 +1,6 @@
 # 에픽 EPIC-ASSISTANT-UX — 개인 비서다운 첫 묶음
 
-작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`, 버전 0.2.0 — plan-audit iteration 1 반영, 재감사 대기).
+작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`, 버전 0.3.0 — plan-audit iteration 1·2 반영(iteration 2: APPROVAL 0.92, INTAKE 0.89, FOLLOWUP 0.92 PASS, UX 0.84 FAIL → N5~N7 수정), iteration 3 대기).
 
 ## 1. 목표
 
@@ -25,7 +25,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 |------|------|------|--------------|-----|----|----------------|-------------|
 | 1 | SPEC-APPROVAL-001 | M | (없음) | 16 | 15 | 15 | standard |
 | 2 | SPEC-INTAKE-001 | L | SPEC-APPROVAL-001 | 24 | 24 | 26 | thorough |
-| 3 | SPEC-FOLLOWUP-001 | M | SPEC-INTAKE-001 | 16 | 16 | 21 | standard |
+| 3 | SPEC-FOLLOWUP-001 | M | SPEC-INTAKE-001 | 16 | 16 | 22 | standard |
 | 4 | SPEC-UX-001 | M | SPEC-FOLLOWUP-001 | 14 | 15 | 19 | standard |
 | | 합계 | | | 70 | 70 | | |
 
@@ -46,7 +46,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 |------|----------------------|----------|--------|
 | APPROVAL-001 | 승인 카드에 빠른 답 칩 3개, 한 줄 입력칸, 민감정보 안내. 실통화 기록에도 "사용자 안내:" 줄 | 코멘트 정제·마스킹(도메인 함수), 서비스가 안내 줄 기록(시뮬레이션 중복 제거), 통화 지시문 규칙 7 | `approval_card.dart`, 코드 포인트 기준 글자 수 |
 | INTAKE-001 | 홈 입력칸 하나 → 계획 카드 → [이대로 시작] 한 번. 최근 통화한 곳 제안. 번호 없으면 한 번만 묻기 | `POST /v1/intake`(작업을 만들지 않음), 번호 후보 규칙, 기록 조회, brain 의뢰 해석(LLM + 결정적 대체), `autoStart`·`autoStartBlocked` | 새 홈, 새 계획 카드 화면, 최근 상대 계산, 막힘 안내 |
-| FOLLOWUP-001 | 결과 화면에 다시 걸기·요약 복사·공유·캘린더에 추가. 첫 통화 전 신뢰 안내, 설정·통화 중 고지 | 결과의 선택 필드 `appointment`(확정된 LLM 결과만) | 후속 행동, 공유 문구, `.ics`, 신뢰 안내, `share_plus` 1개 |
+| FOLLOWUP-001 | 결과 화면에 다시 걸기·요약 복사·공유·캘린더 파일 보내기. 첫 통화 전 신뢰 안내, 설정·통화 중 고지 | 결과의 선택 필드 `appointment`(확정된 LLM 결과만) | 후속 행동, 공유 문구, `.ics`, 신뢰 안내, `share_plus` 1개 |
 | UX-001 | 정돈된 색·글자·간격, 같은 모양의 카드, 쉬운 상태 문구, 큰 글자·움직임 줄이기 대응 | 없음 | 토큰·분위기·공용 카드, 네 화면 재정리, 접근성 테스트 |
 
 ## 4. 공통 결정 (네 SPEC 모두 지킴)
@@ -73,7 +73,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | APPROVAL | OD-1 | 민감 숫자열 처리 | 거절 대신 `[민감정보 삭제]`로 마스킹 |
 | APPROVAL | OD-2 | 빠른 답 칩 | 3개: "금액이 더 나오면 거절해 주세요" / "다른 날짜·시간도 물어봐 주세요" / "조건을 자세히 듣고 다시 물어봐 주세요" |
 | APPROVAL | OD-3 | 기록 안내 줄 접두어 | ko "사용자 안내:", en "User guidance:" |
-| APPROVAL | OD-4 | 민감 숫자열 기준 | 13~19자리 숫자(공백·하이픈 하나씩 허용) |
+| APPROVAL | OD-4 | 민감 숫자열 기준 | 공백·하이픈 하나씩으로 이은 사슬에서 숫자 13개 이상인 조각을 상한 없이 가림, 하이픈으로 쓴 국내 전화번호 토큰은 예외 |
 | INTAKE | OD-1 | 자동 시작 위치 | 서버(`autoStart` 필드) |
 | INTAKE | OD-2 | 기록 범위 | 상대가 받은 적 있는 작업(`connectedAt`)만 |
 | INTAKE | OD-3 | 같은 이름 번호 여럿 | 가장 최근 작업 |
@@ -86,7 +86,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | FOLLOWUP | OD-3 | 신뢰 안내 문구 | REQ-013의 여섯 문장(AI 행동은 "정해져 있어요" 지시 수준, OpenAI 글 전송 항목 포함, 법률 검토 전) |
 | FOLLOWUP | OD-4 | 공유 문구 내용 | 라벨·상대·시각·요약·알아낸 내용·할 일만 |
 | FOLLOWUP | OD-5 | 끝 시각 없는 일정 길이 | 60분 |
-| FOLLOWUP | OD-6 | 캘린더 행동 라벨 | "캘린더에 추가", 기기 수동 확인에서 기본 캘린더가 받지 못하거나 확인 못 하면 "캘린더 파일 보내기" |
+| FOLLOWUP | OD-6 | 캘린더 행동 라벨 | "캘린더 파일 보내기"(기본). 기기 수동 확인으로 기본 캘린더가 받는 것이 확인되면 "캘린더에 추가"로 올림 |
 | UX | OD-1 | 이 SPEC의 순서 | 마지막 |
 | UX | OD-2 | 씨앗 색 | `0xFF1F8A70` 유지 |
 | UX | OD-3 | 상태 라벨 | 세 개만 변경(계획 세우는 중 / 전화 거는 중 / 결과 정리 중) |
@@ -123,8 +123,11 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | AI가 코멘트를 따르지 않음 | 지시문 규칙 + 대화 기록의 사용자 안내 줄로 사후 확인(APPROVAL). 모델 동작 자체는 자동 검증하지 않음 |
 | 틀린 일정 초안 | 확정된 LLM 결과만, 범위 검사, 저장 전 확인 문구(FOLLOWUP) |
 | SPEC 간 파일 겹침 | 직렬 `depends_on`, 각 plan.md §D.1 겹침 표 |
-| Tier 경계 | FOLLOWUP(21개)·UX(19개)는 파일 수가 Tier M 안내치(5~15)를 넘음. 초과분 대부분이 테스트·잠금 파일·토큰 치환이고 REQ/AC 수는 Tier M 상한 안이라 M 유지(각 plan.md §B, plan-audit iteration 1 D23에서 수용). LOC 추정은 검증하지 않음 |
+| Tier 경계 | FOLLOWUP(22개)·UX(19개)는 파일 수가 Tier M 안내치(5~15)를 넘음. 초과분 대부분이 테스트·잠금 파일·토큰 치환이고 REQ/AC 수는 Tier M 상한 안이라 M 유지(각 plan.md §B, plan-audit iteration 1 D23에서 수용). LOC 추정은 검증하지 않음 |
 | 확인하지 못한 외부 사실 | Towards AI·AgenticWire 미확인, 경쟁 제품 화면 미확인, `share_plus` API 미확인, Fastify 기본 404 본문은 일반 지식 — 각 research.md에 표시 |
+| 첫 통화의 두 번 확인 | 기기에서 처음 거는 통화는 계획 카드 [이대로 시작]과 첫 통화 전 신뢰 안내 [확인했어요]를 둘 다 누른다(INTAKE·FOLLOWUP 잔여 위험). 소유자 결정 3("한 번 확인 후 시작")과의 작은 차이이며 소유자에게 알릴 항목 |
+| 과잉 마스킹 | APPROVAL: 하이픈 없이 쓴 전화번호가 이어지면 함께 가려짐. INTAKE: `15000000원` 같은 금액, `0`으로 시작하는 주문번호가 번호 모양으로 가려지거나 제안될 수 있음. 모두 화면(승인 이력·계획 카드)에 보여 사용자가 알 수 있음 |
+| lint 경고 | `moai spec lint`가 draft SPEC에 대해 `StatusGitConsistency` 같은 경고를 낼 수 있으며, 계획 단계에서는 예상된 경고다(plan-audit iteration 2 A9). 오류는 0이어야 한다 |
 
 ## 8. 문서 위치
 
