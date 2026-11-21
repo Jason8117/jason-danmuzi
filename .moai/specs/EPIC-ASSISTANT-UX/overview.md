@@ -1,6 +1,6 @@
 # 에픽 EPIC-ASSISTANT-UX — 개인 비서다운 첫 묶음
 
-작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`).
+작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`, 버전 0.2.0 — plan-audit iteration 1 반영, 재감사 대기).
 
 ## 1. 목표
 
@@ -25,7 +25,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 |------|------|------|--------------|-----|----|----------------|-------------|
 | 1 | SPEC-APPROVAL-001 | M | (없음) | 16 | 15 | 15 | standard |
 | 2 | SPEC-INTAKE-001 | L | SPEC-APPROVAL-001 | 24 | 24 | 26 | thorough |
-| 3 | SPEC-FOLLOWUP-001 | M | SPEC-INTAKE-001 | 16 | 16 | 20 | standard |
+| 3 | SPEC-FOLLOWUP-001 | M | SPEC-INTAKE-001 | 16 | 16 | 21 | standard |
 | 4 | SPEC-UX-001 | M | SPEC-FOLLOWUP-001 | 14 | 15 | 19 | standard |
 | | 합계 | | | 70 | 70 | | |
 
@@ -37,6 +37,8 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 - **UX 마지막**(SPEC-UX-001 OD-1 DEFAULT, 근거 `SPEC-UX-001/plan.md` §A.0): 계획 카드·빠른 답·후속 행동이 실제로 있는 상태에서 한 번에 다듬고, 접근성 검사를 완성된 네 화면 전체에 건다. 앞 세 SPEC은 새 색·간격을 만들지 않고 기존 테마와 공용 위젯만 쓰며, 테스트는 문구·`Key`·의미로만 요소를 찾는다. 그래서 UX 재디자인이 앞 SPEC 테스트를 깨뜨리지 않는다.
 
 **`depends_on`에 v0.2.0 SPEC을 넣지 않은 이유**: SPEC-STORE·LIFECYCLE·POLICY·OUTCOME·ARCH-001은 현재 `status: implemented`(`completed` 아님)다. run-phase의 `depends_on` 사전 검사는 `completed`만 충족으로 보므로, 이들을 넣으면 코드가 이미 들어가 있는데도 막힌다. 그래서 `related_specs`로만 연결했다. 이들의 동작(번호 정책, 결과 `unverified`, 종료 순서, 저장소 전제, 계층 규칙)은 각 SPEC 본문에서 그대로 지킨다.
+
+이 우회는 v0.2.0 SPEC의 생명주기 누락을 덮는다. `spec_audit`은 다섯 SPEC 모두를 `SyncStatusDrift`(동기화 기록 §E.4와 `sync_commit_sha`가 있는데 `status: implemented`)로 본다(plan-audit iteration 1 §0). 별도 정리 작업으로 각 SPEC에 `moai spec close <ID> --backfill-only`를 검토할 것을 권한다(이 에픽 범위 밖, 이 SPEC 작성자는 실행하지 않음). 그 뒤에는 이들을 `depends_on`에 넣어도 사전 검사를 통과한다.
 
 ## 3. SPEC 요약
 
@@ -58,7 +60,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | D5 | 검증되지 않은 결과(`unverified`, `source: heuristic`)는 확정처럼 보이지 않는다. 캘린더 초안을 내주지 않고, 공유 문구에 "결과 미확인"과 안내 줄이 들어간다 | SPEC-OUTCOME-001, FOLLOWUP REQ-004·009·010 |
 | D6 | 로그에는 요청 글·전화번호·코멘트·대화 내용을 넣지 않는다. LLM 실패 로그는 `op`·`reason`·HTTP 상태만 | SPEC-OUTCOME-001 REQ-009, APPROVAL REQ-004, INTAKE REQ-003·009 |
 | D7 | 새 오류 코드 없음. 자동 시작 막힘은 기존 `ServiceError` 코드를 `autoStartBlocked`에 담는다(예외: 서비스 밖 오류는 `auto_start_failed`, HTTP 오류 코드가 아니라 작업 필드 값) | INTAKE design.md §5 |
-| D8 | 새 런타임 의존성은 앱의 `share_plus` 하나(FOLLOWUP OD-1). 서버 없음 | FOLLOWUP REQ-016 |
+| D8 | 새 런타임 직접 의존성은 앱의 `share_plus` 하나(FOLLOWUP OD-1). 전이 의존성은 run 시작 때 `flutter pub add` 출력으로 기록. 서버 없음 | FOLLOWUP REQ-016 |
 | D9 | 계층 규칙(`server/src/architecture.test.ts`)을 그대로 지킨다. 규칙은 `domain/`, LLM은 `brain/`, HTTP는 서비스 호출만 | ARCH-001, 각 SPEC §4 |
 | D10 | 저장소는 단일 JSON 파일·단일 인스턴스 그대로. 새 저장소를 만들지 않는다. 최근 상대는 저장된 작업에서 계산한다 | `docs/OPERATIONS.md` "실행 전제", INTAKE §4 |
 | D11 | 화면 문구는 한국어 해요체. 기능 SPEC은 기존 테마만 쓰고, 시각 스타일은 UX-001이 정한다. 위젯 테스트는 문구·`Key`·의미로 찾는다 | 각 SPEC §4 |
@@ -78,11 +80,13 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | INTAKE | OD-4 | 추출할 번호 형식 | `0`/`+82` 국내 형식만(대표번호·해외 제외) |
 | INTAKE | OD-5 | 홈 제안 | 최근 통화 순 3개 |
 | INTAKE | OD-6 | 화면 문구 | spec.md REQ-017~023 문구 |
+| INTAKE | OD-7 | 자동 시작 통화의 첫 인사 | AI 고지가 든 템플릿 첫 인사로 고정 |
 | FOLLOWUP | OD-1 | 새 의존성 | `share_plus` 추가 |
 | FOLLOWUP | OD-2 | 일정 없을 때 캘린더 | 보여 주지 않음 |
-| FOLLOWUP | OD-3 | 신뢰 안내 문구 | REQ-013의 다섯 문장(법률 검토 전) |
+| FOLLOWUP | OD-3 | 신뢰 안내 문구 | REQ-013의 여섯 문장(AI 행동은 "정해져 있어요" 지시 수준, OpenAI 글 전송 항목 포함, 법률 검토 전) |
 | FOLLOWUP | OD-4 | 공유 문구 내용 | 라벨·상대·시각·요약·알아낸 내용·할 일만 |
 | FOLLOWUP | OD-5 | 끝 시각 없는 일정 길이 | 60분 |
+| FOLLOWUP | OD-6 | 캘린더 행동 라벨 | "캘린더에 추가", 기기 수동 확인에서 기본 캘린더가 받지 못하거나 확인 못 하면 "캘린더 파일 보내기" |
 | UX | OD-1 | 이 SPEC의 순서 | 마지막 |
 | UX | OD-2 | 씨앗 색 | `0xFF1F8A70` 유지 |
 | UX | OD-3 | 상태 라벨 | 세 개만 변경(계획 세우는 중 / 전화 거는 중 / 결과 정리 중) |
@@ -119,7 +123,7 @@ SPEC-APPROVAL-001 ──► SPEC-INTAKE-001 ──► SPEC-FOLLOWUP-001 ──�
 | AI가 코멘트를 따르지 않음 | 지시문 규칙 + 대화 기록의 사용자 안내 줄로 사후 확인(APPROVAL). 모델 동작 자체는 자동 검증하지 않음 |
 | 틀린 일정 초안 | 확정된 LLM 결과만, 범위 검사, 저장 전 확인 문구(FOLLOWUP) |
 | SPEC 간 파일 겹침 | 직렬 `depends_on`, 각 plan.md §D.1 겹침 표 |
-| Tier 경계 | FOLLOWUP·UX는 파일 수가 Tier M 안내치를 넘음(각 plan.md §B에 사유). plan-auditor가 올릴 수 있음 |
+| Tier 경계 | FOLLOWUP(21개)·UX(19개)는 파일 수가 Tier M 안내치(5~15)를 넘음. 초과분 대부분이 테스트·잠금 파일·토큰 치환이고 REQ/AC 수는 Tier M 상한 안이라 M 유지(각 plan.md §B, plan-audit iteration 1 D23에서 수용). LOC 추정은 검증하지 않음 |
 | 확인하지 못한 외부 사실 | Towards AI·AgenticWire 미확인, 경쟁 제품 화면 미확인, `share_plus` API 미확인, Fastify 기본 404 본문은 일반 지식 — 각 research.md에 표시 |
 
 ## 8. 문서 위치
