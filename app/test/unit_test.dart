@@ -37,6 +37,30 @@ void main() {
       expect(task.outcome?.keyFacts, ['7시 가능']);
     });
 
+    // SPEC-OUTCOME-001 AC-009: new servers send "unverified" and a source; tasks saved earlier have neither.
+    test('parses outcome result and source, old and new', () {
+      CallOutcome? parse(Map<String, dynamic> outcome) =>
+          CallTask.fromJson(taskJson(status: 'completed', outcome: outcome)).outcome;
+      Map<String, dynamic> outcome(Map<String, dynamic> fields) =>
+          {'summary': '요약', 'keyFacts': <String>[], 'followUps': <String>[], ...fields};
+
+      final unverified = parse(outcome({'result': 'unverified', 'source': 'heuristic'}));
+      expect(unverified?.result, OutcomeResult.unverified);
+      expect(unverified?.source, OutcomeSource.heuristic);
+
+      final llm = parse(outcome({'result': 'success', 'source': 'llm'}));
+      expect(llm?.result, OutcomeResult.success);
+      expect(llm?.source, OutcomeSource.llm);
+
+      final legacy = parse(outcome({'result': 'partial'}));
+      expect(legacy?.result, OutcomeResult.partial);
+      expect(legacy?.source, OutcomeSource.unknown);
+
+      final future = parse(outcome({'result': 'success', 'source': 'something_new'}));
+      expect(future?.result, OutcomeResult.success);
+      expect(future?.source, OutcomeSource.unknown);
+    });
+
     // Guards SPEC-LIFECYCLE-001 REQ-011: the server adds an optional providerCallId; the app must not depend on it.
     test('ignores providerCallId when parsing tasks', () {
       final without = CallTask.fromJson(taskJson());

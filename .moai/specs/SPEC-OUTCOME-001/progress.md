@@ -46,6 +46,17 @@ _(appended per milestone below)_
 - RED `npm --prefix server test -- src/brain/openaiBrain.test.ts` (exit 1): `Tests  9 failed (9)`; e.g. `AssertionError: expected { err: 'OpenAI responded 500' } to match object { Object (op, taskId, ...) }`, `AssertionError: expected { result: 'success', …(3) } to deeply equal { result: 'success', …(4) }` (no `source`), `AssertionError: expected { err: 'OpenAI responded 500' } to match object { op: 'plan', …(2) }`.
 - GREEN `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/brain/openaiBrain.test.ts src/http/app.test.ts` (exit 0): `Test Files  3 passed (3)` / `Tests  25 passed (25)`; typecheck exit 0.
 - Design: `request()` returns a `Completion<T>` union (no throw/catch of messages); `completeJson()` logs `{ op, reason, status?, taskId? }` once and returns `undefined`; callers fall back. Body-read timeout is classified `timeout`, other body-read failures `invalid_json`.
+- Commit: `608b896`
+
+#### M3 — server integration assertion
+
+- Folded into M1 (`0da933d`); RED/GREEN evidence recorded under M1.
+
+#### M4 — app model
+
+- RED `flutter --suppress-analytics test test/unit_test.dart` (in `app/`, exit 1): compile failure — `test/unit_test.dart:48:48: Error: Member not found: 'unverified'.`, `test/unit_test.dart:49:34: Error: Undefined name 'OutcomeSource'.`, `test/unit_test.dart:49:26: Error: The getter 'source' isn't defined for the type 'CallOutcome'.`
+- GREEN same command (exit 0): `00:00 +6: CallTask.fromJson parses outcome result and source, old and new` … `00:00 +10: All tests passed!` (existing "parses outcomes" unchanged and passing).
+- `flutter --suppress-analytics analyze app`: still only the baseline info at `app/test/support/fakes.dart:53:5` (`1 issue found.`).
 
 ## §E.3 Run-phase Audit-Ready Signal
 

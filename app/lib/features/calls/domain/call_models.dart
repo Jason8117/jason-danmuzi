@@ -51,11 +51,17 @@ enum ApprovalStatus { pending, approved, rejected, expired }
 enum OutcomeResult {
   success('목표 달성'),
   partial('일부 달성'),
-  failed('달성 못 함');
+  failed('달성 못 함'),
+  /// The server produced the summary without an LLM checking it against the goal.
+  unverified('결과 미확인');
 
   const OutcomeResult(this.label);
   final String label;
 }
+
+/// How the server produced an outcome. Tasks saved before the field existed, and values this
+/// app version does not know, parse as [unknown].
+enum OutcomeSource { llm, heuristic, unknown }
 
 T _enumByName<T extends Enum>(List<T> values, Object? name, T fallback) =>
     values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -139,16 +145,26 @@ class ApprovalRequest {
 
 @immutable
 class CallOutcome {
-  const CallOutcome({required this.result, required this.summary, required this.keyFacts, required this.followUps});
+  const CallOutcome({
+    required this.result,
+    required this.summary,
+    required this.keyFacts,
+    required this.followUps,
+    this.source = OutcomeSource.unknown,
+  });
 
+  // @MX:NOTE: [AUTO] Unknown result values stay `failed` (pessimistic) so a future server value never reads as success.
+  // @MX:SPEC: SPEC-OUTCOME-001 REQ-011
   factory CallOutcome.fromJson(Map<String, dynamic> json) => CallOutcome(
         result: _enumByName(OutcomeResult.values, json['result'], OutcomeResult.failed),
+        source: _enumByName(OutcomeSource.values, json['source'], OutcomeSource.unknown),
         summary: json['summary'] as String? ?? '',
         keyFacts: _strings(json['keyFacts']),
         followUps: _strings(json['followUps']),
       );
 
   final OutcomeResult result;
+  final OutcomeSource source;
   final String summary;
   final List<String> keyFacts;
   final List<String> followUps;
