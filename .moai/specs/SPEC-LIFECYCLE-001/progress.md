@@ -75,6 +75,38 @@ TypeError: calls.beginShutdown is not a function
 
 GREEN (같은 명령, exit 0): `Test Files  2 passed (2)` / `Tests  14 passed (14)`; typecheck exit 0.
 
+커밋: `34bc706`
+
+#### M3 — KAT 시간 제한과 timeLimit (AC-010 ~ AC-013)
+
+RED (`npm --prefix server test -- src/providers/kat/katProvider.test.ts src/services/callService.test.ts`, exit 1):
+
+```
+     × a hung provider start fails the task promptly and frees the slot 2006ms
+     × every KAT request carries an abort signal and times out 2008ms
+     × maps a KAT timeout to a readable Korean error 2004ms
+     × hangup never throws on timeout or error (timeout) 2003ms
+     × derives timeLimit from MAX_CALL_DURATION_SEC (600 s -> 630) 4ms
+     × derives timeLimit from MAX_CALL_DURATION_SEC (5 s -> 35) 1ms
+     × derives timeLimit from MAX_CALL_DURATION_SEC (1 s -> 31) 1ms
+     × derives timeLimit from MAX_CALL_DURATION_SEC (20000 s -> 14400) 1ms
+     × clamps an injected duration below the floor to 10 2ms
+TestTimeoutError: Test timed out in 2000ms.   (×4)
+AssertionError: expected 900 to be 630 // Object.is equality
+AssertionError: expected 900 to be 35 // Object.is equality
+AssertionError: expected 900 to be 31 // Object.is equality
+AssertionError: expected 900 to be 14400 // Object.is equality
+AssertionError: expected 900 to be 10 // Object.is equality
+ Test Files  2 failed (2)
+      Tests  9 failed | 13 passed (22)
+```
+
+AC-012의 HTTP 500 경우는 RED 단계에서도 통과했다(acceptance.md "RED: 500은 현재도 잡히지만 시간 초과는 끝나지 않는다"와 일치).
+
+GREEN (같은 명령, exit 0): `Test Files  2 passed (2)` / `Tests  22 passed (22)`; typecheck exit 0.
+
+마일스톤 배치 차이: `KatOptions.maxCallDurationSec`를 필수 필드로 두었기 때문에 typecheck를 유지하려고 `container.ts`의 전달 한 줄을 M6 대신 M3 커밋에 넣었다(파일 범위는 plan.md §B 그대로).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

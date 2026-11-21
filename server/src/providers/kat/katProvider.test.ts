@@ -149,3 +149,86 @@ describe("KAT webhook signatures", () => {
     ).toBe(true);
   });
 });
+
+describe("KatCallProvider request timeout (AC-010 ~ AC-012)", () => {
+  it(
+    "every KAT request carries an abort signal and times out",
+    { timeout: 2000 },
+    async () => {
+      // Call creation: KAT never answers.
+      const create = fakeFetch(hangUntilAborted);
+      const katA = new KatCallProvider(katOptions(create.fn, { requestTimeoutMs: 50 }), recordingLog().log);
+      let startedAt = Date.now();
+      await expect(katA.start(fakeSession("t-a").session)).rejects.toThrow();
+      expect(Date.now() - startedAt).toBeLessThan(550);
+      expect(create.calls).toHaveLength(1);
+      expect(create.calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
+      expect(create.calls[0]!.init.signal!.aborted).toBe(true);
+
+      // Call termination: creation answers, the termination request never does.
+      const terminate = fakeFetch((call) =>
+        call.url.endsWith("/termination") ? hangUntilAborted(call) : json({ result: { callId: "c-1" } }),
+      );
+      const katB = new KatCallProvider(katOptions(terminate.fn, { requestTimeoutMs: 50 }), recordingLog().log);
+      await katB.start(fakeSession("t-b").session);
+      startedAt = Date.now();
+      await katB.hangup("t-b");
+      expect(Date.now() - startedAt).toBeLessThan(550);
+      const termination = terminate.calls.find((c) => c.url.endsWith("/media-stream/calls/c-1/termination"));
+      expect(termination?.init.signal).toBeInstanceOf(AbortSignal);
+      expect(termination?.init.signal?.aborted).toBe(true);
+      expect(terminate.calls.every((c) => c.init.signal instanceof AbortSignal)).toBe(true);
+    },
+  );
+
+  it(
+    "maps a KAT timeout to a readable Korean error",
+    { timeout: 2000 },
+    async () => {
+      const { fn } = fakeFetch(hangUntilAborted);
+      const kat = new KatCallProvider(katOptions(fn, { requestTimeoutMs: 50 }), recordingLog().log);
+      await expect(kat.start(fakeSession().session)).rejects.toThrow("KAT Cloud가 응답하지 않아 전화를 걸지 못했습니다.");
+    },
+  );
+
+  it.each([
+    { name: "timeout", respond: hangUntilAborted },
+    { name: "HTTP 500", respond: () => json({ message: "boom" }, 500) },
+  ])(
+    "hangup never throws on timeout or error ($name)",
+    { timeout: 2000 },
+    async ({ respond }) => {
+      const { fn } = fakeFetch((call) =>
+        call.url.endsWith("/termination") ? respond(call) : json({ result: { callId: "c-1" } }),
+      );
+      const { log, warns } = recordingLog();
+      const kat = new KatCallProvider(katOptions(fn, { requestTimeoutMs: 50 }), log);
+      await kat.start(fakeSession().session);
+
+      await expect(kat.hangup("t-1")).resolves.toBeUndefined();
+      expect(warns).toHaveLength(1);
+    },
+  );
+});
+
+describe("KatCallProvider timeLimit (AC-013)", () => {
+  const timeLimitFor = async (maxCallDurationSec: number) => {
+    const { fn, calls } = fakeFetch(() => json({ result: { callId: "c-1" } }));
+    const kat = new KatCallProvider(katOptions(fn, { maxCallDurationSec }), recordingLog().log);
+    await kat.start(fakeSession().session);
+    return calls[0]!.body?.timeLimit;
+  };
+
+  it.each([
+    [600, 630],
+    [5, 35],
+    [1, 31],
+    [20_000, 14_400],
+  ])("derives timeLimit from MAX_CALL_DURATION_SEC (%i s -> %i)", async (seconds, expected) => {
+    expect(await timeLimitFor(seconds)).toBe(expected);
+  });
+
+  it("clamps an injected duration below the floor to 10", async () => {
+    expect(await timeLimitFor(-25)).toBe(10);
+  });
+});

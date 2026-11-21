@@ -36,6 +36,7 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
         webhookSecret: config.KAT_WEBHOOK_SECRET!,
         publicBaseUrl: config.PUBLIC_BASE_URL!,
         apiBaseUrl: config.KAT_API_BASE_URL,
+        maxCallDurationSec: config.MAX_CALL_DURATION_SEC,
         realtime: {
           apiKey: config.OPENAI_API_KEY!,
           model: config.OPENAI_REALTIME_MODEL,

@@ -3,6 +3,7 @@ import type { CallBrain } from "../brain/types.js";
 import type { CallTask, TaskStatus } from "../domain/types.js";
 import { EventBus, type ServerEvent } from "../events/eventBus.js";
 import type { Logger } from "../logger.js";
+import { KatCallProvider } from "../providers/kat/katProvider.js";
 import type { CallProvider, CallSession } from "../providers/types.js";
 import { InMemoryTaskStore } from "../store/taskStore.js";
 import { CallService, type CallServiceOptions } from "./callService.js";
@@ -275,4 +276,50 @@ describe("CallService terminateActiveCalls (AC-003, AC-004)", () => {
     expect(brain.summaries).toBe(0);
     expect(calls.get("t-1").status).toBe("failed");
   });
+});
+
+describe("CallService with a hung KAT call creation (AC-011)", () => {
+  it(
+    "a hung provider start fails the task promptly and frees the slot",
+    { timeout: 2000 },
+    async () => {
+      // KAT never answers; the request only ends when its abort signal fires.
+      const fetchFn = ((_url: string | URL | Request, init: RequestInit = {}) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), {
+            once: true,
+          });
+        })) as typeof fetch;
+      const kat = new KatCallProvider(
+        {
+          apiKey: "key",
+          groupId: "g-1",
+          fromNumber: "07012345678",
+          webhookSecret: "secret",
+          publicBaseUrl: "https://example.test",
+          apiBaseUrl: "https://kat.test/v1",
+          realtime: { apiKey: "sk", model: "m", voice: "v" },
+          fetch: fetchFn,
+          requestTimeoutMs: 50,
+          maxCallDurationSec: 600,
+        } as ConstructorParameters<typeof KatCallProvider>[0],
+        { info: () => {}, warn: () => {} },
+      );
+      const { calls } = setup({
+        provider: kat,
+        tasks: [makeTask({ id: "A", provider: "kat" }), makeTask({ id: "B", provider: "kat" })],
+        service: { maxConcurrentCalls: 1 },
+      });
+
+      const startedAt = Date.now();
+      await calls.approvePlan("A");
+      expect(Date.now() - startedAt).toBeLessThan(550);
+
+      await vi.waitFor(() => expect(calls.get("A").status).toBe("failed"), { timeout: 500, interval: 5 });
+      expect(Date.now() - startedAt).toBeLessThan(550);
+      expect(calls.get("A").error).toContain("KAT Cloud가 응답하지 않아");
+
+      await expect(calls.approvePlan("B")).resolves.toMatchObject({ id: "B" });
+    },
+  );
 });

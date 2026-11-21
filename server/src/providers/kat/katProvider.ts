@@ -16,6 +16,32 @@ export interface KatOptions {
   realtime: RealtimeOptions;
   /** Injectable for tests; defaults to the global fetch. */
   fetch?: typeof fetch;
+  /** Per-request deadline for every KAT API call. Default 10 s. */
+  requestTimeoutMs?: number;
+  /** Server-side call duration limit (MAX_CALL_DURATION_SEC); KAT's own timeLimit is derived from it. */
+  maxCallDurationSec: number;
+}
+
+export const DEFAULT_KAT_REQUEST_TIMEOUT_MS = 10_000;
+/** KAT's timeLimit runs this much longer than the server's own duration timer, so the server ends the call first. */
+const TIME_LIMIT_MARGIN_SEC = 30;
+const TIME_LIMIT_MIN_SEC = 10;
+const TIME_LIMIT_MAX_SEC = 14_400;
+const KAT_TIMEOUT_START_ERROR = "KAT Cloud가 응답하지 않아 전화를 걸지 못했습니다.";
+
+/** Thrown when a KAT request exceeds its deadline, so callers can tell "no answer" from "error answer". */
+export class KatTimeoutError extends Error {
+  constructor(method: string, path: string, timeoutMs: number) {
+    super(`KAT Cloud ${method} ${path} did not respond within ${timeoutMs} ms`);
+    this.name = "KatTimeoutError";
+  }
+}
+
+/** Safety net if the server disappears mid-call: KAT ends the call on its own after this many seconds. */
+// @MX:NOTE: [AUTO] clamp(MAX_CALL_DURATION_SEC + 30, 10, 14_400); the floor is unreachable from config (min 31) and only guards injected values.
+// @MX:SPEC: SPEC-LIFECYCLE-001
+export function katTimeLimitSec(maxCallDurationSec: number): number {
+  return Math.max(TIME_LIMIT_MIN_SEC, Math.min(TIME_LIMIT_MAX_SEC, maxCallDurationSec + TIME_LIMIT_MARGIN_SEC));
 }
 
 interface Logger {
@@ -93,13 +119,22 @@ export class KatCallProvider implements CallProvider {
       streamUrl,
       statusCallbackUrl: `${base}/kat/status`,
       metadata: { taskId: task.id, token: streamToken },
-      timeLimit: Math.max(10, Math.min(14_400, 15 * 60)),
+      timeLimit: katTimeLimitSec(this.options.maxCallDurationSec),
       codec: "PCMU",
     };
 
-    const response = await this.api("POST", `/group/${this.options.groupId}/media-stream/calls`, body, {
-      "Idempotency-Key": task.id,
-    });
+    let response: Record<string, any>;
+    try {
+      response = await this.api("POST", `/group/${this.options.groupId}/media-stream/calls`, body, {
+        "Idempotency-Key": task.id,
+      });
+    } catch (error) {
+      if (error instanceof KatTimeoutError) {
+        this.log.warn({ taskId: task.id, err: error.message }, "KAT call creation timed out");
+        throw new Error(KAT_TIMEOUT_START_ERROR);
+      }
+      throw error;
+    }
     const callId = paramString(response.callId);
     if (!callId) {
       throw new Error("KAT Cloud did not return a callId");
@@ -302,18 +337,36 @@ export class KatCallProvider implements CallProvider {
     extraHeaders?: Record<string, string>,
   ): Promise<Record<string, any>> {
     const url = `${this.options.apiBaseUrl.replace(/\/$/, "")}${path}`;
-    const response = await (this.options.fetch ?? fetch)(url, {
-      method,
-      headers: {
-        "x-api-key": this.options.apiKey,
-        Accept: "application/json",
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...extraHeaders,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_KAT_REQUEST_TIMEOUT_MS;
+    // AbortController + setTimeout instead of AbortSignal.timeout(), so tests can drive the timer.
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
 
-    const text = await response.text();
+    let response: Response;
+    let text: string;
+    try {
+      response = await (this.options.fetch ?? fetch)(url, {
+        method,
+        headers: {
+          "x-api-key": this.options.apiKey,
+          Accept: "application/json",
+          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+          ...extraHeaders,
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+      text = await response.text();
+    } catch (error) {
+      if (timedOut) throw new KatTimeoutError(method, path, timeoutMs);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
     let json: Record<string, any> = {};
     if (text) {
       try {
