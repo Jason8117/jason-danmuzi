@@ -32,6 +32,13 @@ export interface ShutdownDeps {
   budgets?: Partial<ShutdownBudgets>;
 }
 
+/**
+ * The hang-up deadline handed to terminateActiveCalls ends this long before the step budget, so the
+ * calls are marked failed before the step moves on to app.close and the final flush. With equal
+ * values the step timer fired first and the flush saved the pre-shutdown status (audit F2).
+ */
+export const TERMINATE_MARK_HEADROOM_MS = 250;
+
 const TIMED_OUT = Symbol("timed out");
 
 /** Resolves with the step's value, or TIMED_OUT once `ms` passes. A rejected step counts as finished. */
@@ -86,9 +93,12 @@ export function createShutdownHandler(deps: ShutdownDeps): (signal: string) => v
     } catch (error) {
       logger.warn({ step: "begin_shutdown", err: (error as Error).message }, "Shutdown step failed");
     }
+    // The outer budget only guards a terminateActiveCalls that itself hangs; normally it returns at its
+    // own, earlier deadline with every call already marked failed.
+    const hangupDeadlineMs = Math.max(0, budgets.terminateCallsMs - TERMINATE_MARK_HEADROOM_MS);
     await step(
       "terminate_calls",
-      () => deps.calls.terminateActiveCalls({ deadlineMs: budgets.terminateCallsMs }),
+      () => deps.calls.terminateActiveCalls({ deadlineMs: hangupDeadlineMs }),
       budgets.terminateCallsMs,
     );
     if (exited) return;

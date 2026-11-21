@@ -279,3 +279,15 @@ changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
 mx_scan: skipped   # --skip-mx semantics
 ac_pass_with_debt_carried: [AC-014 (c)]
 ```
+
+## Audit-fix addendum
+
+출처: 독립 sync 감사 `FIVE-SPECS-audit-1`의 **F2**(High, REQ-004/REQ-006). 수정 기준 커밋 `534a53e`(run_start_sha `534a53edfdf9efaecb6c142997d20ea6fd563319`), 커밋은 수정 worktree 브랜치의 `fix(SPEC-LIFECYCLE-001): ...`(`git log --grep "fix(SPEC-LIFECYCLE-001)"`로 확인). 증거: `.moai/state/verify/fix-audit-1/`(gitignore, 로컬).
+
+- 원인: `shutdown.ts`가 단계 예산(3,000 ms)과 같은 값을 `terminateActiveCalls`의 마감으로 넘겨, 바깥 단계 타이머가 먼저 울리고 `finalFlush`가 `failed` 표시 전 상태를 저장했다.
+- 수정: 마감을 `terminateCallsMs - TERMINATE_MARK_HEADROOM_MS`(250 ms, 0 미만이면 0)로 넘긴다. 기본값에서 통화 종료 요청은 2,750 ms에 포기되고 그 직후 동기적으로 `failed`가 표시된 뒤 단계가 끝난다. 바깥 3,000 ms 예산은 `terminateActiveCalls` 자체가 멈출 때만 쓰이는 안전망으로 남는다. 단계 예산(3 s + 1 s + 5 s, 합계 9 s)과 기존 테스트는 바꾸지 않았다.
+- RED(수정 전, `f2-red.log`, 실제 Fastify 앱 + 실제 `JsonFileTaskStore` + 끝나지 않는 `hangup`): `- "status": "failed", + "status": "ringing"` / `Tests 1 failed (1)`. 프로브 `red-probe-shutdown-real-app.out`: `in-memory=failed on-disk=ringing | undefined`.
+- GREEN(`f2-green.log`): `Test Files 11 passed (11)` / `Tests 211 passed (211)`. 프로브 `green-probe-shutdown-real-app.out`: `exit=0 elapsed=2761ms in-memory=failed on-disk=failed | 서버가 종료되어 통화를 끊었습니다.`
+- 동작 변화: 이 경로에서 `"Shutdown step exceeded its budget"`(terminate_calls) warn은 더 이상 나오지 않고, REQ-003의 작업 ID warn(`"Shutdown hangup did not finish in time"`)은 그대로 남는다.
+- manager-spec 후속(이 에이전트는 spec.md 본문을 고칠 수 없음): spec.md OD-3 본문의 "14,371에서 `timeLimit`이 14,400에 닿고"는 한 칸 어긋난다. 실측 `katTimeLimitSec(14370) = 14400`이므로 "14,370에서"가 맞다(감사 A2, `probe-timelimit.mts`). "14,371 이상이면 여유가 줄어든다"는 표현은 맞다.
+
