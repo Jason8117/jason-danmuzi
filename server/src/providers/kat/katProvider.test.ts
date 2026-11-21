@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type WebSocket from "ws";
+import { toDomesticDialString } from "../../domain/phone.js";
 import type { CallTask } from "../../domain/types.js";
 import type { CallSession } from "../types.js";
 import { KatCallProvider, type KatOptions, toKatPhoneNumber } from "./katProvider.js";
@@ -113,6 +114,12 @@ describe("toKatPhoneNumber", () => {
 
   it("strips punctuation from local numbers", () => {
     expect(toKatPhoneNumber("010-9093-2936")).toBe("01090932936");
+  });
+
+  // SPEC-POLICY-001 audit F1: the number policy judges this same function's output.
+  it("is the domain dial-string transformation the number policy judges", () => {
+    expect(toKatPhoneNumber).toBe(toDomesticDialString);
+    expect(toKatPhoneNumber("+11912345678")).toBe("11912345678");
   });
 });
 

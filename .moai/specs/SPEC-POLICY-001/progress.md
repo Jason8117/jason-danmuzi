@@ -181,3 +181,13 @@ residual_risk:
   - "long numbers starting with a short code (e.g. 119-1234-5678 -> +11912345678) are NOT blocked; pre-existing normalization, follow-up SPEC candidate"
   - "non-+82 numbers reach KAT as bare digits"
 ```
+
+## Audit-fix addendum
+
+Source: independent sync audit `FIVE-SPECS-audit-1` finding **F1** (High). Fix cycle base `534a53e` (run_start_sha `534a53edfdf9efaecb6c142997d20ea6fd563319`); commit: `fix(SPEC-POLICY-001): ...` on the fix worktree branch (resolve via `git log --grep "fix(SPEC-POLICY-001)"`). Evidence: `.moai/state/verify/fix-audit-1/` (gitignored, local).
+
+- Owner decision implemented: the number is judged by its FINAL dialed form. `toDomesticDialString` (moved from `katProvider.toKatPhoneNumber` into `domain/phone.ts`) is the single transformation; `toKatPhoneNumber` is now that same function (`katProvider.test.ts` asserts identity). `isBlockedNumber` judges the dialed string: leading `0` (all +82) -> exact national match (unchanged); no leading `0` (non-+82) -> blocked when it starts with a short code.
+- RED (before fix, `f1-red.log`): `Tests 14 failed | 93 passed (107)` across domain/service/HTTP, e.g. `AssertionError: expected 201 to be 400` for `"119 1234 5678"`.
+- GREEN (`f1-green.log`): `Test Files 10 passed (10)` / `Tests 210 passed (210)`; typecheck exit 0; test-file compile exit 0. AC-008/AC-009 rows unchanged and green.
+- Newly blocked (sweep `f1-sweep.out`): inputs that normalize to `+1…` whose bare digits start with 112/113/114/117/118/119/122/125/182, incl. real NANP area codes 22x/25x/82x (e.g. `+1 225 …`, `+1 251 …`, `+1 828 …`) — KAT would dial them as domestic `122…`/`125…`/`182…` strings. No +82 number changed (010/011/016/019/02/031/051/064/0505/0507/070/080 and 1588/1544/1577/1600/1644/1800/1899 all still `ok`).
+- NOT implemented (blocker returned to the orchestrator): rejecting `callbackNumber "112-0000-0000"` with HTTP 400 `blocked_number`. spec.md REQ-004 states the callback number is normalized or dropped to `undefined` and "새 거절 규칙을 만들지 않음"; AC-004 pins "어느 경우도 예외가 없다". A 400 on the callback number needs a manager-spec REQ-004/AC-004 amendment first. Callback behavior is unchanged (`"112-0000-0000"` -> stored `"+11200000000"`; the server never dials it).

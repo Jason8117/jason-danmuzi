@@ -80,6 +80,21 @@ describe("CallMate API", () => {
     expect(res.json()).toEqual({ error: "blocked_number", message: "긴급·특수번호에는 전화할 수 없습니다." });
   });
 
+  // SPEC-POLICY-001 audit F1: judged on the dialed digits, not on the +1 value they normalize to.
+  it.each(["119 1234 5678", "+119 12345", "112-0000-0000"])(
+    "rejects numbers whose dialed form starts with a blocked code: %s",
+    async (phoneNumber) => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/tasks",
+        headers: auth,
+        payload: { targetName: "x", phoneNumber, goal: "문의", requesterName: "김" },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "blocked_number", message: "긴급·특수번호에는 전화할 수 없습니다." });
+    },
+  );
+
   it("keeps invalid_request for schema violations", async () => {
     const res = await app.inject({
       method: "POST",

@@ -21,10 +21,27 @@ export function normalizePhoneNumber(raw: string): string | null {
 /** Emergency and special-service numbers must never be dialed by an automated agent. */
 const BLOCKED_KR_SHORT_CODES = ["112", "119", "113", "114", "117", "118", "122", "125", "182"];
 
+/**
+ * The digit string actually sent to the carrier: domestic Korean form (010… / 070…) for +82,
+ * otherwise the bare digits. Shared by the number policy and the KAT provider so both see one number.
+ */
+// @MX:NOTE: [AUTO] Non-+82 numbers lose their "+" here, so "+1 19…" is dialed as a domestic "119…" string (SPEC-POLICY-001 audit F1).
+// @MX:SPEC: SPEC-POLICY-001
+export function toDomesticDialString(e164OrLocal: string): string {
+  const trimmed = e164OrLocal.trim();
+  if (trimmed.startsWith("+82")) return `0${trimmed.slice(3)}`;
+  return trimmed.replace(/[^\d]/g, "");
+}
+
+/**
+ * Judged on the dialed form. A domestic number (leading 0) is blocked only when its national part is
+ * exactly a short code, so 011-9xx… and 02-112… stay dialable. A digit string without a leading 0 is
+ * blocked when it starts with a short code, because the carrier would read it as that code.
+ */
 export function isBlockedNumber(e164: string): boolean {
-  if (!e164.startsWith("+82")) return false;
-  const national = e164.slice(3);
-  return BLOCKED_KR_SHORT_CODES.includes(national);
+  const dialed = toDomesticDialString(e164);
+  if (dialed.startsWith("0")) return BLOCKED_KR_SHORT_CODES.includes(dialed.slice(1));
+  return BLOCKED_KR_SHORT_CODES.some((code) => dialed.startsWith(code));
 }
 
 export type TargetNumberCheck = { kind: "ok"; e164: string } | { kind: "invalid" } | { kind: "blocked" };

@@ -535,3 +535,31 @@ describe("CallService number policy before dialing (SPEC-POLICY-001 AC-010)", ()
     expect(start).not.toHaveBeenCalled();
   });
 });
+
+describe("CallService number policy on the dialed form (SPEC-POLICY-001 audit F1)", () => {
+  it.each(["119 1234 5678", "+119 12345", "112-0000-0000"])(
+    "create blocks a number whose dialed form starts with a blocked code: %s",
+    async (phoneNumber) => {
+      const { calls, events, brain } = setup();
+      const createPlan = vi.spyOn(brain, "createPlan");
+      expect(thrownBy(() => calls.create({ ...INPUT, phoneNumber }))).toMatchObject(BLOCKED_NUMBER);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(calls.list()).toEqual([]);
+      expect(events).toHaveLength(0);
+      expect(createPlan).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["+11912345678", "+11912345", "+11200000000"])(
+    "approvePlan blocks a stored number whose dialed form starts with a blocked code: %s",
+    async (phoneNumber) => {
+      const provider = new FakeProvider();
+      const start = vi.spyOn(provider, "start");
+      const { calls } = setup({ provider, tasks: [makeTask({ id: "stored", phoneNumber })] });
+      await expect(calls.approvePlan("stored")).rejects.toMatchObject(BLOCKED_NUMBER);
+      expect(calls.get("stored").status).toBe("awaiting_approval");
+      expect(calls.get("stored").startedAt).toBeUndefined();
+      expect(start).not.toHaveBeenCalled();
+    },
+  );
+});

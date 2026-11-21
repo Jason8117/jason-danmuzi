@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type WebSocket from "ws";
-import { maskPhoneNumber } from "../../domain/phone.js";
+import { maskPhoneNumber, toDomesticDialString } from "../../domain/phone.js";
 import type { ProviderId } from "../../domain/types.js";
 import type { CallProvider, CallSession, ProviderRoutes } from "../types.js";
 import { type BridgeParams, bridgeToRealtime, type RealtimeOptions } from "../realtimeBridge.js";
@@ -81,12 +81,11 @@ function safeEqual(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** KAT expects domestic Korean numbers (010… / 070…), not E.164. */
-export function toKatPhoneNumber(e164OrLocal: string): string {
-  const trimmed = e164OrLocal.trim();
-  if (trimmed.startsWith("+82")) return `0${trimmed.slice(3)}`;
-  return trimmed.replace(/[^\d]/g, "");
-}
+/**
+ * KAT expects domestic Korean numbers (010… / 070…), not E.164. The transformation lives in the domain
+ * so the number policy judges exactly the string KAT receives (SPEC-POLICY-001 audit F1).
+ */
+export const toKatPhoneNumber = toDomesticDialString;
 
 function paramString(value: unknown): string {
   if (typeof value === "string") return value;

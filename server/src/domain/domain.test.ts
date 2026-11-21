@@ -90,3 +90,32 @@ describe("task state machine", () => {
     expect(canTransition("planning", "dialing")).toBe(false);
   });
 });
+
+describe("checkTargetNumber judges the dialed form (SPEC-POLICY-001 audit F1)", () => {
+  // These normalize to +1… but the provider dials the bare digits, which start with a blocked code.
+  it.each(["119 1234 5678", "+119 12345", "112-0000-0000", "182 1234 5678", "+11912345678"])(
+    "blocks a number whose dialed form starts with an emergency or special code: %s",
+    (raw) => {
+      expect(checkTargetNumber(raw)).toEqual({ kind: "blocked" });
+    },
+  );
+
+  // Regular Korean numbers are dialed with a leading 0 and must stay dialable.
+  it.each([
+    ["010-1234-5678", "+821012345678"],
+    ["010 9093 2936", "+821090932936"],
+    ["010-1191-2345", "+821011912345"],
+    ["011-912-3456", "+82119123456"],
+    ["02-112-3456", "+8221123456"],
+    ["031-119-1234", "+82311191234"],
+    ["0507-1234-5678", "+8250712345678"],
+    ["080-123-4567", "+82801234567"],
+    ["070-1234-5678", "+827012345678"],
+    ["+82 10 1234 5678", "+821012345678"],
+    ["1588-1234", "+15881234"],
+    ["1544 5678", "+15445678"],
+    ["+1 (415) 555-0100", "+14155550100"],
+  ])("keeps regular numbers dialable: %s", (raw, e164) => {
+    expect(checkTargetNumber(raw)).toEqual({ kind: "ok", e164 });
+  });
+});
