@@ -67,11 +67,25 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - The bridge reads `session.agentInstructions()` once at bridge start (same moment it already took the `session.task()` snapshot), so the string sent on every (re)connect is unchanged. The bridge-side AC-007 assertion lands in M3 with the WebSocket injection point.
 - Plan deviation (recorded): the AC-006 rule for all of `providers/**` cannot pass until `scenario.ts` moves (M5). M2 asserts only the bridge file so the M2 commit stays green; the full rule is added (RED → GREEN) in M5.
 
+### M3 — bridge injection point, bridge tests, Realtime validation
+
+- Step 1: `createSocket?: RealtimeSocketFactory` added to `bridgeToRealtime` (default `new WebSocket(url, options)`); no other change.
+- Protection + RED, run on the step-1 tree (`npm --prefix server test -- src/providers/realtimeBridge.test.ts`, exit 1, `m3-protect-red.txt`):
+  ```
+  9 AC-015 (a)~(i) + AC-007 bridge tests: pass (protection)
+  × validates handled realtime events and ignores the rest   AssertionError: expected [ { event: 'media', …(2) } ] to deeply equal []
+  × ignores malformed KAT media frames without logging       AssertionError: expected [ { …(2) } ] to deeply equal []   (+ "audio": 42, "type": "input_audio_buffer.append")
+  Tests  2 failed | 9 passed (11)
+  ```
+- GREEN: `realtimeEvents.ts` (handled-event schemas, `ApprovalToolArgs`) and the media/stop frame schema in `kat/schemas.ts`; same command → `Tests  11 passed (11)` (`m3-green.txt`); full suite `Test Files 10 passed (10)` / `Tests 147 passed (147)` (`m3-full.txt`); typecheck exit 0; `grep -cE 'Record<string, any>|: any\b|as any\b' src/providers/realtimeBridge.ts` → `0`.
+- AC-015 (h) also pins the `"Realtime handshake rejected"` warn payload: `{ taskId, status: 401, body: <first 400 chars>, attempt: 1|2 }` (spec.md §4 exception kept).
+
 ### Milestone log
 
 - M1 done (commit: see git log `feat(SPEC-ARCH-001): M1`)
 - M2 done (commit: see git log `feat(SPEC-ARCH-001): M2`)
-- next: M3
+- M3 done (commit: see git log `feat(SPEC-ARCH-001): M3`)
+- next: M4
 
 ## §E.3 Run-phase Audit-Ready Signal
 

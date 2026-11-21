@@ -1,5 +1,7 @@
 import WebSocket from "ws";
 import type { ApprovalDecision } from "../domain/types.js";
+import { parseMediaStreamFrame } from "./kat/schemas.js";
+import { ApprovalToolArgs, parseRealtimeEvent } from "./realtimeEvents.js";
 import type { CallSession } from "./types.js";
 
 export interface RealtimeOptions {
@@ -42,21 +44,32 @@ const TOOLS = [
 /** Gives the goodbye audio time to reach the callee before the line is cut. */
 const HANGUP_GRACE_MS = 2500;
 const REALTIME_CONNECT_RETRIES = 2;
+/** Asked when the model calls request_user_approval without a usable question. */
+const DEFAULT_APPROVAL_QUESTION = "진행해도 될까요?";
 
-/**
- * Bridges a G.711 μ-law media stream (KAT Cloud / Twilio-compatible JSON frames)
- * to one OpenAI Realtime session. Both sides speak μ-law, so audio is forwarded
- * without transcoding.
- */
-export function bridgeToRealtime(params: {
+/** Opens the OpenAI Realtime socket. Injectable so tests never reach the network. */
+export type RealtimeSocketFactory = (url: string, options: WebSocket.ClientOptions) => WebSocket;
+
+const openRealtimeSocket: RealtimeSocketFactory = (url, options) => new WebSocket(url, options);
+
+export interface BridgeParams {
   media: WebSocket;
   streamSid: string;
   session: CallSession;
   options: RealtimeOptions;
   hangup: () => Promise<void>;
   log: Logger;
-}): void {
-  const { media, streamSid, session, options, hangup, log } = params;
+  /** Defaults to a real `ws` client socket. */
+  createSocket?: RealtimeSocketFactory;
+}
+
+/**
+ * Bridges a G.711 μ-law media stream (KAT Cloud / Twilio-compatible JSON frames)
+ * to one OpenAI Realtime session. Both sides speak μ-law, so audio is forwarded
+ * without transcoding.
+ */
+export function bridgeToRealtime(params: BridgeParams): void {
+  const { media, streamSid, session, options, hangup, log, createSocket = openRealtimeSocket } = params;
   const task = session.task();
   // Built once per bridge from the same snapshot, as before; reused on every reconnect attempt.
   const instructions = session.agentInstructions();
@@ -100,15 +113,15 @@ export function bridgeToRealtime(params: {
   };
 
   const handleTool = async (name: string, callId: string, rawArgs: string) => {
-    let args: Record<string, unknown> = {};
+    let args: unknown = {};
     try {
-      args = JSON.parse(rawArgs) as Record<string, unknown>;
+      args = JSON.parse(rawArgs);
     } catch {
       log.warn({ name }, "Realtime tool arguments were not valid JSON");
     }
 
     if (name === "request_user_approval") {
-      const question = typeof args.question === "string" ? args.question : "진행해도 될까요?";
+      const question = ApprovalToolArgs.safeParse(args).data?.question ?? DEFAULT_APPROVAL_QUESTION;
       const decision = await session.requestApproval(question);
       if (session.signal.aborted) return;
       // user_comment is guidance only; never overrides safety / payment / PII policy.
@@ -157,12 +170,14 @@ export function bridgeToRealtime(params: {
     });
 
     socket.on("message", (raw) => {
-      let event: Record<string, any>;
-      try {
-        event = JSON.parse(raw.toString());
-      } catch {
+      const parsed = parseRealtimeEvent(raw.toString());
+      if (parsed.kind === "malformed") {
+        // Type name only: event content can carry call audio or transcript text.
+        log.warn({ taskId: session.taskId, type: parsed.type }, "Ignored malformed Realtime event");
         return;
       }
+      if (parsed.kind === "ignored") return;
+      const event = parsed.event;
 
       switch (event.type) {
         case "response.output_audio.delta":
@@ -174,17 +189,17 @@ export function bridgeToRealtime(params: {
           sendMedia({ event: "clear", streamSid });
           break;
         case "conversation.item.input_audio_transcription.completed":
-          session.appendTranscript("callee", String(event.transcript ?? ""));
+          session.appendTranscript("callee", event.transcript ?? "");
           break;
         case "response.output_audio_transcript.done":
         case "response.audio_transcript.done":
-          session.appendTranscript("agent", String(event.transcript ?? ""));
+          session.appendTranscript("agent", event.transcript ?? "");
           break;
         case "response.function_call_arguments.done":
-          void handleTool(String(event.name), String(event.call_id), String(event.arguments ?? "{}"));
+          void handleTool(event.name, event.call_id, event.arguments ?? "{}");
           break;
         case "error": {
-          const detail = String(event.error?.message ?? "Realtime API error");
+          const detail = event.error?.message ?? "Realtime API error";
           log.warn({ error: detail, taskId: session.taskId }, "Realtime API error");
           if (/credit|billing|quota|invalid_api_key|unauthorized/i.test(detail)) {
             failAndHangup(`음성 AI 오류로 통화를 종료합니다: ${detail}`);
@@ -249,7 +264,7 @@ export function bridgeToRealtime(params: {
     intentionalClose = false;
     opened = false;
     retryScheduled = false;
-    ai = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(options.model)}`, {
+    ai = createSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(options.model)}`, {
       headers: {
         Authorization: `Bearer ${options.apiKey}`,
         "OpenAI-Beta": "realtime=v1",
@@ -260,15 +275,11 @@ export function bridgeToRealtime(params: {
   };
 
   media.on("message", (raw) => {
-    let event: Record<string, any>;
-    try {
-      event = JSON.parse(raw.toString());
-    } catch {
-      return;
-    }
-    if (event.event === "media" && event.media?.payload) {
-      sendAi({ type: "input_audio_buffer.append", audio: event.media.payload });
-    } else if (event.event === "stop") {
+    // Malformed or unknown frames are dropped without logging (SPEC-ARCH-001 REQ-011).
+    const frame = parseMediaStreamFrame(raw.toString());
+    if (frame?.event === "media") {
+      sendAi({ type: "input_audio_buffer.append", audio: frame.media.payload });
+    } else if (frame?.event === "stop") {
       closeAi("media_stop");
     }
   });
