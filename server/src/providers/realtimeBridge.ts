@@ -264,10 +264,11 @@ export function bridgeToRealtime(params: BridgeParams): void {
     intentionalClose = false;
     opened = false;
     retryScheduled = false;
+    // @MX:NOTE: [AUTO] GA Realtime endpoint: never send "OpenAI-Beta: realtime=v1" here — the server
+    // closes the socket with 4000 invalid_request_error.beta_api_shape_disabled (live-call outage).
     ai = createSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(options.model)}`, {
       headers: {
         Authorization: `Bearer ${options.apiKey}`,
-        "OpenAI-Beta": "realtime=v1",
       },
       handshakeTimeout: 15_000,
     });

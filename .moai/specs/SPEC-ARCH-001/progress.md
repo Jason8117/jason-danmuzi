@@ -227,3 +227,14 @@ Source: independent sync audit `FIVE-SPECS-audit-1` finding **F3** (Medium). Fix
 - RED (`f3-red.log`): `AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times` (x2) / `Tests 2 failed | 47 passed (49)`.
 - GREEN (`f3-green.log`): `Test Files 11 passed (11)` / `Tests 213 passed (213)`; "ignores malformed status webhooks" (AC-009/AC-010) unchanged and green. Probe `green-probe-webhook.out`: `numeric callId + metadata.taskId: markRinging=1 warns=[]` (base: `markRinging=0 warns=["Ignored malformed KAT status webhook"]`).
 - Not changed (outside the owner decision): `metadata` as a JSON string and a numeric `status` are still rejected as malformed (REQ-010 behavior); the audit's per-field `.catch(undefined)` suggestion was not applied.
+
+## Hotfix addendum
+
+Source: live production failure. Real calls connected through KAT, then the Realtime socket closed within seconds. The server log read: `"Realtime socket open"` attempt 1 → warn `"Realtime API error": "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API."` → `"Realtime session closed"` code `4000`, reason `invalid_request_error.beta_api_shape_disabled`, `opened:true`. Fix cycle base `b140218` (run_start_sha `b140218beae0e8b1d5e9f4986ae1414ccef64630`); commit: `fix(SPEC-ARCH-001): drop the OpenAI-Beta header on the GA Realtime endpoint` (resolve via `git log --grep "OpenAI-Beta header"`). Evidence: `.moai/state/verify/fix-hotfix-1/` (gitignored, local).
+
+- Root cause: `connectAi()` opened the GA endpoint `wss://api.openai.com/v1/realtime?model=...` but still sent the header `OpenAI-Beta: realtime=v1`. The `session.update` payload (`type: "realtime"`, `output_modalities`, `audio.input/output.format = audio/pcmu`) and the event handling were already in GA shape.
+- Change: removed the `OpenAI-Beta` header only. The URL, the `session.update` shape and the event handling are unchanged.
+- RED (`a-red.log`): `AssertionError: expected [ 'authorization', 'openai-beta' ] to not include 'openai-beta'` (x2: first connect and reconnect) / `Tests 2 failed | 11 passed (13)`.
+- GREEN (`a-green.log`): `Test Files 11 passed (11)` / `Tests 220 passed (220)`.
+- Beta-leftover scan (`a-beta-scan.txt`): no other `OpenAI-Beta`, `realtime=v1`, `gpt-4o-realtime`, `input_audio_format` or bare `modalities:` usage in `server/src`. The legacy receive-side aliases `response.audio.delta` / `response.audio_transcript.done` are kept on purpose: they are accepted alongside the GA names and are never sent.
+- Not verified: the real OpenAI Realtime service was not contacted. The fix rests on the production log plus the fake-socket test. A real call is still needed to confirm it.

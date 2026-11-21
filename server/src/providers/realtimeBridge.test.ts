@@ -60,6 +60,7 @@ function setup(decision: ApprovalDecision = { approved: true, reason: "user_appr
   media.readyState = WebSocket.OPEN;
   const sockets: FakeSocket[] = [];
   const urls: string[] = [];
+  const socketOptions: WebSocket.ClientOptions[] = [];
   const hangup = vi.fn(async () => {});
 
   bridgeToRealtime({
@@ -69,16 +70,17 @@ function setup(decision: ApprovalDecision = { approved: true, reason: "user_appr
     options: { apiKey: "sk-test", model: "gpt-realtime", voice: "marin" },
     hangup,
     log,
-    createSocket: (url) => {
+    createSocket: (url, options) => {
       const socket = new FakeSocket();
       sockets.push(socket);
       urls.push(url);
+      socketOptions.push(options);
       return socket as unknown as WebSocket;
     },
   });
 
   const ai = () => sockets[sockets.length - 1]!;
-  return { session, media, sockets, urls, ai, hangup, warns };
+  return { session, media, sockets, urls, socketOptions, ai, hangup, warns };
 }
 
 /** Lets the bridge's async tool handling settle. */
@@ -288,5 +290,34 @@ describe("bridgeToRealtime input validation (SPEC-ARCH-001 AC-011)", () => {
     expect(ai().sent).toEqual([]);
     expect(ai().close).not.toHaveBeenCalled();
     expect(warns).toEqual([]);
+  });
+});
+
+describe("bridgeToRealtime GA handshake (SPEC-ARCH-001 hotfix)", () => {
+  const headerNames = (options: WebSocket.ClientOptions | undefined) =>
+    Object.keys((options?.headers ?? {}) as Record<string, string>).map((name) => name.toLowerCase());
+
+  // The GA /v1/realtime endpoint closes the socket with 4000
+  // invalid_request_error.beta_api_shape_disabled when the beta header is sent.
+  it("opens the GA endpoint with a Bearer token and without the OpenAI-Beta header", () => {
+    const { socketOptions } = setup();
+
+    expect(socketOptions).toHaveLength(1);
+    expect(headerNames(socketOptions[0])).not.toContain("openai-beta");
+    expect((socketOptions[0]!.headers as Record<string, string>).Authorization).toBe("Bearer sk-test");
+  });
+
+  it("keeps the beta header off reconnect attempts too", async () => {
+    vi.useFakeTimers();
+    const { sockets, socketOptions } = setup();
+
+    sockets[0]!.reject(503, "busy");
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(socketOptions).toHaveLength(2);
+    for (const options of socketOptions) {
+      expect(headerNames(options)).not.toContain("openai-beta");
+      expect((options.headers as Record<string, string>).Authorization).toBe("Bearer sk-test");
+    }
   });
 });
