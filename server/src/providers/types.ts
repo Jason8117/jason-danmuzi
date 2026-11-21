@@ -23,6 +23,8 @@ export interface CallSession {
    * timeout, or hang-up. Optional comment is user guidance for the agent.
    */
   requestApproval(question: string): Promise<ApprovalDecision>;
+  /** Reports the provider's external call id as soon as it is known, so it survives a restart. */
+  recordProviderCallId(providerCallId: string): void;
   end(options?: EndOptions): void;
 }
 
@@ -32,4 +34,9 @@ export interface CallProvider {
   start(session: CallSession): Promise<void>;
   /** Hangs up an active call. Must be safe to call more than once. */
   hangup(taskId: string): Promise<void>;
+  /**
+   * Hangs up a call by its external id without any in-memory session (e.g. after a restart).
+   * Optional: providers that never report a call id (simulated) do not implement it.
+   */
+  terminateByProviderCallId?(providerCallId: string): Promise<void>;
 }

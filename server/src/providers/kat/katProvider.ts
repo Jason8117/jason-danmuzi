@@ -14,6 +14,8 @@ export interface KatOptions {
   publicBaseUrl: string;
   apiBaseUrl: string;
   realtime: RealtimeOptions;
+  /** Injectable for tests; defaults to the global fetch. */
+  fetch?: typeof fetch;
 }
 
 interface Logger {
@@ -104,6 +106,7 @@ export class KatCallProvider implements CallProvider {
     }
     active.callId = callId;
     this.byCallId.set(callId, task.id);
+    session.recordProviderCallId(callId);
     this.log.info(
       {
         taskId: task.id,
@@ -299,7 +302,7 @@ export class KatCallProvider implements CallProvider {
     extraHeaders?: Record<string, string>,
   ): Promise<Record<string, any>> {
     const url = `${this.options.apiBaseUrl.replace(/\/$/, "")}${path}`;
-    const response = await fetch(url, {
+    const response = await (this.options.fetch ?? fetch)(url, {
       method,
       headers: {
         "x-api-key": this.options.apiKey,

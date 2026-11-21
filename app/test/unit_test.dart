@@ -37,6 +37,16 @@ void main() {
       expect(task.outcome?.keyFacts, ['7시 가능']);
     });
 
+    // Guards SPEC-LIFECYCLE-001 REQ-011: the server adds an optional providerCallId; the app must not depend on it.
+    test('ignores providerCallId when parsing tasks', () {
+      final without = CallTask.fromJson(taskJson());
+      final withId = CallTask.fromJson({...taskJson(), 'providerCallId': 'c-1'});
+      expect(withId.id, without.id);
+      expect(withId.status, without.status);
+      expect(withId.isSimulated, without.isSimulated);
+      expect(withId.transcript.length, without.transcript.length);
+    });
+
     test('treats unknown statuses as failed instead of crashing', () {
       expect(TaskStatus.parse('something_new'), TaskStatus.failed);
     });

@@ -15,6 +15,7 @@ import {
   isTerminal,
 } from "../domain/types.js";
 import type { EventBus } from "../events/eventBus.js";
+import { logger as defaultLogger, type Logger } from "../logger.js";
 import type { CallProvider, CallSession, EndOptions } from "../providers/types.js";
 import type { TaskStore } from "../store/taskStore.js";
 
@@ -33,6 +34,7 @@ export interface CallServiceOptions {
   maxCallsPerDay: number;
   approvalTimeoutMs: number;
   maxCallDurationMs: number;
+  logger?: Logger;
 }
 
 interface PendingApproval {
@@ -57,6 +59,7 @@ const now = () => new Date().toISOString();
 export class CallService {
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly sessions = new Map<string, RunningSession>();
+  private readonly log: Logger;
 
   constructor(
     private readonly store: TaskStore,
@@ -64,7 +67,9 @@ export class CallService {
     private readonly brain: CallBrain,
     private readonly provider: CallProvider,
     private readonly options: CallServiceOptions,
-  ) {}
+  ) {
+    this.log = options.logger ?? defaultLogger;
+  }
 
   /** Calls interrupted by a server restart cannot be resumed; mark them so the user is not left waiting. */
   recoverInterruptedTasks(): void {
@@ -229,6 +234,12 @@ export class CallService {
           this.persist(task);
         }),
       requestApproval: (question: string) => this.requestApproval(taskId, question, controller.signal),
+      recordProviderCallId: (providerCallId: string) =>
+        updateActive((task) => {
+          if (!providerCallId || task.providerCallId === providerCallId) return;
+          task.providerCallId = providerCallId;
+          this.persist(task);
+        }),
       end: (options?: EndOptions) => this.endSession(taskId, options ?? {}),
     };
   }
