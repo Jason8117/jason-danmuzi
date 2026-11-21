@@ -1,6 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import { detectScenario, SCENARIO_TEMPLATES } from "../brain/scenario.js";
+import { detectScenario, SCENARIO_TEMPLATES } from "../domain/scenario.js";
+import type { ProviderId } from "../domain/types.js";
 import type { CallSession, CallProvider } from "./types.js";
+
+export const SIMULATED_PROVIDER_ID = "simulated" satisfies ProviderId;
 
 const LINES = {
   ko: {
@@ -30,7 +33,7 @@ const LINES = {
  * transcript, mid-call approval, summary) works without telephony credentials.
  */
 export class SimulatedCallProvider implements CallProvider {
-  readonly name = "simulated" as const;
+  readonly name: ProviderId = SIMULATED_PROVIDER_ID;
 
   constructor(private readonly speed = 1) {}
 

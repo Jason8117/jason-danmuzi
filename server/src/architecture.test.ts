@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /** Reads a source file relative to src/, so the rules check the code as written. */
@@ -36,5 +37,20 @@ describe("module boundaries (SPEC-ARCH-001)", () => {
 
   it("the realtime bridge does not import brain", () => {
     expect(linesContaining(source("providers/realtimeBridge.ts"), ['from "../brain/', 'from "../../brain/'])).toEqual([]);
+  });
+
+  // AC-006 / REQ-007
+  it("providers do not import brain", () => {
+    const files = readdirSync(new URL("./providers/", import.meta.url), { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+      .map((file) => `providers/${file.split(sep).join("/")}`);
+    expect(files).toContain("providers/kat/katProvider.ts");
+
+    const offending = files.flatMap((file) =>
+      linesContaining(source(file), ['from "../brain/', 'from "../../brain/']).map((line) => `${file}:${line}`),
+    );
+    expect(offending).toEqual([]);
+    // No re-export left behind for providers to reach through.
+    expect(existsSync(new URL("./brain/scenario.ts", import.meta.url))).toBe(false);
   });
 });

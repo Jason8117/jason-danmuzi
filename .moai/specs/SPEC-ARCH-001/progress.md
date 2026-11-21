@@ -97,13 +97,27 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - `app.test.ts` "answers signed but malformed status webhooks with 204" (AC-009 route half) was added after the GREEN change; the route returned 204 for any signed body before this SPEC as well (handler code read at b5bde14: `kat.handleStatusWebhook(...); return reply.status(204).send();`), so it is a protection test without its own pre-change run — recorded as a gap.
 - Targeted: `npm --prefix server test -- src/architecture.test.ts src/http/app.test.ts src/providers/kat/katProvider.test.ts` → `Test Files 3 passed (3)` / `Tests 65 passed (65)` (`m4-green.txt`).
 
+### M5 — scenario move and provider id type
+
+- RED (`npm --prefix server test -- src/architecture.test.ts src/services/callService.test.ts`, exit 1, `m5-red.txt`):
+  ```
+  × providers do not import brain   AssertionError: expected [ Array(1) ] to deeply equal []
+  + "providers/simulatedProvider.ts:2: import { detectScenario, SCENARIO_TEMPLATES } from \"../brain/scenario.js\";"
+  Tests  1 failed | 26 passed (27)
+  ```
+  The same run shows the AC-013 protection test "accepts any provider id" passing on the old code, as acceptance.md predicts (vitest strips types).
+- AC-013 RED is the grep recorded in the baseline table (2 lines). App protection before any app change: `flutter --suppress-analytics test test/unit_test.dart` → `+11: All tests passed!`, exit 0 (`m5-app-unit-pre.txt`; the new "treats unknown providers as real calls" test passes with no app code change).
+- GREEN: `git mv server/src/brain/scenario.ts server/src/domain/scenario.ts` (content byte-identical — its `../domain/types.js` import still resolves from `domain/`; no re-export left behind), importers updated; `ProviderId = string` in `domain/types.ts`, used by `CallTask.provider` and `CallProvider.name`; `SIMULATED_PROVIDER_ID` / `KAT_PROVIDER_ID` constants (`satisfies ProviderId`). `config.ts` `CALL_PROVIDER` enum unchanged.
+- Results: typecheck exit 0; full suite `Test Files 10 passed (10)` / `Tests 176 passed (176)` (`m5-full.txt`); AC-013 grep → no output (exit 1); AC-006 grep → no output (exit 1); app `flutter test` → `+17: All tests passed!`; `flutter analyze` → `1 issue found` (the same baseline info at `test/support/fakes.dart:53:5`).
+
 ### Milestone log
 
 - M1 done (commit: see git log `feat(SPEC-ARCH-001): M1`)
 - M2 done (commit: see git log `feat(SPEC-ARCH-001): M2`)
 - M3 done (commit: see git log `feat(SPEC-ARCH-001): M3`)
 - M4 done (commit: see git log `feat(SPEC-ARCH-001): M4`)
-- next: M5
+- M5 done (commit: see git log `refactor(SPEC-ARCH-001): M5`)
+- next: M6
 
 ## §E.3 Run-phase Audit-Ready Signal
 

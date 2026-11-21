@@ -66,6 +66,12 @@ export interface CallOutcome {
   followUps: string[];
 }
 
+/**
+ * Which call provider placed a task ("simulated", "kat", ...). A plain string so a new provider needs no
+ * domain change; stored tasks keep whatever id they were created with.
+ */
+export type ProviderId = string;
+
 export interface CallTaskInput {
   targetName: string;
   phoneNumber: string;
@@ -86,7 +92,7 @@ export interface CallTask extends CallTaskInput {
   approvals: ApprovalRequest[];
   outcome?: CallOutcome;
   error?: string;
-  provider: "simulated" | "kat";
+  provider: ProviderId;
   /** The provider's own id for the placed call (KAT callId). Lets a restarted server hang the call up. Absent for simulated calls and tasks saved before this field existed. */
   providerCallId?: string;
   createdAt: string;

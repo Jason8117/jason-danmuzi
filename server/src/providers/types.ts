@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import type WebSocket from "ws";
-import type { ApprovalDecision, CallTask, Speaker } from "../domain/types.js";
+import type { ApprovalDecision, CallTask, ProviderId, Speaker } from "../domain/types.js";
 
 /** What a provider route handler sees of an HTTP request. Framework-neutral on purpose. */
 export interface ProviderHttpRequest {
@@ -68,7 +68,7 @@ export interface CallSession {
 }
 
 export interface CallProvider {
-  readonly name: "simulated" | "kat";
+  readonly name: ProviderId;
   /** Starts dialing. Resolves once the call is initiated, not when it ends. */
   start(session: CallSession): Promise<void>;
   /** Hangs up an active call. Must be safe to call more than once. */

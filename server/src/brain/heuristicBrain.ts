@@ -1,6 +1,6 @@
 import type { CallOutcome, CallPlan, CallTask, CallTaskInput } from "../domain/types.js";
 import { openingLine } from "./prompts.js";
-import { detectScenario, SCENARIO_TEMPLATES } from "./scenario.js";
+import { detectScenario, SCENARIO_TEMPLATES } from "../domain/scenario.js";
 import type { CallBrain } from "./types.js";
 
 const FILLER =

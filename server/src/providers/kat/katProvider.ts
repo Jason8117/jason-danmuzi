@@ -2,10 +2,13 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type WebSocket from "ws";
 import { maskPhoneNumber } from "../../domain/phone.js";
+import type { ProviderId } from "../../domain/types.js";
 import type { CallProvider, CallSession, ProviderRoutes } from "../types.js";
 import { type BridgeParams, bridgeToRealtime, type RealtimeOptions } from "../realtimeBridge.js";
 import { ApiErrorBody, CreateCallResponse, parseJson, StartFrame, StatusWebhook } from "./schemas.js";
 import { verifyKatHttpSignature, verifyKatStreamSignature } from "./webhook.js";
+
+export const KAT_PROVIDER_ID = "kat" satisfies ProviderId;
 
 /** Routes KAT calls back on; also sent to KAT as statusCallbackUrl / streamUrl when a call is created. */
 const STATUS_PATH = "/kat/status";
@@ -92,7 +95,7 @@ function paramString(value: unknown): string {
 }
 
 export class KatCallProvider implements CallProvider {
-  readonly name = "kat" as const;
+  readonly name: ProviderId = KAT_PROVIDER_ID;
   private readonly calls = new Map<string, ActiveCall>();
   private readonly byCallId = new Map<string, string>();
 

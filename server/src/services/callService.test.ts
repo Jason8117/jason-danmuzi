@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAgentInstructions } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
-import type { CallTask, TaskStatus } from "../domain/types.js";
+import type { CallTask, ProviderId, TaskStatus } from "../domain/types.js";
 import { EventBus, type ServerEvent } from "../events/eventBus.js";
 import type { Logger } from "../logger.js";
 import { KatCallProvider } from "../providers/kat/katProvider.js";
@@ -63,7 +63,7 @@ class FakeProvider implements CallProvider {
   startImpl: (session: CallSession) => Promise<void> = async () => {};
   terminateImpl?: (providerCallId: string) => Promise<void>;
 
-  constructor(readonly name: "simulated" | "kat" = "simulated") {}
+  constructor(readonly name: ProviderId = "simulated") {}
 
   async start(session: CallSession): Promise<void> {
     this.sessions.set(session.taskId, session);
@@ -163,6 +163,19 @@ describe("CallService session instructions (SPEC-ARCH-001 AC-007)", () => {
 
     expect(session.agentInstructions()).toBe(buildAgentInstructions(calls.get("t-1")));
     expect(session.agentInstructions()).toContain("2명, 창가 자리 선호");
+  });
+});
+
+describe("CallService provider ids (SPEC-ARCH-001 AC-013)", () => {
+  it("accepts any provider id", () => {
+    const { calls } = setup({
+      provider: new FakeProvider("fake"),
+      tasks: [makeTask({ id: "old-sim", provider: "simulated" }), makeTask({ id: "old-kat", provider: "kat" })],
+    });
+
+    expect(calls.create(INPUT).provider).toBe("fake");
+    expect(calls.get("old-sim").provider).toBe("simulated");
+    expect(calls.get("old-kat").provider).toBe("kat");
   });
 });
 

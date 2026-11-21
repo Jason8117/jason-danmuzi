@@ -71,6 +71,15 @@ void main() {
       expect(withId.transcript.length, without.transcript.length);
     });
 
+    // SPEC-ARCH-001 AC-014 (OD-1 DEFAULT): a provider the app does not know is shown as a real call.
+    test('treats unknown providers as real calls', () {
+      final task = CallTask.fromJson({...taskJson(), 'provider': 'telco_x'});
+      expect(task.id, 'task-1');
+      expect(task.isSimulated, isFalse);
+      expect(CallTask.fromJson({...taskJson(), 'provider': 'kat'}).isSimulated, isFalse);
+      expect(CallTask.fromJson(taskJson()).isSimulated, isTrue);
+    });
+
     test('treats unknown statuses as failed instead of crashing', () {
       expect(TaskStatus.parse('something_new'), TaskStatus.failed);
     });
