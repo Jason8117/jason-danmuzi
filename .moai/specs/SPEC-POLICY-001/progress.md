@@ -79,7 +79,23 @@ run_start_sha: 6ffe4ba0904444fb9db41bc2c2ebc61a9b9dd008
 - GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  109 passed (109)`; typecheck exit 0
 - files: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`
 
-_<M4-M5 pending>_
+- commit: `8ee2463`
+
+#### M4 — HTTP layer cleanup (AC-006, AC-007 (c)(d))
+
+- RED: `npm --prefix server test -- src/http/app.test.ts` → exit 1
+  ```
+  FAIL  src/http/app.test.ts > CallMate API > rejects emergency numbers with blocked_number
+  AssertionError: expected { error: 'invalid_phone', …(1) } to deeply equal { error: 'blocked_number', …(1) }
+   Test Files  1 failed (1)
+        Tests  1 failed | 8 passed (9)
+  ```
+  ("keeps invalid_request for schema violations" passed before and after — protection item)
+- RED: `grep -c "normalizePhoneNumber\|isBlockedNumber\|invalid_phone\|blocked_number" server/src/http/app.ts` → `5`
+- GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  111 passed (111)`; typecheck exit 0; same grep → `0`
+- files: `server/src/http/app.ts`, `server/src/http/app.test.ts`
+
+_<M5 pending>_
 
 ## §E.3 Run-phase Audit-Ready Signal
 

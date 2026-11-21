@@ -66,6 +66,28 @@ describe("CallMate API", () => {
     expect(res.json().error).toBe("invalid_phone");
   });
 
+  it("rejects emergency numbers with blocked_number", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      headers: auth,
+      payload: { targetName: "x", phoneNumber: "119", goal: "문의", requesterName: "김" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "blocked_number", message: "긴급·특수번호에는 전화할 수 없습니다." });
+  });
+
+  it("keeps invalid_request for schema violations", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      headers: auth,
+      payload: { phoneNumber: "010-1234-5678", goal: "문의", requesterName: "김" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_request");
+  });
+
   it("plans, calls, pauses for approval and summarizes", async () => {
     const created = await createTask();
     expect(created.statusCode).toBe(201);

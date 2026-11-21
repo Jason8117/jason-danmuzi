@@ -6,7 +6,6 @@ import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import type { AppConfig } from "../config.js";
-import { isBlockedNumber, normalizePhoneNumber } from "../domain/phone.js";
 import { InvalidTransitionError } from "../domain/stateMachine.js";
 import type { EventBus } from "../events/eventBus.js";
 import type { KatCallProvider } from "../providers/kat/katProvider.js";
@@ -115,12 +114,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/v1/tasks/:id", async (request) => calls.get(TaskParams.parse(request.params).id));
 
   app.post("/v1/tasks", async (request, reply) => {
-    const body = CreateTaskBody.parse(request.body);
-    const phoneNumber = normalizePhoneNumber(body.phoneNumber);
-    if (!phoneNumber) throw new ServiceError(400, "invalid_phone", "전화번호 형식이 올바르지 않습니다.");
-    if (isBlockedNumber(phoneNumber)) throw new ServiceError(400, "blocked_number", "긴급·특수번호에는 전화할 수 없습니다.");
-    const callbackNumber = body.callbackNumber ? normalizePhoneNumber(body.callbackNumber) ?? undefined : undefined;
-    const task = calls.create({ ...body, phoneNumber, callbackNumber });
+    // Number normalization and the emergency-number block live in CallService (SPEC-POLICY-001 REQ-008).
+    const task = calls.create(CreateTaskBody.parse(request.body));
     return reply.status(201).send(task);
   });
 
