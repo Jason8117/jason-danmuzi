@@ -72,8 +72,8 @@ flutter --suppress-analytics analyze
 
 - **Given** 요청 본문을 기록하는 가짜 `fetch`가 `{"targetName":"라 파스타","goal":"010-9999-8888로 예약","conditions":[],"context":"번호 02-555-5555"}`를 돌려주는 `OpenAiBrain`, 빈 저장소
 - **When** `"라 파스타에 010-1234-5678로 전화해서 예약"`으로 의뢰 해석을 하면
-- **Then** (a) `fetch`가 받은 요청 본문 문자열에 `010-1234-5678`, `01012345678`이 없고 `[전화번호]`가 있다. (b) `draft.phoneNumber`는 `+821012345678`(글의 번호), `phoneSource "text"`. (c) 응답 어디에도 `+821099998888`, `+82255555555`가 없다(LLM 응답의 숫자를 번호로 쓰지 않음). (d) 같은 가짜 응답에서 원문에 번호가 없는 `"라 파스타에 전화해서 예약"`이면 `phoneNumber: null`, `missing`에 `"phoneNumber"` 포함
-- 테스트: `server/src/brain/openaiBrain.test.ts` — "never sends or invents phone numbers"; `callService.test.ts` — "uses only numbers from the text or history"
+- **Then** (a) `fetch`가 받은 요청 본문 문자열에 `010-1234-5678`, `01012345678`이 없고 `[전화번호]`가 있다. 가리기 벡터(`design.md` §2 가리기 표 6행: 국내 후보, `1588-1234`, `+1 415 555 0100`은 `[전화번호]`로, `2024. 12. 25`·`금요일 7시 2명`·`119`는 그대로)를 도메인 함수 단위로도 확인한다. (b) `draft.phoneNumber`는 `+821012345678`(글의 번호), `phoneSource "text"`. (c) 응답 JSON을 문자열로 바꿨을 때 `010-9999-8888`, `01099998888`, `+821099998888`, `02-555-5555`, `+82255555555`가 하나도 없고, `draft.goal`은 `"로 예약"`, `draft.context`는 `"번호"`다(번호 모양을 지우고 공백 정리). (d) 같은 가짜 응답에서 원문에 번호가 없는 `"라 파스타에 전화해서 예약"`이면 `phoneNumber: null`, `missing`에 `"phoneNumber"` 포함, (c)와 같은 문자열이 응답에 없음. (e) 가짜 `fetch`가 `content`로 `{"targetName":"1588-9999 고객센터","goal":"+1 202 555 0199로 문의","conditions":["02 777 7777도 가능"],"context":null}`를 줄 때 원문 `"고객센터에 전화해서 문의"` → 응답에 `1588-9999`, `+1 202 555 0199`, `02 777 7777`이 없고, 번호를 지운 뒤 포함 검사를 하므로 `targetName "고객센터"`, `goal "로 문의"`, `conditions ["도 가능"]`
+- 테스트: `server/src/domain/intake.test.ts` — "masks number-shaped text before it reaches the LLM" (가리기 벡터); `server/src/brain/openaiBrain.test.ts` — "never sends phone numbers to the LLM" ((a) 요청 본문); `callService.test.ts` — "uses only numbers from the text or history" ((b)~(e), 서비스 + 가짜 `fetch`의 `OpenAiBrain`)
 - RED: 해석 경로가 없다.
 
 ### AC-008 — LLM 해석 (REQ-008)
@@ -83,15 +83,17 @@ flutter --suppress-analytics analyze
   2. `{"targetName":"강남 맛집","goal":"예약","conditions":[],"context":null}` (원문에 없는 이름)
   3. `{"targetName":null,"goal":"[전화번호]로 예약 문의","conditions":null}`
 - **When** 원문 `"라 파스타에 전화해서 금요일 7시 2명 예약해줘. 안 되면 8시도 괜찮아"`(3은 `"02-123-4567로 예약 문의"`)로 해석하면
-- **Then** (1) `targetName "라 파스타"`, `goal "금요일 7시 2명 예약"`, `conditions ["8시도 괜찮음"]`, `source "llm"`. (2) `targetName null`(원문에 없음), `missing`에 `"targetName"`. (3) `goal "로 예약 문의"`(자리표시 제거 뒤 공백 정리), `conditions []`, `phoneNumber "+8221234567"`, `source "llm"`
-- 테스트: `openaiBrain.test.ts` — "drafts intake content with the LLM" (`it.each`); 이름 포함 검사는 `callService.test.ts` — "drops a target name the request never mentioned"
+- **Then (서비스 응답, REQ-008 후처리 포함)** (1) `targetName "라 파스타"`, `goal "금요일 7시 2명 예약"`, `conditions ["8시도 괜찮음"]`, `source "llm"`. (2) `targetName null`(원문에 없음), `missing`에 `"targetName"`. (3) `goal "로 예약 문의"`(자리표시 제거 뒤 공백 정리), `conditions []`, `phoneNumber "+8221234567"`, `source "llm"`
+- **Then (brain 단)** `OpenAiBrain.draftIntake`는 세 경우 모두 스키마 검증한 값을 바꾸지 않고 돌려준다: (2)의 `targetName`은 `"강남 맛집"` 그대로, (3)의 `goal`은 `"[전화번호]로 예약 문의"` 그대로, `conditions`는 `null` → `[]`, `source "llm"`. 후처리가 brain에 없음을 고정한다
+- 테스트: 서비스 응답은 `callService.test.ts` — "post-processes LLM intake content in the service" (`it.each`, 가짜 `fetch`의 `OpenAiBrain`을 주입한 `CallService`); brain 단은 `openaiBrain.test.ts` — "returns schema-validated intake content unchanged" (`it.each`)
 
 ### AC-009 — LLM 실패 시 결정적 해석과 로그 (REQ-009)
 
 - **Given** SPEC-OUTCOME-001 AC-005의 여섯 가지 실패 가짜 `fetch`(500, `TimeoutError`, 빈 `content`, JSON 아님, 스키마 위반 `{"goal":5}`, `TypeError("fetch failed")`), 기록하는 가짜 로거
 - **When** `"라 파스타에 전화해서 7시 예약"`으로 `OpenAiBrain.draftIntake`를 부르면
 - **Then** 여섯 경우 모두 결과가 `HeuristicBrain.draftIntake`와 같고 `source "heuristic"`이며, warn 로그가 정확히 1건이고 그 객체의 키가 `op`(`"intake"`), `reason`(각각 `http_status`, `timeout`, `empty_content`, `invalid_json`, `schema_mismatch`, `network`), 500일 때만 `status`뿐이다. 로그 문자열에 `라 파스타`가 없다
-- 테스트: `openaiBrain.test.ts` — "falls back visibly when the intake LLM fails" (`it.each`)
+- (7) 제한 시간: 의뢰 해석 제한 시간을 50 ms로 주입하고, 받은 `signal`이 끊길 때까지 끝나지 않는(끊기면 `TimeoutError` 이름의 오류로 거부하는) 가짜 `fetch` → 결과 `source "heuristic"`, warn 1건 `reason "timeout"`. 주입하지 않은 기본값은 15000 ms이고 계획·요약의 기본값은 30000 ms 그대로다(내보낸 상수 단언)
+- 테스트: `openaiBrain.test.ts` — "falls back visibly when the intake LLM fails" (`it.each`), "bounds the intake LLM call below the app timeout"
 
 ### AC-010 — 결정적 해석 규칙 (REQ-010)
 
@@ -127,7 +129,8 @@ flutter --suppress-analytics analyze
 - **When** (1) `autoStart: true`로 `create`, (2) `autoStart` 없이 `create` 한 뒤 계획이 끝날 때까지 기다리면
 - **Then** (1) 별도 `approvePlan` 호출 없이 작업이 `dialing`(또는 그 뒤 상태)이고 `start`가 정확히 1회, `startedAt`이 있다. (2) `awaiting_approval`이고 `start` 0회
 - 추가: 시뮬레이션 서버 전체 흐름 — `autoStart: true`로 만든 작업이 `approve-plan` 요청 없이 승인 대기(`approvals`에 `pending`)까지 간다
-- 테스트: `callService.test.ts` — "starts the call once planning finishes when autoStart is set"; `app.test.ts` — "auto-starts a simulated call without approve-plan"
+- (3) 첫 인사 고정(OD-7): `createPlan`이 `openingLine: "안녕하세요, 김민수입니다."`(AI 고지 없음)를 돌려주는 가짜 brain → (1)의 작업은 `plan.openingLine`이 `openingLine(task)`(`brain/prompts.ts:3-7`)와 같고 `AI 비서`를 포함한다. 같은 가짜 brain으로 `autoStart` 없이 만든 뒤 수동 `approvePlan(id)`을 부르면 `plan.openingLine`은 `"안녕하세요, 김민수입니다."` 그대로다(수동 경로 불변)
+- 테스트: `callService.test.ts` — "starts the call once planning finishes when autoStart is set", "auto-started calls open with the template AI disclosure"; `app.test.ts` — "auto-starts a simulated call without approve-plan"
 
 ### AC-015 — 자동 시작이 막히면 (REQ-015)
 
@@ -169,6 +172,7 @@ flutter --suppress-analytics analyze
 - **Given** 작업 6개: `라 파스타`(+8221234567, 연결됨, 11-01), `라파스타`(같은 번호, 연결됨, 11-10), `미용실`(+82311112222, 연결됨, 11-05), `세탁소`(+82311113333, 연결 안 됨, 11-12), `치과`(+82311114444, 연결됨, 11-03), `빵집`(+82311115555, 연결됨, 11-02)
 - **When** 홈을 렌더링하고, 첫 제안을 누르고, 이어서 "식당 예약" 칩을 누르면
 - **Then** "최근 통화한 곳"에 정확히 3개가 위에서부터 `라파스타`(2번), `미용실`(1번), `치과`(1번) 순서로 보이고 `세탁소`는 없다. 첫 제안을 누르면 입력칸 글이 `라파스타에 `이고 커서 위치가 글 끝이다. "식당 예약" 칩을 누르면 입력칸 글이 템플릿 목적 문장(`call_templates.dart:17`)과 같다. 기존 테스트 "shows the empty state with quick-start templates"는 수정 없이 통과한다
+- (3) 작업 0개인 홈: "식당 예약" 칩이 정확히 하나(`findsOneWidget`)이고, 누르면 입력칸 글이 템플릿 목적 문장이 되며 기존 양식 화면("통화 계획 만들기")은 열리지 않는다. 빈 상태 안내 "귀찮은 전화, 대신 걸어드릴게요"는 보인다
 - 단위: 계산 함수(`counterparties.dart`) — 같은 입력에서 `[('라파스타', '+8221234567', 2), ('미용실', …, 1), ('치과', …, 1)]`; 정규화 벡터 `design.md` §3.1
 - 테스트: `intake_flow_test.dart` — "suggests recent counterparties and templates"; `app/test/unit_test.dart` — "derives recent counterparties"
 - RED: 제안이 없다.
@@ -229,7 +233,8 @@ flutter --suppress-analytics analyze
 
 ## 잔여 위험
 
-- 의뢰 해석 LLM 호출(최대 30 s)이 앱 요청 제한 시간(20 s)보다 길 수 있다. 그 경우 앱은 네트워크 오류 스낵바를 보여 주고, 서버는 결과를 버린다(부작용 없음, REQ-003).
+- 의뢰 해석 LLM 제한(15 s) + 서버 처리 + 네트워크 왕복이 앱 제한(20 s)에 가까우면 여전히 앱이 먼저 끝날 수 있다. 그 경우 앱은 네트워크 오류 스낵바를 보여 주고, 서버는 결과를 버린다(부작용 없음, REQ-003).
+- 가리기 집합(국내 후보, `+` 국제 표기, 15xx·16xx·18xx 대표번호) 밖의 드문 번호 표기(예: 지역번호 없는 7~8자리 `123-4567`)는 LLM에 그대로 갈 수 있다. 날짜·시각·인원을 LLM이 받을 수 있게 하려고 좁게 정했다(REQ-007 (a)). LLM 응답에서 같은 집합 밖 숫자는 지우지 않는다.
 - 이름 정규화가 NFC를 하지 않아, 자모가 분리된 입력(NFD)은 같은 상대로 묶이지 않는다.
 - 결정적 이름 규칙은 "…에 전화/연락"으로 시작하는 글만 잡는다. 그 밖의 글은 기록 이름이나 사용자의 직접 입력에 기댄다.
 - `autoStart` 작업은 사용자가 통화 계획(첫 인사·순서·질문)을 보지 않고 시작한다. 소유자 결정 3에 따른 것이며, 위험한 결정은 통화 중 승인이 막는다.

@@ -1,7 +1,7 @@
 ---
 id: SPEC-INTAKE-001
 title: "한 줄 부탁을 계획 카드로 — 번호 찾기, 한 번 확인 후 바로 통화"
-version: "0.1.0"
+version: "0.2.0"
 status: draft
 created: 2026-11-21
 updated: 2026-11-21
@@ -23,6 +23,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 | 버전 | 날짜 | 작성 | 변경 |
 |------|------|------|------|
 | 0.1.0 | 2026-11-21 | jason (manager-spec) | 최초 작성 (draft). 에픽 EPIC-ASSISTANT-UX의 두 번째 SPEC |
+| 0.2.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 1 반영: D5 템플릿 칩은 제안 줄 한 곳에서만, D6 LLM에 보내기 전 가리는 번호 모양을 넓히고 범위를 정직하게 적음, D7 LLM 응답 문자열의 번호 모양 제거, D8 후처리는 서비스 한 계층으로, D9 자동 시작 오류 근거 정정, D10 "너무 길어요" 문구를 REQ-021에, D11 의뢰 해석 LLM 제한 시간 15 s, D12 실행 경로·직렬 작업 기록, 자동 시작 첫 인사 템플릿 고정(OD-7). REQ/AC 번호·개수 불변 |
 
 ## 1. 배경과 목적
 
@@ -56,12 +57,12 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 - **REQ-004** [Ubiquitous] 서버는 요청 글에서 한국식 번호 후보(맨 앞 `0` 또는 `+82`, 이어서 국번·식별 번호 1~3자리, 3~4자리, 4자리 묶음. 묶음 사이에는 공백·하이픈·점·괄호 중 하나만 올 수 있고 후보 앞뒤에 다른 숫자가 붙어 있지 않음. 정확한 규칙과 테스트 벡터는 `design.md` §2)를 글 순서대로 찾아 각각 `checkTargetNumber`로 판정하고, 처음으로 `ok`인 후보의 E.164 값을 `draft.phoneNumber`로, `phoneSource`를 `"text"`로 해야 한다(**shall**).
 - **REQ-005** [Event-driven] **When** 글에 `ok`인 후보가 없고 차단 판정 후보나 차단 단축 번호(SPEC-POLICY-001의 9개 번호, 앞뒤에 숫자가 붙지 않은 것)가 있으면, 서버는 `phoneNumber: null`, `numberIssue: "blocked"`로 답해야 하며(**shall**), 통화 기록에서 번호를 찾지 않는다.
 - **REQ-006** [Event-driven] **When** 글에서 번호를 찾지 못했고(`numberIssue` 없음) `draft.targetName`이 정해졌으면, 서버는 통화 기록에서 번호를 찾아야 한다(**shall**): 저장된 작업 중 `connectedAt`이 있는 것(상대가 받은 적이 있는 번호)을 `createdAt` 최신순으로 보고, 정규화한 `targetName`이 같은 첫 작업의 `phoneNumber`를 `checkTargetNumber`로 다시 판정해 `ok`이면 그 값을 쓰고 `phoneSource`를 `"history"`로 한다(OD-2, OD-3 DEFAULT). 이름 정규화는 소문자로 바꾸고 모든 공백을 지우는 것이다(앱과 같은 규칙, REQ-018).
-- **REQ-007** [Unwanted] 서버는 요청 글이나 통화 기록에서 온 것이 아닌 전화번호를 제안해서는 안 되며(**shall not**), LLM에 전화번호를 보내거나 요구해서도 안 된다. LLM에 보내는 글에서는 REQ-004의 후보를 `[전화번호]`로 바꾸고, LLM 응답 스키마에는 번호 필드가 없으며, LLM 응답의 숫자는 번호로 쓰지 않는다.
+- **REQ-007** [Unwanted] 서버는 요청 글이나 통화 기록에서 온 것이 아닌 전화번호를 제안해서는 안 되며(**shall not**), 번호 모양의 글을 LLM에 보내거나 LLM에 번호를 요구해서도 안 된다. (a) 가리기 대상(번호 모양)은 REQ-004의 국내 후보, `+`로 시작해 숫자 8개 이상인 국제 표기, `15xx`·`16xx`·`18xx` + 4자리 대표번호 표기이며(정확한 규칙과 벡터는 `design.md` §2), LLM에 보내는 글에서 이들을 `[전화번호]`로 바꾼다. 날짜(`2024. 12. 25`)·시각·인원 같은 짧은 숫자는 가리지 않으므로 LLM에 그대로 간다. 이 세 모양 밖의 드문 번호 표기는 가려지지 않을 수 있다(잔여 위험, acceptance.md). (b) LLM 응답 스키마에는 번호 필드가 없다. (c) LLM이 준 모든 문자열 필드에서 (a)의 번호 모양 부분을 지운다(LLM은 번호를 받지 못했으므로 응답 속 번호는 지어낸 것이다). 따라서 응답 어디에도 요청 글에 없던 번호가 남지 않는다.
 
-### 3.3 내용 정리 (서버 brain)
+### 3.3 내용 정리 (서버 brain + 서비스 후처리)
 
-- **REQ-008** [Event-driven] **When** LLM을 쓸 수 있으면, brain은 (번호를 가린) 글을 LLM에 보내 `{ targetName: string|null, goal, conditions: string[], context: string|null }`를 받아 스키마(`design.md` §4: 이름 ≤80자, 목적 1~1000자, 조건 최대 5개·각 1~200자, 정보 ≤1000자)로 검증해야 하며(**shall**), 결과의 `source`는 `"llm"`이다. LLM이 준 `targetName`은 정규화한 요청 글이 정규화한 이름을 포함할 때만 쓰고, 아니면 `null`로 둔다(지어낸 상대 방지). 모든 문자열 필드에서 `[전화번호]` 자리표시는 지운다.
-- **REQ-009** [Event-driven] **When** 의뢰 해석용 LLM 호출이 실패하면(SPEC-OUTCOME-001 REQ-006과 같은 실패 분류), brain은 `op: "intake"`, 원인 분류(`reason`), 해당하면 HTTP 상태 코드만 담아 warn 수준으로 한 번 기록하고, REQ-010의 결정적 결과를 `source: "heuristic"`으로 돌려줘야 한다(**shall**). LLM 키가 없을 때도 결정적 결과를 쓴다.
+- **REQ-008** [Event-driven] **When** LLM을 쓸 수 있으면, brain은 서비스가 넘긴 (번호를 가린) 글을 LLM에 보내 `{ targetName: string|null, goal, conditions: string[], context: string|null }`를 받아 스키마(`design.md` §4: 이름 ≤80자, 목적 1~1000자, 조건 최대 5개·각 1~200자, 정보 ≤1000자)로 검증한 값을 `source: "llm"`과 함께 그대로 돌려줘야 한다(**shall**). 후처리는 원문 글을 가진 서비스(`CallService`) 한 곳에서만 한다(brain은 원문을 받지 않는다): 모든 문자열 필드에서 `[전화번호]` 자리표시와 REQ-007 (c)의 번호 모양을 지우고 공백을 정리하며, `targetName`은 정규화한 원문 글이 정규화한 이름을 포함할 때만 쓰고 아니면 `null`로 둔다(지어낸 상대 방지). 결정적 결과(REQ-010)에도 같은 후처리를 한다.
+- **REQ-009** [Event-driven] **When** 의뢰 해석용 LLM 호출이 실패하면(SPEC-OUTCOME-001 REQ-006과 같은 실패 분류), brain은 `op: "intake"`, 원인 분류(`reason`), 해당하면 HTTP 상태 코드만 담아 warn 수준으로 한 번 기록하고, REQ-010의 결정적 결과를 `source: "heuristic"`으로 돌려줘야 한다(**shall**). LLM 키가 없을 때도 결정적 결과를 쓴다. 의뢰 해석 LLM 호출의 제한 시간은 15 s다(계획·요약의 30 s와 별도). 앱 요청 제한 시간 20 s(`api_client.dart:39`)보다 짧게 두어, LLM이 느려도 결정적 결과가 앱에 닿게 한다. 시험을 위해 이 값은 주입할 수 있다.
 - **REQ-010** [Ubiquitous] 결정적 해석은 다음 규칙을 따라야 한다(**shall**): (a) 목적은 번호 자리표시를 지우고 공백을 한 칸으로 줄인 글, (b) 상대 이름은 (a)의 글이 "이름 + (에|에게|한테|께) + (전화|연락)"으로 시작할 때의 이름(40자 이하), 아니면 `null`, (c) 조건은 빈 목록, 정보는 `null`. 테스트 벡터는 `design.md` §3.
 - **REQ-011** [Event-driven] **When** brain이 준 상대 이름이 `null`이면, 서버는 정규화한 요청 글에 포함된 통화 기록 상대 이름(정규화 뒤 2자 이상, REQ-006과 같은 기록 범위) 중 가장 긴 것을 고르고, 표시 이름은 그 상대의 가장 최근 작업의 `targetName`으로 해야 한다(**shall**).
 - **REQ-012** [Ubiquitous] 응답의 `missing`은 `targetName`이 `null`이면 `"targetName"`, `phoneNumber`가 `null`이면 `"phoneNumber"`, `goal`이 비면 `"goal"`을 이 순서로 담아야 하고(**shall**), `draft.language`는 요청의 `language`(없으면 `ko`)다. 서버는 언어를 추측하지 않는다.
@@ -69,20 +70,20 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 ### 3.4 한 번 확인 후 자동 시작 (서버)
 
 - **REQ-013** [Ubiquitous] `POST /v1/tasks`는 선택 필드 `autoStart`(불리언, 기본 `false`)를 받아야 하며(**shall**), 참이면 작업에 `autoStart: true`를 저장한다. 그 밖의 작업 생성 동작(번호 정책, 201 응답, 오류 코드)은 바뀌지 않는다(OD-1 DEFAULT: 자동 시작은 서버가 한다).
-- **REQ-014** [Event-driven] **When** `autoStart: true`인 작업의 계획이 준비되어 `awaiting_approval`이 되면, 서비스는 별도 요청 없이 계획 승인과 같은 검사와 순서(503 `shutting_down` → 409 상태 → 400 번호 재검사 → 429 한도)로 통화를 시작해야 한다(**shall**). 계획 수정값은 없다. 성공하면 수동 승인과 똑같이 `dialing`부터 진행한다.
+- **REQ-014** [Event-driven] **When** `autoStart: true`인 작업의 계획이 준비되어 `awaiting_approval`이 되면, 서비스는 별도 요청 없이 계획 승인과 같은 검사와 순서(503 `shutting_down` → 409 상태 → 400 번호 재검사 → 429 한도)로 통화를 시작해야 한다(**shall**). 계획 수정값은 없다. 성공하면 수동 승인과 똑같이 `dialing`부터 진행한다. 자동 시작 통화의 첫 인사는 LLM이 만든 값 대신 AI임을 밝히는 템플릿 첫 인사(`brain/prompts.ts`의 `openingLine(task)`)로 계획 수정값을 넣어 고정한다(OD-7 DEFAULT) — 사용자가 계획 본문을 보지 않고 시작하므로, AI 고지 문장을 모델 출력에 맡기지 않기 위해서다.
 - **REQ-015** [Event-driven] **When** 자동 시작의 검사 하나라도 실패하면, 서비스는 작업을 `awaiting_approval`로 두고 `autoStartBlocked: { code, message }`(실패한 `ServiceError`의 코드와 문구)를 저장·발행해야 하며(**shall**), 다시 시도하지 않는다. 그 뒤 사용자의 수동 계획 승인이 성공하면 `autoStartBlocked`는 지워진다.
 - **REQ-016** [Unwanted] 서비스는 같은 프로세스에서 그 작업의 계획이 막 끝난 순간 외에는 자동 시작해서는 안 된다(**shall not**): 기동 시 불러온 작업, 계획 중 취소된 작업, 계획에 실패한 작업은 자동 시작하지 않으며, 재기동 복구(`recoverInterruptedTasks`)는 어떤 작업도 발신하지 않는다.
 
 ### 3.5 홈 화면 (앱)
 
 - **REQ-017** [Ubiquitous] 홈 화면은 맨 위에 입력칸 하나("무엇을 도와드릴까요?")와 보내기 버튼을 보여야 한다(**shall**). 버튼은 공백을 지운 글이 2자 이상일 때만 눌리고, 누르면 `POST /v1/intake`를 부르는 동안 진행 표시와 함께 비활성화된 뒤 계획 카드 화면으로 간다. 내 정보(이름)가 없으면 먼저 설정 화면으로 보내고 입력한 글은 지우지 않는다. 기존 "전화 맡기기" 떠 있는 버튼은 없애고, "직접 입력하기" 링크로 기존 양식(`/calls/new`)을 연다.
-- **REQ-018** [Ubiquitous] 홈 화면은 입력칸 아래에 제안을 보여야 한다(**shall**): (a) "최근 통화한 곳" — 상대가 받은 적 있는 작업(`connectedAt` 있음)을 정규화한 이름과 번호로 묶어, 가장 최근 통화 순으로 최대 3개, 각 항목에 표시 이름(가장 최근 작업의 이름)·번호·통화 횟수(OD-5 DEFAULT). 누르면 입력칸이 `<이름>에 `로 바뀌고 커서가 끝에 간다. (b) "이런 부탁도 할 수 있어요" — 기존 템플릿 칩, 누르면 입력칸이 템플릿 목적 문장으로 바뀐다. 작업이 없을 때의 기존 안내 문구와 진행 중·지난 통화 목록은 그대로다.
+- **REQ-018** [Ubiquitous] 홈 화면은 입력칸 아래에 제안을 보여야 한다(**shall**): (a) "최근 통화한 곳" — 상대가 받은 적 있는 작업(`connectedAt` 있음)을 정규화한 이름과 번호로 묶어, 가장 최근 통화 순으로 최대 3개, 각 항목에 표시 이름(가장 최근 작업의 이름)·번호·통화 횟수(OD-5 DEFAULT). 누르면 입력칸이 `<이름>에 `로 바뀌고 커서가 끝에 간다. (b) "이런 부탁도 할 수 있어요" — 기존 템플릿 칩, 누르면 입력칸이 템플릿 목적 문장으로 바뀐다(더 이상 `/calls/new`로 가지 않음). 템플릿 칩은 화면 전체에서 이 줄 한 곳에만 그려지며 작업 수와 관계없이 항상 보인다. 작업이 없을 때의 빈 상태는 기존 안내 문구(`MessageView`의 제목·설명)만 남기고 그 아래의 기존 칩 줄(`home_screen.dart:196-208`)은 없앤다. 그래서 기존 테스트 "shows the empty state with quick-start templates"(`approval_flow_test.dart:34-39`, `find.text('식당 예약')` `findsOneWidget`)는 수정 없이 통과한다. 진행 중·지난 통화 목록은 그대로다.
 
 ### 3.6 계획 카드 (앱)
 
 - **REQ-019** [Ubiquitous] 계획 카드 화면은 초안을 다음 행으로 보여 줘야 하며(**shall**), 각 행을 누르면 그 자리에서 고칠 수 있다(대화상자나 새 화면 없음): 전화할 곳, 전화번호(표시 형식 + 출처 표시 `"text"` → "말씀하신 번호", `"history"` → "지난번 통화한 번호"), 부탁할 일, 조건(항목별 삭제, 추가), 알려줘도 되는 정보(있을 때), 통화 언어(한 번 눌러 바꿈, 기본 한국어), 내 이름(설정의 값, 누르면 설정). `source`가 `"heuristic"`이면 "AI 없이 간단히 정리했어요. 내용을 확인해 주세요."를 보여 준다.
 - **REQ-020** [State-driven] **While** 초안에 번호가 없으면, 계획 카드는 번호 칸 하나를 맨 위에 보여 줘야 한다(**shall**): 자동 초점, 전화 키패드, 도움말 "번호만 알려 주시면 바로 걸게요.". `numberIssue`가 `"blocked"`이면 도움말은 "긴급·특수번호에는 걸 수 없어요. 다른 번호를 알려 주세요."다. 이 밖의 추가 질문·대화상자는 없다. 상대 이름이 없으면 그 행이 고치는 상태로 열린다.
-- **REQ-021** [Event-driven] **When** 사용자가 [이대로 시작]을 누르면, 앱은 `autoStart: true`와 함께 작업을 만들고(이름·번호·목적·정보·언어, 목적에는 조건을 `\n조건: a / b` 형식으로 붙임, 요청자 이름·회신 번호는 설정 값) 성공하면 그 작업의 상세 화면으로 바꿔 가야 한다(**shall**). 버튼은 이름이 있고, 번호 숫자가 8개 이상이고, 목적이 5자 이상이고, 조건을 붙인 목적이 1000자(UTF-16 길이) 이하이고, 내 이름이 있을 때만 눌린다. 400 `invalid_phone`/`blocked_number`이면 화면에 남아 번호 칸 아래에 서버 문구를 보여 주고, 그 밖의 오류는 스낵바로 알린 뒤 화면에 남는다.
+- **REQ-021** [Event-driven] **When** 사용자가 [이대로 시작]을 누르면, 앱은 `autoStart: true`와 함께 작업을 만들고(이름·번호·목적·정보·언어, 목적에는 조건을 `\n조건: a / b` 형식으로 붙임, 요청자 이름·회신 번호는 설정 값) 성공하면 그 작업의 상세 화면으로 바꿔 가야 한다(**shall**). 버튼은 이름이 있고, 번호 숫자가 8개 이상이고, 목적이 5자 이상이고, 조건을 붙인 목적이 1000자(UTF-16 길이) 이하이고, 내 이름이 있을 때만 눌린다. 조건을 붙인 목적이 1000자를 넘으면 "부탁할 일이 너무 길어요."를 부탁할 일 행 아래에 보여 준다. 400 `invalid_phone`/`blocked_number`이면 화면에 남아 번호 칸 아래에 서버 문구를 보여 주고, 그 밖의 오류는 스낵바로 알린 뒤 화면에 남는다.
 - **REQ-022** [Event-driven] **When** `POST /v1/intake`가 404로 답하면(이 SPEC 이전 서버), 앱은 목적 = 입력 글, 이름·번호 없음, `source: "heuristic"`인 초안으로 계획 카드를 열어야 한다(**shall**). 그 밖의 오류(네트워크, 401, 503 등)는 스낵바로 알리고 홈 화면에 글을 남긴다.
 
 ### 3.7 상세 화면과 호환
@@ -97,7 +98,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 - 로그 제약: SPEC-OUTCOME-001 REQ-009와 같은 허용 목록(`op`, `reason`, HTTP 상태 코드)만. 의뢰 해석 로그에는 작업 ID가 없다.
 - 저장소: 새 저장소를 만들지 않는다. 통화 기록 조회는 `TaskStore.list()`(메모리 사본, `store/taskStore.ts`)를 요청마다 한 번 훑는다. 단일 JSON 파일·단일 인스턴스 전제(`docs/OPERATIONS.md` "실행 전제")를 바꾸지 않는다. 삭제한 작업은 기록에서도 사라진다.
 - 앱 문구는 한국어 해요체. 위젯 테스트는 문구·`Key`·의미로 요소를 찾는다.
-- 응답 시간: LLM 호출은 기존 `request()`의 30 s 시간 제한을 그대로 쓴다. 앱 요청 제한 시간(20 s, `api_client.dart:39`)이 더 짧으므로, 앱이 먼저 끝나면 네트워크 오류로 보여 준다(잔여 위험, acceptance.md).
+- 응답 시간: 의뢰 해석 LLM 호출은 15 s 제한(REQ-009). 앱 요청 제한 20 s(`api_client.dart:39`) 안에 결정적 대체 결과까지 돌아오도록 둔 값이다. 계획·요약 호출의 30 s(`openaiBrain.ts:124`)는 바꾸지 않는다.
 
 ## 5. Open Decisions
 
@@ -109,6 +110,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 | OD-4 | 의뢰 해석이 찾는 번호 형식 | **DEFAULT (pending owner review)** | `0`/`+82`로 시작하는 국내 형식만(050x 안심번호 포함). `1588-xxxx` 같은 대표번호와 해외 번호는 찾지 않고 번호 칸으로 묻는다. 대표번호는 현재 정규화 규칙(`domain/phone.ts:13-16`)이 `+1588…`로 바꾸는 문제가 있어 이 SPEC에서 제안하지 않는다(`research.md` §4). |
 | OD-5 | 홈 제안 개수와 정렬 | **DEFAULT (pending owner review)** | 최근 통화 순 3개. 바꾸려면 상수와 AC-018 기대값만 고친다. |
 | OD-6 | 화면 문구 | **DEFAULT (pending owner review)** | REQ-017~023의 문구. 바꾸려면 문구 상수와 해당 AC의 기대 문자열만 고친다. |
+| OD-7 | 자동 시작 통화의 첫 인사 | **DEFAULT (pending owner review)** | 템플릿 첫 인사(`openingLine(task)`, "…님을 대신해 전화드린 AI 비서입니다…")로 고정한다(REQ-014). LLM 첫 인사가 더 자연스러울 수 있지만 사용자가 보지 않고 시작하므로 AI 고지를 확실히 하는 쪽을 택했다. 바꾸려면 REQ-014의 마지막 문장과 AC-014 (3)을 뺀다. 수동 경로(`/calls/new` → 계획 검토)는 지금처럼 LLM 첫 인사를 보여 주고 고칠 수 있다. |
 
 ## 6. 제외 범위 (Out of Scope)
 

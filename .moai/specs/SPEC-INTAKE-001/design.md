@@ -49,8 +49,8 @@
 
 1. 종료 중이면 503(REQ-002). HTTP가 본문을 먼저 검증하므로 잘못된 본문은 400이 앞선다(`POST /v1/tasks`와 같음).
 2. 번호 후보 찾기(§2) → 글에서 번호 결정 또는 `numberIssue`.
-3. 후보를 `[전화번호]`로 가린 글로 `brain.draftIntake(maskedText, language)` 호출(§4).
-4. 이름 보정: brain 이름이 `null`이면 기록 이름 포함 검사(§3.3).
+3. 번호 모양(§2 가리기 집합)을 `[전화번호]`로 가린 글로 `brain.draftIntake(maskedText, language)` 호출(§4). brain은 원문을 받지 않는다.
+4. 서비스 후처리(§4, REQ-008 — 이 계층에서만): 모든 문자열에서 `[전화번호]`와 번호 모양 제거, 공백 정리, 이름 포함 검사(원문 기준). 그 뒤 brain 이름이 `null`이면 기록 이름 포함 검사(§3.3).
 5. 번호가 없고 `numberIssue`도 없고 이름이 있으면 기록에서 번호 찾기(§3.2).
 6. `missing` 계산, 응답.
 
@@ -65,7 +65,19 @@
 - 후보 모양: `(\+82[ .-]?|\(?0)` + 숫자 1~3개 + `\)?[ .-]?` + 숫자 3~4개 + `[ .-]?` + 숫자 4개. 후보 바로 앞 글자는 숫자나 `+`가 아니고, 바로 뒤 글자는 숫자가 아니다.
 - 판정에 넘기는 값: `0` + (세 숫자 묶음을 이은 것). `+82` 표기도 같은 값으로 바꿔 판정한다. 판정은 `checkTargetNumber`(`domain/phone.ts:57-67`) 하나로만 한다.
 - 차단 단축 번호: 앞에 숫자·`+`가 없고, 뒤에 (공백을 건너뛰고) 글 끝 또는 `에`, `로`, `으로`, `번`, `한테`, `에게`, `전화` 중 하나가 오는 `112|119|113|114|117|118|122|125|182`(앞에 `0`이나 `+82`가 붙은 표기 포함). `112호실`처럼 다른 말이 붙은 숫자는 단축 번호로 보지 않는다.
-- 가리기: LLM에 보내는 글에서 후보 부분(원문 그대로의 범위)을 `[전화번호]`로 바꾼다. 차단 단축 번호는 개인 정보가 아니므로 가리지 않는다.
+- 가리기 집합(REQ-007 (a)): ① 위 국내 후보, ② 국제 표기 — `+` 다음 숫자로 시작해 숫자·공백·하이픈·점·괄호로 이어진 부분 중 숫자가 8개 이상(앞 글자가 숫자가 아님), ③ 대표번호 — `1[5-8]\d{2}` + (공백·하이픈·점 중 하나)? + 숫자 4개, 앞뒤에 숫자가 붙지 않음. 각 모양의 원문 범위를 `[전화번호]`로 바꾼다. 차단 단축 번호와 날짜·시각처럼 짧거나 `0`/`+`/`1[5-8]`로 시작하지 않는 숫자는 가리지 않는다. ①만 번호 제안 대상이고 ②③은 가리기만 한다(OD-4).
+- LLM 응답 정리(REQ-007 (c)): LLM이 준 모든 문자열에 같은 가리기 집합 검사를 돌려 일치하는 부분을 지운다.
+
+가리기 벡터(`intake.test.ts`, AC-007 (a)):
+
+| 글 | LLM에 보내는 글 |
+|----|----------------|
+| `라 파스타에 010-1234-5678로 전화해서 예약` | `라 파스타에 [전화번호]로 전화해서 예약` |
+| `1588-1234에 전화` | `[전화번호]에 전화` |
+| `+1 415 555 0100 번호로 연락` | `[전화번호] 번호로 연락` |
+| `2024. 12. 25 예약` | 그대로 |
+| `금요일 7시 2명` | 그대로 |
+| `119에 전화해 줘` | 그대로(차단 판정은 §2 규칙대로 따로 함) |
 
 테스트 벡터(`server/src/domain/intake.test.ts`, AC-004·AC-005):
 
@@ -136,7 +148,8 @@ brain 이름이 `null`이면, 기록 범위 작업의 정규화 이름(2자 이�
 - `HeuristicBrain.draftIntake`: §3.4 규칙. `source: "heuristic"`.
 - `OpenAiBrain.draftIntake`: 기존 `completeJson`(`openaiBrain.ts:93-107`)을 `op: "intake"`로 사용. 실패 시 `this.fallback.draftIntake(...)`. `CallContext.op` 타입에 `"intake"` 추가.
 - LLM 응답 스키마(의사): `targetName: string.max(80).nullish → null`, `goal: string.min(1).max(1000)`, `conditions: array(string.min(1).max(200)).max(5).nullish → []`, `context: string.max(1000).nullish → null`. 번호 필드 없음. 검증 실패는 `schema_mismatch` 대체(SPEC-OUTCOME-001과 같은 분류).
-- 서비스 후처리: 모든 문자열에서 `[전화번호]` 제거 후 공백 정리, 이름 포함 검사(정규화한 원문 글이 정규화 이름을 포함해야 함). 빈 문자열 이름은 `null`.
+- 서비스 후처리(유일한 위치 — `CallService`, REQ-008): 모든 문자열에서 `[전화번호]`와 가리기 집합 모양(§2) 제거 후 공백 정리, 이름 포함 검사(정규화한 원문 글이 정규화 이름을 포함해야 함). 빈 문자열 이름은 `null`. brain은 스키마 검증만 하고 값을 그대로 돌려준다. 결정적 결과에도 같은 후처리를 한다.
+- 제한 시간(REQ-009): 의뢰 해석 호출만 15 s. `request()`에 제한 시간 인자를 받게 하고(계획·요약은 지금처럼 30 s), `OpenAiBrain` 생성자 옵션으로 의뢰 해석 제한 시간을 주입할 수 있게 한다(테스트에서 50 ms).
 - 프롬프트(`brain/prompts.ts`의 새 상수, 영어): 한 줄 부탁을 통화 초안으로 바꾼다. `targetName`은 글에 적힌 그대로, 없으면 null. `goal`은 통화로 이룰 일(시간·한도 등 포함, `conditions`에 넣은 항목은 빼고). `conditions`는 사용자가 밝힌 제약·대안(0~5개). `context`는 사용자가 상대에게 알려도 된다고 밝힌 정보만. 이름·번호·날짜를 지어내지 말 것. `[전화번호]`는 지워진 번호 표시이므로 옮기지 말 것. 요청 언어로 쓸 것.
 
 ## 5. 자동 시작 순서 (REQ-013 ~ REQ-016)
@@ -146,13 +159,14 @@ app: POST /v1/tasks {…, autoStart: true}
   └─ CallService.create → persist(task{planning, autoStart:true}) → void plan(id)
        plan(): brain.createPlan → (status 아직 planning?) → task.plan, transition awaiting_approval
          └─ if task.autoStart: await autoStartCall(id)
-              try   approvePlan(id)            // 503 → 404 → 409 → 400 → 429, 같은 함수
+              try   approvePlan(id, {openingLine: openingLine(task)})   // 503 → 404 → 409 → 400 → 429, 같은 함수
               catch ServiceError e → task.autoStartBlocked = {code: e.code, message: e.message}; persist
               catch 그 밖의 오류   → task.autoStartBlocked = {code: "auto_start_failed", message: "자동으로 통화를 시작하지 못했어요."}; persist
 approvePlan 성공 경로(수동·자동 공통): delete task.autoStartBlocked 후 dialing
 ```
 
-- `autoStartCall`은 어떤 오류도 `plan()`의 `catch`로 넘기지 않는다. 넘기면 `plan()`이 `awaiting_approval` → `failed` 전이를 시도해 `InvalidTransitionError`가 난다(`stateMachine.ts:5`에 그 전이가 없음).
+- `autoStartCall`은 어떤 오류도 `plan()`의 `catch`로 넘기지 않는다. 넘기면 그 `catch`는 상태가 `planning`이 아니므로 아무 기록 없이 바로 끝나(`callService.ts:316-318`) 오류가 조용히 삼켜지고 `autoStartBlocked`도 남지 않는다. 사용자는 이유 없이 멈춘 작업만 보게 된다.
+- 첫 인사 고정(REQ-014, OD-7): `autoStartCall`은 `approvePlan(id, { openingLine: openingLine(task) })`로 부른다. 수동 승인 경로는 바꾸지 않는다.
 - 계획 중 취소: `plan()`은 상태가 `planning`이 아니면 바로 끝난다(`callService.ts:312-313`). 자동 시작 분기는 그 뒤에 있으므로 실행되지 않는다.
 - 재기동: `recoverInterruptedTasks`는 `awaiting_approval` 작업을 건너뛴다(`callService.ts:99`). 자동 시작은 `plan()` 안에서만 일어나므로 기동 시 불러온 작업은 자동 시작되지 않는다.
 - 종료 중: 계획이 종료 중에 끝나면 503 → `autoStartBlocked: shutting_down`. 최종 flush가 이 상태를 저장한다.
@@ -170,7 +184,7 @@ approvePlan 성공 경로(수동·자동 공통): delete task.autoStartBlocked �
 │  [라파스타 · 02-111-0000 · 2번]        │  ← 누르면 "라파스타에 "
 │ 이런 부탁도 할 수 있어요                │
 │  (식당 예약) (영업시간 문의) …          │  ← 누르면 템플릿 문장
-│ (작업이 없으면) 귀찮은 전화, 대신 …     │  ← 기존 안내 유지
+│ (작업이 없으면) 귀찮은 전화, 대신 …     │  ← 기존 안내 문구만(칩 줄 없음)
 │ 진행 중 / 지난 통화 목록 (기존)         │
 └─────────────────────────────────────────┘
 ```

@@ -69,7 +69,8 @@
 
 - `app/lib/core/network/api_client.dart:72-85`: 2xx가 아니면 본문의 `error`를 코드로, `message`를 문구로 `ApiException`을 던진다. `statusCode`도 담는다.
 - Fastify에 없는 경로는 `setErrorHandler`(`server/src/http/app.ts:122-138`)가 아니라 기본 404 처리로 간다. 기본 본문의 `error` 필드는 `"Not Found"`라는 HTTP 사유 문구다(Fastify 기본 동작에 대한 일반 지식이며 이 저장소에서 실행해 확인하지 않았다). 그래서 앱은 예전 서버 판별에 `statusCode == 404`를 쓴다.
-- `api_client.dart:39` 앱 요청 제한 시간 20 s, `openaiBrain.ts:124` 서버 LLM 제한 시간 30 s.
+- `api_client.dart:39` 앱 요청 제한 시간 20 s, `openaiBrain.ts:124` 서버 LLM 제한 시간 30 s(지금은 모든 LLM 호출 공통). 의뢰 해석만 15 s로 따로 둔다(REQ-009, plan-audit D11).
+- `server/src/services/callService.ts:316-318`: `plan()`의 `catch`는 상태가 `planning`이 아니면 바로 돌아간다. 자동 시작 오류가 여기로 오면 기록 없이 삼켜진다(plan-audit D9).
 
 ## 7. 저장소 한계와 기록 조회 비용
 
