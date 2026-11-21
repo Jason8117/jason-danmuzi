@@ -62,7 +62,24 @@ run_start_sha: 6ffe4ba0904444fb9db41bc2c2ebc61a9b9dd008
 - GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  107 passed (107)`; typecheck exit 0
 - files: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`
 
-_<M3-M5 pending>_
+- commit: `e163fea`
+
+#### M3 — re-check before dialing (AC-010)
+
+- RED: `npm --prefix server test -- src/services/callService.test.ts` → exit 1
+  ```
+  FAIL ... approvePlan re-checks the number right before dialing
+  AssertionError: promise resolved "{ id: 'blocked', version: 2, …(13) }" instead of rejecting
+  FAIL ... approvePlan checks in the order shutting_down, state, number, limits
+  AssertionError: expected Error: Too many calls are in progress { …(2) } to match object { statusCode: 400, …(2) }
+   Test Files  1 failed (1)
+        Tests  2 failed | 19 passed (21)
+  ```
+  (first test stops at its first assertion: the stored `+82119` task was dialed; (iii) answered 429 instead of 400. (i) 503 and (ii) 409 / 404 are protection items and were not the failing assertions.)
+- GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  109 passed (109)`; typecheck exit 0
+- files: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`
+
+_<M4-M5 pending>_
 
 ## §E.3 Run-phase Audit-Ready Signal
 

@@ -452,3 +452,56 @@ describe("CallService number policy at creation (SPEC-POLICY-001 AC-001..AC-004)
     expect(store.get(task.id)?.callbackNumber).toBe(expected);
   });
 });
+
+describe("CallService number policy before dialing (SPEC-POLICY-001 AC-010)", () => {
+  it("approvePlan re-checks the number right before dialing", async () => {
+    const provider = new FakeProvider();
+    const start = vi.spyOn(provider, "start");
+    // Stored directly, as if loaded from the data file without going through create().
+    const { calls } = setup({
+      provider,
+      tasks: [
+        makeTask({ id: "blocked", phoneNumber: "+82119" }),
+        makeTask({ id: "invalid", phoneNumber: "12" }),
+        makeTask({ id: "normal", phoneNumber: "+821012345678" }),
+      ],
+    });
+
+    await expect(calls.approvePlan("blocked")).rejects.toMatchObject(BLOCKED_NUMBER);
+    await expect(calls.approvePlan("invalid")).rejects.toMatchObject(INVALID_PHONE);
+    for (const id of ["blocked", "invalid"]) {
+      expect(calls.get(id).status).toBe("awaiting_approval");
+      expect(calls.get(id).startedAt).toBeUndefined();
+    }
+    expect(start).not.toHaveBeenCalled();
+
+    await calls.approvePlan("normal");
+    expect(calls.get("normal").status).toBe("dialing");
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("approvePlan checks in the order shutting_down, state, number, limits", async () => {
+    // (i) shutting down wins over a blocked number; a missing id is 503 too.
+    const shutdown = setup({ tasks: [makeTask({ id: "blocked", phoneNumber: "+82119" })] });
+    shutdown.calls.beginShutdown();
+    await expect(shutdown.calls.approvePlan("blocked")).rejects.toMatchObject(SHUTTING_DOWN);
+    await expect(shutdown.calls.approvePlan("missing")).rejects.toMatchObject(SHUTTING_DOWN);
+
+    // (ii) state wins over a blocked number; (iii) a blocked number wins over a full call limit.
+    const provider = new FakeProvider();
+    const start = vi.spyOn(provider, "start");
+    const { calls } = setup({
+      provider,
+      tasks: [
+        makeTask({ id: "live", status: "in_progress", phoneNumber: "+82119" }),
+        makeTask({ id: "blocked", phoneNumber: "+82119" }),
+      ],
+      service: { maxConcurrentCalls: 1 },
+    });
+    await expect(calls.approvePlan("missing")).rejects.toMatchObject({ statusCode: 404, code: "not_found" });
+    await expect(calls.approvePlan("live")).rejects.toMatchObject({ statusCode: 409, code: "invalid_state" });
+    await expect(calls.approvePlan("blocked")).rejects.toMatchObject(BLOCKED_NUMBER);
+    expect(calls.get("blocked").status).toBe("awaiting_approval");
+    expect(start).not.toHaveBeenCalled();
+  });
+});

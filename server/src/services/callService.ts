@@ -241,12 +241,15 @@ export class CallService {
 
   /** User reviewed the plan (optionally edited it) and wants the call placed now. */
   async approvePlan(id: string, planOverride?: Partial<CallPlan>): Promise<CallTask> {
-    // Check order is fixed: 503 shutting_down -> 404 -> 409 -> 429 (SPEC-LIFECYCLE-001 REQ-001 (d)).
+    // Check order is fixed: 503 shutting_down -> 404 -> 409 -> 400 number -> 429
+    // (SPEC-LIFECYCLE-001 REQ-001 (d), SPEC-POLICY-001 REQ-007).
     this.assertNotShuttingDown();
     const task = this.get(id);
     if (task.status !== "awaiting_approval" || !task.plan) {
       throw new ServiceError(409, "invalid_state", "The plan is not waiting for approval");
     }
+    // Tasks loaded from the data file never went through create(), so the stored number is re-checked here.
+    this.requireDialableNumber(task.phoneNumber);
     this.assertWithinLimits();
 
     task.plan = { ...task.plan, ...planOverride };
