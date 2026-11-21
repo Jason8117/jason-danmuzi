@@ -224,6 +224,116 @@ describe("KatCallProvider terminate by call id (AC-007 support)", () => {
   });
 });
 
+describe("KatCallProvider orphan media streams (AC-014)", () => {
+  class FakeSocket extends EventEmitter {
+    readonly close = vi.fn();
+  }
+
+  function upgradeRequest(options: { callId?: string; valid?: boolean } = {}) {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const streamId = "MZ" + "b".repeat(32);
+    const callId = options.callId ?? "";
+    const signature =
+      "v1=" +
+      createHmac("sha256", options.valid === false ? "wrong-secret" : SECRET)
+        .update(`${timestamp}.${callId}.${streamId}`)
+        .digest("hex");
+    const headers: Record<string, string> = {
+      "x-webhook-timestamp": timestamp,
+      "x-webhook-signature": signature,
+      "x-kat-stream-id": streamId,
+    };
+    if (options.callId) headers["x-kat-call-id"] = options.callId;
+    return { headers } as unknown as IncomingMessage;
+  }
+
+  function provider() {
+    const fetch = fakeFetch(() => json({ result: { callId: "c-1" } }));
+    const kat = new KatCallProvider(katOptions(fetch.fn), recordingLog().log);
+    const terminations = () => fetch.calls.filter((c) => c.url.endsWith("/termination")).map((c) => c.url);
+    return { kat, fetch, terminations };
+  }
+
+  const TERMINATE = (callId: string) => `https://kat.test/v1/group/g-1/media-stream/calls/${callId}/termination`;
+
+  it("terminates signed media streams that have no active session (a: header call id, non-JSON first frame)", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = provider();
+    const socket = new FakeSocket();
+
+    kat.attachMediaStream(socket as unknown as WebSocket, upgradeRequest({ callId: "c-9" }));
+    socket.emit("message", Buffer.from("this is not json"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(terminations()).toEqual([TERMINATE("c-9")]);
+    expect(socket.close).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(terminations()).toHaveLength(1);
+  });
+
+  it("terminates signed media streams that have no active session (b: header call id, no frame for 10 s)", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = provider();
+    const socket = new FakeSocket();
+
+    kat.attachMediaStream(socket as unknown as WebSocket, upgradeRequest({ callId: "c-9" }));
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(terminations()).toEqual([]);
+    expect(socket.close).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(terminations()).toEqual([TERMINATE("c-9")]);
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it("terminates signed media streams that have no active session (c: no header call id, start frame call id)", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = provider();
+    // The real upgrade verifier requires x-kat-call-id, so a signed upgrade without it cannot be built;
+    // stub the (separately tested) signature check to reach the start-frame path.
+    vi.spyOn(kat, "isValidStreamUpgrade").mockReturnValue(true);
+    const socket = new FakeSocket();
+
+    kat.attachMediaStream(socket as unknown as WebSocket, upgradeRequest());
+    socket.emit(
+      "message",
+      Buffer.from(JSON.stringify({ event: "start", start: { streamSid: "s-1", callId: "c-8" } })),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(terminations()).toEqual([TERMINATE("c-8")]);
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it("terminates signed media streams that have no active session (d: invalid signature)", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = provider();
+    const socket = new FakeSocket();
+
+    kat.attachMediaStream(socket as unknown as WebSocket, upgradeRequest({ callId: "c-9", valid: false }));
+    socket.emit("message", Buffer.from("this is not json"));
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(terminations()).toEqual([]);
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it("keeps a stream whose header call id belongs to an active session", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = provider();
+    await kat.start(fakeSession("t-1").session); // registers callId c-1
+    const socket = new FakeSocket();
+
+    kat.attachMediaStream(socket as unknown as WebSocket, upgradeRequest({ callId: "c-1" }));
+    socket.emit("message", Buffer.from("this is not json"));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(terminations()).toEqual([]);
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+});
+
 describe("KatCallProvider timeLimit (AC-013)", () => {
   const timeLimitFor = async (maxCallDurationSec: number) => {
     const { fn, calls } = fakeFetch(() => json({ result: { callId: "c-1" } }));

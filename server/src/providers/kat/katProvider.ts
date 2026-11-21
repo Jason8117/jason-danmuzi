@@ -247,7 +247,14 @@ export class KatCallProvider implements CallProvider {
     }
   }
 
-  /** Waits for KAT's "start" frame, authenticates it, then bridges to Realtime. */
+  /**
+   * Waits for KAT's "start" frame, authenticates it, then bridges to Realtime.
+   * A signed stream with no active session is a real phone call nobody owns (e.g. the call
+   * was created after our request timed out): it is hung up, not just disconnected.
+   */
+  // @MX:WARN: [AUTO] Hangs up real calls whose media stream has no active session; only signed upgrades may trigger it.
+  // @MX:REASON: An unsigned peer must never be able to end arbitrary calls (SPEC-LIFECYCLE-001 REQ-016 (d)); single-instance assumption (§4).
+  // @MX:SPEC: SPEC-LIFECYCLE-001
   attachMediaStream(socket: WebSocket, request: IncomingMessage): void {
     if (!this.isValidStreamUpgrade(request.headers)) {
       this.log.warn({}, "Rejected media stream with invalid signature");
@@ -257,9 +264,38 @@ export class KatCallProvider implements CallProvider {
 
     const headerCallId = headerValue(request.headers["x-kat-call-id"]);
     const headerStreamId = headerValue(request.headers["x-kat-stream-id"]);
-    const timeout = setTimeout(() => socket.close(), 10_000);
+    const hasActiveSession = (callId: string) => {
+      const taskId = this.byCallId.get(callId);
+      return Boolean(taskId && this.calls.has(taskId));
+    };
+    const hangUpOrphan = (callId: string, when: string) => {
+      socket.off("message", onMessage);
+      clearTimeout(timeout);
+      this.log.warn({ callId, when }, "Hanging up a signed media stream with no active session");
+      socket.close();
+      void this.terminateCall(callId);
+    };
 
+    const timeout = setTimeout(() => {
+      // Decide at the deadline, not at upgrade time: the call-creation response may still be in flight.
+      if (headerCallId && !hasActiveSession(headerCallId)) {
+        hangUpOrphan(headerCallId, "no_frame_timeout");
+        return;
+      }
+      socket.close();
+    }, 10_000);
+
+    let headerChecked = false;
     const onMessage = (raw: WebSocket.RawData) => {
+      // With a header call id, ownership is decided on the first frame, before the frame is parsed.
+      if (headerCallId && !headerChecked) {
+        headerChecked = true;
+        if (!hasActiveSession(headerCallId)) {
+          hangUpOrphan(headerCallId, "first_frame");
+          return;
+        }
+      }
+
       let event: {
         event?: string;
         streamSid?: string;
@@ -313,6 +349,9 @@ export class KatCallProvider implements CallProvider {
           const pstnCallId = active.callId || callId;
           active.session.end({ error: "미디어 스트림 인증에 실패해 통화를 종료했습니다." });
           void this.terminateCall(pstnCallId, taskId);
+        } else if (callId) {
+          // No session owns this signed call (start-frame call id): hang it up too.
+          void this.terminateCall(callId, taskId || undefined);
         }
         return;
       }

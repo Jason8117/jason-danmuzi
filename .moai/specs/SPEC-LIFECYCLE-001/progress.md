@@ -134,6 +134,26 @@ TypeError: kat.terminateByProviderCallId is not a function
 
 GREEN (`npm --prefix server test -- src/providers/kat/katProvider.test.ts src/services/callService.test.ts`, exit 0): `Test Files  2 passed (2)` / `Tests  27 passed (27)`; typecheck exit 0. `index.ts`는 `await calls.recoverInterruptedTasks()`로 바꿨다(비동기화에 따른 필수 변경).
 
+커밋: `d1ce301`
+
+#### M5 — 주인 없는 미디어 스트림 (AC-014)
+
+RED (`npm --prefix server test -- src/providers/kat/katProvider.test.ts -t "media streams|active session"`, exit 1):
+
+```
+     × terminates signed media streams that have no active session (a: header call id, non-JSON first frame) 8ms
+     × terminates signed media streams that have no active session (b: header call id, no frame for 10 s) 2ms
+     × terminates signed media streams that have no active session (c: no header call id, start frame call id) 2ms
+AssertionError: expected [] to deeply equal [ Array(1) ]   (×3)
+      Tests  3 failed | 2 passed | 16 skipped (21)
+```
+
+RED에서 통과한 2건은 (d) 무효 서명(종료 0회 — 현행 동작 유지 확인)과 "활성 세션이 있는 스트림은 유지"(회귀 방지) 테스트다.
+
+GREEN (`npm --prefix server test -- src/providers/kat/katProvider.test.ts`, exit 0): `Tests  21 passed (21)`; typecheck exit 0.
+
+**발견 사항 (AC-014 (c))**: `verifyKatStreamSignature`(`webhook.ts`, 이 SPEC 범위 밖)는 `x-kat-call-id` 헤더가 없으면 항상 `false`를 돌려준다. 따라서 "유효 서명 + 헤더 통화 ID 없음" 연결은 실제 검증기로는 만들 수 없고, 운영 환경에서 (c) 경로는 도달하지 않는다. (c) 테스트는 서명 검사(`isValidStreamUpgrade`)만 `vi.spyOn`으로 대체해 start 프레임 경로를 검증했다. 기존 코드도 `headerCallId || start.callId` 대체 경로를 이미 두고 있었으므로, (c)는 그 대체 경로에 종료 요청을 더한 방어 코드다.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
