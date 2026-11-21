@@ -185,3 +185,28 @@ describe("OpenAiBrain (SPEC-OUTCOME-001)", () => {
     expect(log.warns[0]!.obj).toMatchObject({ op: "summarize", reason: "schema_mismatch" });
   });
 });
+
+// Audit finding F4: a 200 response whose JSON body is not an object used to throw instead of falling back.
+describe("OpenAiBrain with a non-object JSON body (SPEC-OUTCOME-001 audit F4)", () => {
+  it.each(["null", "5", '"text"', "[]"])("summarize falls back on a %s body", async (body) => {
+    stubFetch(async () => new Response(body, { status: 200 }));
+    const { brain, log } = setup();
+
+    const outcome = await brain.summarize(task);
+
+    expect(outcome.source).toBe("heuristic");
+    expect(log.warns).toHaveLength(1);
+    expect(log.warns[0]!.obj).toEqual({ op: "summarize", reason: "empty_content", taskId: "t-1" });
+  });
+
+  it("createPlan falls back to the heuristic plan on a null body", async () => {
+    stubFetch(async () => new Response("null", { status: 200 }));
+    const { brain, log } = setup();
+
+    const plan = await brain.createPlan(input);
+
+    expect(plan).toEqual(await new HeuristicBrain().createPlan(input));
+    expect(log.warns).toHaveLength(1);
+    expect(log.warns[0]!.obj).toEqual({ op: "plan", reason: "empty_content" });
+  });
+});

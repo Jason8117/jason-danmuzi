@@ -134,3 +134,11 @@ residual_risk:
   - "older app builds render result 'unverified' as 'failed'; deploy server and app together"
   - "stored tasks keep their old results (no reclassification)"
 ```
+
+## Audit-fix addendum
+
+Source: independent sync audit `FIVE-SPECS-audit-1` finding **F4** (Low). Fix cycle base `534a53e` (run_start_sha `534a53edfdf9efaecb6c142997d20ea6fd563319`); commit: `fix(SPEC-OUTCOME-001): ...` on the fix worktree branch (resolve via `git log --grep "fix(SPEC-OUTCOME-001)"`). Evidence: `.moai/state/verify/fix-audit-1/` (gitignored, local).
+
+- Change: `openaiBrain.ts` reads `body?.choices`, so an HTTP 200 whose JSON body is `null` takes the existing `empty_content` fallback (heuristic plan / heuristic outcome with `source: "heuristic"`) and logs only `{ op, reason, taskId? }` — no body text.
+- RED (`f4-red.log`): `TypeError: Cannot read properties of null (reading 'choices')` (x2) / `Tests 2 failed | 16 passed (18)`. The `5`, `"text"` and `[]` bodies already fell back (protection cases).
+- GREEN (`f4-green.log`): `Test Files 11 passed (11)` / `Tests 218 passed (218)`. Probe `green-probe-openai-null.out`: `createPlan: resolved (fallback used)`, `summarize: resolved (fallback used)`, warn objects `{"op":"plan","reason":"empty_content"}` and `{"op":"summarize","reason":"empty_content","taskId":"t-1"}`.

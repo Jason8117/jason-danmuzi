@@ -120,14 +120,15 @@ export class OpenAiBrain implements CallBrain {
     }
     if (!res.ok) return { ok: false, reason: "http_status", status: res.status };
 
-    let body: { choices?: { message?: { content?: string } }[] };
+    // JSON `null` is a valid body too; it must reach empty_content instead of throwing (audit F4).
+    let body: { choices?: { message?: { content?: string } }[] } | null;
     try {
       body = (await res.json()) as typeof body;
     } catch (error) {
       // The timeout signal also covers reading the body.
       return { ok: false, reason: isTimeout(error) ? "timeout" : "invalid_json" };
     }
-    const content = body.choices?.[0]?.message?.content;
+    const content = body?.choices?.[0]?.message?.content;
     if (!content) return { ok: false, reason: "empty_content" };
 
     let parsed: unknown;
