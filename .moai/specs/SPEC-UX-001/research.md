@@ -26,7 +26,8 @@
 ## 3. 글자 크기와 움직임
 
 - 통화 상세는 승인 카드를 `Scaffold.bottomNavigationBar`(`call_detail_screen.dart:136-142`)의 `_ActionBar`(`:258-283`)에 둔다. 이 영역은 스크롤되지 않는 `Column`이다. 승인 카드는 제목·질문·안내·입력칸·버튼(앞선 SPEC 뒤에는 칩 세 개 추가)을 가지므로, 글자 크기 2.0과 작은 화면에서 넘칠 것으로 예상한다(실행으로 확인하지 않음 → AC-011 RED에서 확인).
-- `PulsingDot`(`common.dart:147-180`)은 `repeat(reverse: true)`로 계속 움직이며 `MediaQuery.disableAnimations`를 보지 않는다. 그 밖의 움직임: 대화 따라가기 스크롤 300·400 ms(`call_detail_screen.dart:44, 55`).
+- `PulsingDot`(`common.dart:147-180`)은 `repeat(reverse: true)`로 계속 움직이며 `MediaQuery.disableAnimations`를 보지 않는다. 그 밖의 움직임: 결과로 올라가는 스크롤 400 ms(`call_detail_screen.dart:44`), 대화 따라가기 스크롤 300 ms(`:55`). 1100 ms(`common.dart:159`)는 `pulse` 토큰으로, 300 ms는 `medium`(250 ms)으로, 400 ms는 `slow`로 바꾼다(REQ-001, plan-audit D19).
+- 승인 카드는 `Timer.periodic` 1초마다 `setState`로 다시 그린다(`approval_card.dart:37`). 남은 초를 실시간 영역 라벨에 넣으면 라벨이 매초 바뀌므로 REQ-012는 남은 초를 라벨에서 빼고 30초·10초에만 알린다(plan-audit D18; 화면 읽기 프로그램의 실제 재낭독 동작은 확인하지 않음).
 - 진동: 승인 카드가 뜰 때 `HapticFeedback.heavyImpact()`(`approval_card.dart:36`), 다른 화면에서 승인 요청 알림 때도(`approval_listener.dart:32`).
 
 ## 4. 화면 읽기와 누르는 영역

@@ -32,7 +32,7 @@ git diff --stat <run_start_sha> -- server/
   grep -nE "EdgeInsets\.(all|symmetric|only|fromLTRB)\([^)]*[0-9]|BorderRadius\.circular\([0-9]|Duration\(milliseconds: [0-9]" <대상 파일들>
   ```
 
-- **Then** 출력이 없다(0줄). 토큰 파일(`core/theme/tokens.dart`)은 목록에서 제외한다. 그리고 단위 테스트가 토큰 값이 REQ-001과 같음(간격 7개, 둥근 정도 4개, 움직임 3개, 최소 누르는 영역 48)을 단언한다
+- **Then** 출력이 없다(0줄). 토큰 파일(`core/theme/tokens.dart`)은 목록에서 제외한다. 그리고 단위 테스트가 토큰 값이 REQ-001과 같음(간격 7개, 둥근 정도 4개, 움직임 전환 3개 + 반복 주기 `pulse` 1100 ms, 최소 누르는 영역 48)을 단언한다. 대화 따라가기 스크롤은 `medium`(250 ms), 결과로 올라가는 스크롤은 `slow`(400 ms)를 쓴다(`call_detail_screen.dart`에서 토큰 이름으로 확인)
 - 테스트: `app/test/theme_test.dart`(새 파일) — "design tokens have the agreed values"; 위 명령 원문 결과를 `progress.md`에 기록
 - RED: 기준선(c664596에서 같은 명령의 줄 수: `home_screen.dart` 10, `call_detail_screen.dart` 5, `common.dart` 5, `app_theme.dart` 4, `transcript_view.dart` 4, `new_call_screen.dart` 3, `approval_card.dart` 2, `status_chip.dart` 2, `settings_screen.dart` 1, `outcome_card.dart` 0 — 앞선 SPEC이 만든 파일은 run-phase 시작 시 다시 셈).
 
@@ -84,7 +84,7 @@ git diff --stat <run_start_sha> -- server/
 
 - **Given** (1) 작업 없는 홈, (2) `ringing`이고 대화 기록 없는 상세, (3) `in_progress`이고 대화 기록 없는 상세, (4) 목록 오류(가짜 저장소 `list`가 예외), (5) 없는 작업 ID의 상세
 - **When** 렌더링하면
-- **Then** 다섯 경우 모두 빈 상태 위젯이 정확히 하나 있고, 제목·설명이 `design.md` §5 표와 같으며, (4)에는 "서버 설정"·"다시 시도" 버튼이 있다. 기존 테스트 "shows the empty state with quick-start templates"는 수정 없이 통과한다
+- **Then** 다섯 경우 모두 빈 상태 위젯이 정확히 하나 있고, 제목·설명이 `design.md` §5 표와 같으며, (4)에는 "서버 설정"·"다시 시도" 버튼이 있다. (1)의 빈 상태 위젯 안에는 칩이 없고(`find.descendant(of: 빈 상태, matching: find.byType(ActionChip))` 0개), 템플릿 칩은 SPEC-INTAKE-001 REQ-018 (b)에 따라 입력칸 아래 제안 줄에만 있어 "식당 예약"이 화면에 정확히 하나다. 기존 테스트 "shows the empty state with quick-start templates"는 수정 없이 통과한다
 - 테스트: `accessibility_test.dart` — "empty states share one widget and wording"
 
 ## AC-009 — 누르는 영역 (REQ-009)
@@ -113,10 +113,14 @@ git diff --stat <run_start_sha> -- server/
 
 ## AC-012 — 화면 읽기 (REQ-012)
 
-- **Given** (A) 화면(질문 "예약금 1만 원 결제가 필요합니다. 진행할까요?", 남은 90초), (H) 화면
-- **When** `tester.getSemantics`로 읽으면
-- **Then** 승인 카드 영역의 의미 노드가 `liveRegion` 플래그를 가지고 그 `label`에 질문과 `초 남음`이 들어 있다. 상태 칩의 `label`은 `상태: 통화 중`(또는 해당 라벨). 설정·삭제·보내기·수정 아이콘 버튼은 `tooltip`이 비어 있지 않다(`find.byTooltip('설정')`, `'삭제'`, `'보내기'`, `'수정'`)
-- 테스트: `accessibility_test.dart` — "screen reader labels are present"
+- **Given** (A) 화면(질문 "예약금 1만 원 결제가 필요합니다. 진행할까요?"), (H) 화면, `SystemChannels.accessibility`로 가는 알림을 기록하는 대역
+- **When / Then**
+  1. 남은 90초로 승인 카드가 나타나면 → 카드 영역의 의미 노드가 `liveRegion` 플래그를 가지고 `label`이 "승인 요청: 예약금 1만 원 결제가 필요합니다. 진행할까요?"를 포함하며 숫자·`초`를 포함하지 않는다. 1초씩 5번 `pump`한 뒤에도 그 `label`이 처음과 같다(매초 바뀌지 않음). 화면의 남은 초 글자(예: `90초`)는 의미 트리에 나오지 않는다(`find.bySemanticsLabel(RegExp(r'^\d+초$'))` 0개)
+  2. 남은 32초로 나타난 카드를 1초씩 3번 `pump` → 기록된 알림이 "30초 남았어요" 정확히 1건. 이어서 20번 더 `pump`(남은 9초) → "10초 남았어요"가 정확히 1건 더해져 모두 2건이고, 그 밖의 알림은 없다
+  3. 남은 8초로 나타난 카드 → 30초·10초 알림 없음(이미 지난 시점)
+- **Then (공통)** 상태 칩의 `label`은 `상태: 통화 중`(또는 해당 라벨). 설정·삭제·보내기·수정 아이콘 버튼은 `tooltip`이 비어 있지 않다(`find.byTooltip('설정')`, `'삭제'`, `'보내기'`, `'수정'`)
+- 테스트: `accessibility_test.dart` — "screen reader labels are present", "announces the remaining time only at 30 and 10 seconds"
+- 참고: 화면 읽기 프로그램이 실시간 영역 라벨 변화를 어떻게 다시 읽는지는 플랫폼 동작이며 자동으로 확인하지 않는다. 이 AC는 라벨이 매초 바뀌지 않음과 알림 횟수를 고정한다.
 
 ## AC-013 — 세로 순서 (REQ-013)
 
@@ -145,6 +149,7 @@ git diff --stat <run_start_sha> -- server/
 - `textContrastGuideline`은 그려진 픽셀 기준이 아니라 위젯의 글자·배경 색 추정이므로, 겹친 반투명 배경에서는 실제와 다를 수 있다. AC-002의 직접 계산이 이를 보완한다.
 - 실제 화면 읽기 프로그램(TalkBack·VoiceOver)의 읽기 순서·말투는 자동으로 확인하지 않는다.
 - 시스템 글꼴은 기기마다 달라 같은 글자 크기에서도 줄바꿈 위치가 다르다.
+- AC-001 grep은 한 줄 단위다. 인자가 여러 줄로 나뉜 생성자(`EdgeInsets.fromLTRB(` 다음 줄의 숫자 등)는 잡지 못하고, 간격용 `SizedBox(height: N)`은 검사 대상이 아니다. run-phase는 `dart format` 뒤 같은 grep을 다시 돌리고, 여러 줄 인자는 `grep -nA3 "EdgeInsets\."`로 눈으로 확인한 결과를 기록한다. analyzer 규칙으로 강제하는 일은 이 SPEC 밖이다.
 
 ## 완료 정의 (Definition of Done)
 
