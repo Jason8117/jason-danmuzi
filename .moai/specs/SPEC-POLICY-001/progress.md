@@ -95,11 +95,72 @@ run_start_sha: 6ffe4ba0904444fb9db41bc2c2ebc61a9b9dd008
 - GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  111 passed (111)`; typecheck exit 0; same grep → `0`
 - files: `server/src/http/app.ts`, `server/src/http/app.test.ts`
 
-_<M5 pending>_
+- commit: `0136dc4`
+
+#### M5 — regression check (AC-005, AC-007 (a)(b)(d), AC-011)
+
+Final measurements against HEAD `0136dc4` (code-final tree; M5 adds only this evidence):
+
+- `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  111 passed (111)` (baseline 81 + 30 new)
+- `npm --prefix server run typecheck` → exit 0
+- `npm --prefix server test -- src/services/callService.test.ts src/domain/domain.test.ts src/http/app.test.ts --reporter=verbose` → exit 0 — `Test Files  3 passed (3)` / `Tests  69 passed (69)`
+- `git diff 6ffe4ba..HEAD -- server/src/http/app.test.ts server/src/domain/domain.test.ts server/src/services/callService.test.ts | grep -E "^-[^-]"` → only `-import { isBlockedNumber, maskPhoneNumber, normalizePhoneNumber } from "./phone.js";` (the import line widened to add `checkTargetNumber`; no existing assertion removed or edited)
+- `git diff --stat 6ffe4ba..HEAD -- app/` → empty
+
+### AC matrix
+
+| AC | Status | Verification command | Actual output | RED observed |
+|----|--------|----------------------|---------------|--------------|
+| AC-001 | PASS | targeted verbose run | `✓ … create normalizes the target number` | M2: `expected '010-1234-5678' to be '+821012345678'` |
+| AC-002 | PASS | targeted verbose run | `✓ … create rejects an invalid number without side effects` | M2: `expected undefined to match object { statusCode: 400, …(2) }` |
+| AC-003 | PASS | targeted verbose run | `✓ … create blocks emergency and special numbers: 119` / `: +82 112` | M2: same `expected undefined to match object …` for both |
+| AC-004 | PASS | targeted verbose run | `✓ … create normalizes or drops the callback number: 010 9999 8888` / `abc` / `` / `undefined` | M2: `'010 9999 8888'`, `'abc'`, `''` stored raw (omitted case was a protection item) |
+| AC-005 | PASS | `grep -n "from \"../domain/phone.js\"" src/services/callService.ts`; `grep -n "^[[:space:]]*create(" src/services/callService.ts` | `3:import { checkTargetNumber, normalizePhoneNumber } from "../domain/phone.js";` / `217:  create(input: CallTaskInput): CallTask {` | first grep 0 matches at baseline (callService.ts had no phone.js import) |
+| AC-006 | PASS | `grep -c "normalizePhoneNumber\|isBlockedNumber\|invalid_phone\|blocked_number" server/src/http/app.ts` | `0` | M4: `5` |
+| AC-007 (a) | PASS | targeted verbose run | `✓ … plans, calls, pauses for approval and summarizes` (test body unchanged) | protection item |
+| AC-007 (b) | PASS | targeted verbose run | `✓ … validates phone numbers` (test body unchanged) | protection item |
+| AC-007 (c) | PASS | targeted verbose run | `✓ … rejects emergency numbers with blocked_number` | M4: `expected { error: 'invalid_phone', …(1) } to deeply equal { error: 'blocked_number', …(1) }` |
+| AC-007 (d) | PASS | targeted verbose run | `✓ … keeps invalid_request for schema violations` | protection item (passed before and after) |
+| AC-008 | PASS | targeted verbose run | 9 × `✓ … blocked in every notation: <input>` (119, 112, 182, (119), +82 119, +82-182, 0082-112, 0119, +82 112) | M1: `TypeError: checkTargetNumber is not a function` (18 failed) |
+| AC-009 | PASS | targeted verbose run | 4 × `… is ok`, 4 × `… is invalid` (`+1 911`, ``, `abc`, `+12`), `keeps the block list unchanged`; existing `normalizes`/`rejects`/`blocks Korean emergency short codes` unchanged and passing | M1: same TypeError |
+| AC-010 | PASS | targeted verbose run | `✓ … approvePlan re-checks the number right before dialing` / `✓ … approvePlan checks in the order shutting_down, state, number, limits` | M3: `promise resolved "{ id: 'blocked', …}" instead of rejecting`; (iii) `expected Error: Too many calls are in progress …` |
+| AC-011 | PASS | `npm --prefix server test`; `npm --prefix server run typecheck`; `git diff --stat 6ffe4ba..HEAD -- app/` | `Tests  111 passed (111)` exit 0; typecheck exit 0; app/ diff empty | n/a |
+
+Evidence files (worktree, gitignored): `.moai/state/verify/policy-run/policy/{baseline-*,m1-*,m2-*,m3-*,m4-*,final-*,bypass-probe}.txt`.
+
+### Gaps
+
+- Flutter `test`/`analyze` not run: no app file is in scope and `app/` diff is empty.
+- No coverage tool configured in `server/package.json`; coverage % on modified files was not measured.
+- No linter configured for the server; only `tsc --noEmit` ran.
+- No real KAT call was placed; the dial path was exercised with a fake provider only.
+
+### Residual risk (observed with `.moai/state/verify/policy-run/policy/probe.ts`, output `bypass-probe.txt`)
+
+- `119-1234-5678` → `{"kind":"ok","e164":"+11912345678"}`, KAT receives `11912345678`; `+82 119 1234` → `+821191234`, KAT `01191234`. Long numbers starting with a short code are not blocked; whether the carrier routes them to 119 was not verified. Pre-existing normalization (REQ-011 keeps it; OD-2 excludes new rules).
+- Full-width digits (`１１９`), zero-width space (`119​`), non-ASCII hyphens (`1‑1‑9`), `82119`, `00119`, `+820119`, `*119`, `tel:119` → `invalid` (rejected with `invalid_phone`, not `blocked_number`). Not dialable, so the rejection still holds; only the error code differs.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+```yaml
+run_complete_at: 2026-11-21
+run_start_sha: 6ffe4ba0904444fb9db41bc2c2ebc61a9b9dd008
+run_commit_sha: pending-backfill (M5 commit; code-final HEAD 0136dc4)
+run_status: audit-ready
+ac_pass_count: 11
+ac_fail_count: 0
+milestone_commits: [d8ddb62 M1, e163fea M2, 8ee2463 M3, 0136dc4 M4, M5 = this evidence commit]
+tests: "6 files / 111 tests passed (baseline 6 / 81)"
+typecheck_exit: 0
+preserve_list_post_run_count: "existing test assertions in app.test.ts / domain.test.ts / callService.test.ts unchanged (only one import line widened)"
+app_diff_since_run_start: empty
+l44_pre_commit_fetch: not-run (worktree-local branch, no push per orchestrator instruction)
+l44_post_push_fetch: not-applicable (no push)
+new_warnings_or_lints_introduced: 0 (tsc only; no server linter configured)
+cross_platform_build: not-applicable (TypeScript server, no platform-specific code)
+total_run_phase_files: 8 (6 planned source/test files + spec.md status + progress.md)
+m1_to_mN_commit_strategy: one commit per milestone on worktree branch, explicit pathspec staging, no push
+```
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
