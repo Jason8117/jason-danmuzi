@@ -39,6 +39,13 @@ _(appended per milestone below)_
 - GREEN `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/http/app.test.ts` (exit 0): `Tests  16 passed (16)`; full `npm --prefix server test` (exit 0): `Test Files  7 passed (7)` / `Tests  118 passed (118)`; typecheck exit 0.
 - Deviation: the AC-011 assertion change (plan M3) is committed with M1, because M1 GREEN makes the old `"success"` assertion fail and a separate commit would leave the suite red. RED for AC-011 was still observed before GREEN (above).
 - Interim: `openaiBrain.ts` `summarize` got an explicit `completeJson<CallOutcome>` type argument so M1 typechecks; M2 replaces it.
+- Commit: `0da933d`
+
+#### M2 — OpenAI fallback path
+
+- RED `npm --prefix server test -- src/brain/openaiBrain.test.ts` (exit 1): `Tests  9 failed (9)`; e.g. `AssertionError: expected { err: 'OpenAI responded 500' } to match object { Object (op, taskId, ...) }`, `AssertionError: expected { result: 'success', …(3) } to deeply equal { result: 'success', …(4) }` (no `source`), `AssertionError: expected { err: 'OpenAI responded 500' } to match object { op: 'plan', …(2) }`.
+- GREEN `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/brain/openaiBrain.test.ts src/http/app.test.ts` (exit 0): `Test Files  3 passed (3)` / `Tests  25 passed (25)`; typecheck exit 0.
+- Design: `request()` returns a `Completion<T>` union (no throw/catch of messages); `completeJson()` logs `{ op, reason, status?, taskId? }` once and returns `undefined`; callers fall back. Body-read timeout is classified `timeout`, other body-read failures `invalid_json`.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

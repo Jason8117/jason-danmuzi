@@ -23,7 +23,24 @@ interface Logger {
   warn(obj: object, msg: string): void;
 }
 
-/** LLM-backed brain. Any API or validation failure degrades to the heuristic brain instead of failing the task. */
+/** Why an LLM call fell back. Only these categories are logged, never error messages or response text (REQ-009). */
+type FailureReason = "timeout" | "http_status" | "invalid_json" | "schema_mismatch" | "empty_content" | "network";
+
+type Completion<T> = { ok: true; value: T } | { ok: false; reason: FailureReason; status?: number };
+
+interface CallContext {
+  op: "plan" | "summarize";
+  taskId?: string;
+}
+
+function isTimeout(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "name" in error && error.name === "TimeoutError";
+}
+
+/**
+ * LLM-backed brain. Any API or validation failure degrades to the heuristic brain instead of failing the task;
+ * the fallback is logged by category and the heuristic outcome carries `source: "heuristic"`.
+ */
 export class OpenAiBrain implements CallBrain {
   readonly name = "openai" as const;
   private readonly fallback = new HeuristicBrain();
@@ -42,7 +59,8 @@ export class OpenAiBrain implements CallBrain {
       goal: input.goal,
       shareableInfo: input.context ?? "",
     });
-    return this.completeJson(PLAN_SYSTEM_PROMPT, user, PlanSchema, () => this.fallback.createPlan(input));
+    const plan = await this.completeJson(PLAN_SYSTEM_PROMPT, user, PlanSchema, { op: "plan" });
+    return plan ?? this.fallback.createPlan(input);
   }
 
   async summarize(task: CallTask): Promise<CallOutcome> {
@@ -56,17 +74,35 @@ export class OpenAiBrain implements CallBrain {
       })),
       transcript: task.transcript.map((t) => `${t.speaker}: ${t.text}`),
     });
-    return this.completeJson<CallOutcome>(SUMMARY_SYSTEM_PROMPT, user, OutcomeSchema, () => this.fallback.summarize(task));
+    const outcome = await this.completeJson(SUMMARY_SYSTEM_PROMPT, user, OutcomeSchema, {
+      op: "summarize",
+      taskId: task.id,
+    });
+    return outcome ? { ...outcome, source: "llm" } : this.fallback.summarize(task);
   }
 
-  private async completeJson<T>(
-    system: string,
-    user: string,
-    schema: z.ZodType<T>,
-    fallback: () => Promise<T>,
-  ): Promise<T> {
+  /** Returns the validated LLM answer, or undefined after logging why the caller must fall back. */
+  private async completeJson<T>(system: string, user: string, schema: z.ZodType<T>, ctx: CallContext): Promise<T | undefined> {
+    const completion = await this.request(system, user, schema);
+    if (completion.ok) return completion.value;
+    this.log.warn(
+      {
+        op: ctx.op,
+        reason: completion.reason,
+        ...(completion.status !== undefined && { status: completion.status }),
+        ...(ctx.taskId !== undefined && { taskId: ctx.taskId }),
+      },
+      "LLM call failed, using heuristic fallback",
+    );
+    return undefined;
+  }
+
+  // @MX:WARN: [AUTO] Every failure path must map to a FailureReason without carrying the thrown error's message.
+  // @MX:REASON: JSON.parse and zod messages can echo response or transcript text, which REQ-009 keeps out of logs.
+  private async request<T>(system: string, user: string, schema: z.ZodType<T>): Promise<Completion<T>> {
+    let res: Response;
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -79,14 +115,28 @@ export class OpenAiBrain implements CallBrain {
         }),
         signal: AbortSignal.timeout(30_000),
       });
-      if (!res.ok) throw new Error(`OpenAI responded ${res.status}`);
-      const body = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const content = body.choices?.[0]?.message?.content;
-      if (!content) throw new Error("OpenAI returned no content");
-      return schema.parse(JSON.parse(content));
     } catch (error) {
-      this.log.warn({ err: (error as Error).message }, "LLM call failed, using heuristic fallback");
-      return fallback();
+      return { ok: false, reason: isTimeout(error) ? "timeout" : "network" };
     }
+    if (!res.ok) return { ok: false, reason: "http_status", status: res.status };
+
+    let body: { choices?: { message?: { content?: string } }[] };
+    try {
+      body = (await res.json()) as typeof body;
+    } catch (error) {
+      // The timeout signal also covers reading the body.
+      return { ok: false, reason: isTimeout(error) ? "timeout" : "invalid_json" };
+    }
+    const content = body.choices?.[0]?.message?.content;
+    if (!content) return { ok: false, reason: "empty_content" };
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return { ok: false, reason: "invalid_json" };
+    }
+    const checked = schema.safeParse(parsed);
+    return checked.success ? { ok: true, value: checked.data } : { ok: false, reason: "schema_mismatch" };
   }
 }
