@@ -204,4 +204,17 @@ open_decisions: "OD-1, OD-2 implemented as DEFAULT (pending owner review)"
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-21
+sync_commit_sha: "the docs(SPEC-ARCH-001) sync commit that adds this section (resolve via git log)"
+sync_status: implemented
+main_branch_commits: [3371a77, 7b7d01a, 6b749b8, f679d04, 847cd38, eeea230, facb660]   # cherry-picked onto main; worktree SHAs cited in §E.2/§E.3 do not exist on main
+run_commit_sha_on_main: eeea230   # corrected run_commit_sha (last implementation commit on main); §E.3 left untouched (run-phase owned)
+acceptance_distinct_ac_ids: 20   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' acceptance.md | sort -u | wc -l
+server_tests_at_sync: "10 files / 182 passed (re-measured at facb660)"
+server_typecheck_exit_at_sync: 0
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated: already 2026-11-21
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped   # --skip-mx semantics
+```

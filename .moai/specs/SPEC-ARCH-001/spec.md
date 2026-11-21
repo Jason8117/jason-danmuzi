@@ -2,7 +2,7 @@
 id: SPEC-ARCH-001
 title: "모듈 경계 정리와 외부 입력 검증"
 version: "0.3.0"
-status: in-progress
+status: implemented
 created: 2026-11-20
 updated: 2026-11-21
 author: jason
