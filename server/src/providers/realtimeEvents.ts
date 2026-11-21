@@ -67,3 +67,6 @@ export function parseRealtimeEvent(text: string): ParsedRealtimeEvent {
 
 /** Arguments of the request_user_approval tool. */
 export const ApprovalToolArgs = z.object({ question: z.string() });
+
+/** Arguments of the end_call tool. */
+export const EndCallToolArgs = z.object({ reason: z.string() });

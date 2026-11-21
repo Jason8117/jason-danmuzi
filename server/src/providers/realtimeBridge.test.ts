@@ -55,7 +55,11 @@ function setup(decision: ApprovalDecision = { approved: true, reason: "user_appr
   } satisfies CallSession;
 
   const warns: { obj: object; msg: string }[] = [];
-  const log = { info: () => {}, warn: (obj: object, msg: string) => warns.push({ obj, msg }) };
+  const infos: { obj: object; msg: string }[] = [];
+  const log = {
+    info: (obj: object, msg: string) => infos.push({ obj, msg }),
+    warn: (obj: object, msg: string) => warns.push({ obj, msg }),
+  };
   const media = new FakeSocket();
   media.readyState = WebSocket.OPEN;
   const sockets: FakeSocket[] = [];
@@ -80,7 +84,7 @@ function setup(decision: ApprovalDecision = { approved: true, reason: "user_appr
   });
 
   const ai = () => sockets[sockets.length - 1]!;
-  return { session, media, sockets, urls, socketOptions, ai, hangup, warns };
+  return { session, media, sockets, urls, socketOptions, ai, hangup, warns, infos };
 }
 
 /** Lets the bridge's async tool handling settle. */
@@ -290,6 +294,51 @@ describe("bridgeToRealtime input validation (SPEC-ARCH-001 AC-011)", () => {
     expect(ai().sent).toEqual([]);
     expect(ai().close).not.toHaveBeenCalled();
     expect(warns).toEqual([]);
+  });
+});
+
+// Live-call fix: a call ended with no log line showing whether the model hung up or KAT stopped the stream.
+describe("bridgeToRealtime hangup diagnostics (SPEC-ARCH-001 live-call fix)", () => {
+  const endCall = (args: string) => ({ type: "response.function_call_arguments.done", name: "end_call", call_id: "call-9", arguments: args });
+  const named = (infos: { obj: object; msg: string }[], msg: string) => infos.filter((i) => i.msg === msg).map((i) => i.obj);
+
+  it("logs the model's end_call reason, truncated to 120 characters", () => {
+    vi.useFakeTimers();
+    const { ai, infos } = setup();
+    ai().open();
+    const reason = "영업시간 확인 불가로 종료합니다. ".repeat(10);
+
+    ai().receive(endCall(JSON.stringify({ reason })));
+
+    expect(named(infos, "Model requested end_call")).toEqual([{ taskId: "t-1", reason: Array.from(reason).slice(0, 120).join("") }]);
+  });
+
+  it("logs a null reason when end_call arguments are missing or invalid", () => {
+    vi.useFakeTimers();
+    const { ai, infos } = setup();
+    ai().open();
+
+    ai().receive(endCall("{}"));
+    ai().receive(endCall("not json"));
+
+    expect(named(infos, "Model requested end_call")).toEqual([
+      { taskId: "t-1", reason: null },
+      { taskId: "t-1", reason: null },
+    ]);
+  });
+
+  it("records whether a KAT stop frame arrived after the model asked to hang up", () => {
+    vi.useFakeTimers();
+    const calleeSide = setup();
+    calleeSide.ai().open();
+    calleeSide.media.receive({ event: "stop", streamSid: "s-1" });
+    expect(named(calleeSide.infos, "KAT media stream stopped")).toEqual([{ taskId: "t-1", endCallRequested: false }]);
+
+    const modelSide = setup();
+    modelSide.ai().open();
+    modelSide.ai().receive(endCall('{"reason":"done"}'));
+    modelSide.media.receive({ event: "stop", streamSid: "s-1" });
+    expect(named(modelSide.infos, "KAT media stream stopped")).toEqual([{ taskId: "t-1", endCallRequested: true }]);
   });
 });
 

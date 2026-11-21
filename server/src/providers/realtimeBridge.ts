@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import type { ApprovalDecision } from "../domain/types.js";
 import { parseMediaStreamFrame } from "./kat/schemas.js";
-import { ApprovalToolArgs, parseRealtimeEvent } from "./realtimeEvents.js";
+import { ApprovalToolArgs, EndCallToolArgs, parseRealtimeEvent } from "./realtimeEvents.js";
 import type { CallSession } from "./types.js";
 
 export interface RealtimeOptions {
@@ -44,6 +44,8 @@ const TOOLS = [
 /** Gives the goodbye audio time to reach the callee before the line is cut. */
 const HANGUP_GRACE_MS = 2500;
 const REALTIME_CONNECT_RETRIES = 2;
+/** Longest end_call reason kept in the log; the reason is the model's own words, not callee speech. */
+const END_CALL_REASON_LOG_CHARS = 120;
 /** Asked when the model calls request_user_approval without a usable question. */
 const DEFAULT_APPROVAL_QUESTION = "진행해도 될까요?";
 
@@ -80,6 +82,7 @@ export function bridgeToRealtime(params: BridgeParams): void {
   let failed = false;
   let connectAttempt = 0;
   let retryScheduled = false;
+  let endCallRequested = false;
 
   const sendAi = (event: object) => {
     if (ai?.readyState === WebSocket.OPEN) ai.send(JSON.stringify(event));
@@ -135,6 +138,11 @@ export function bridgeToRealtime(params: BridgeParams): void {
     }
 
     if (name === "end_call") {
+      endCallRequested = true;
+      const reason = EndCallToolArgs.safeParse(args).data?.reason;
+      // Code points, not UTF-16 units, so truncation never splits a character.
+      const logged = reason === undefined ? null : Array.from(reason).slice(0, END_CALL_REASON_LOG_CHARS).join("");
+      log.info({ taskId: session.taskId, reason: logged }, "Model requested end_call");
       setTimeout(() => void hangup(), HANGUP_GRACE_MS);
       return;
     }
@@ -281,6 +289,8 @@ export function bridgeToRealtime(params: BridgeParams): void {
     if (frame?.event === "media") {
       sendAi({ type: "input_audio_buffer.append", audio: frame.media.payload });
     } else if (frame?.event === "stop") {
+      // endCallRequested=false: the stream stopped before the model asked to hang up (callee, carrier or KAT side).
+      log.info({ taskId: session.taskId, endCallRequested }, "KAT media stream stopped");
       closeAi("media_stop");
     }
   });
