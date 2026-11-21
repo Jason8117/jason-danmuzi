@@ -30,20 +30,23 @@
 
 | 경로 | 역할 |
 |---|---|
-| `index.ts` | 진입점 |
+| `index.ts` | 진입점(기동 복구 후 리슨, SIGINT/SIGTERM에 `shutdown.ts` 핸들러 연결) |
+| `shutdown.ts` | 종료 절차: 신규 작업 차단 → 진행 중 통화 끊기 → `app.close()` → 저장소 최종 flush → 종료 코드 0/1. 단계별 예산 3 s + 1 s + 5 s(합계 9 s) |
 | `config.ts` | 환경 변수 검증(zod)과 제공자·LLM 선택 |
 | `container.ts` | 구체 구현을 조립하는 유일한 위치 |
 | `logger.ts` | 로거 |
-| `domain/types.ts` | `CallTask`, `TaskStatus`, `Language` 등 도메인 타입 |
+| `architecture.test.ts` | 모듈 경계 테스트: HTTP 계층은 구체 제공자를 모름, 외부 데이터에 `any` 금지, `providers/`는 `brain/`을 import하지 않음 |
+| `domain/types.ts` | `CallTask`, `TaskStatus`, `Language`, `OutcomeResult`(`unverified` 포함), `OutcomeSource`(`llm` \| `heuristic`) 등 도메인 타입 |
 | `domain/stateMachine.ts` | 상태 전이 규칙(`canTransition`, `assertTransition`) |
-| `domain/phone.ts` | 번호 정규화·마스킹, 차단 번호 판별 |
-| `brain/` | 통화 계획·판단 로직: `types.ts`(인터페이스), `openaiBrain.ts`, `heuristicBrain.ts`, `scenario.ts`, `prompts.ts` |
-| `providers/` | 통화 실행: `types.ts`(인터페이스), `simulatedProvider.ts`, `realtimeBridge.ts` |
-| `providers/kat/` | KAT Cloud 연동: `katProvider.ts`, `webhook.ts`(서명 검증) |
-| `services/callService.ts` | 작업 생명주기 조정(계획, 승인, 발신, 취소, 상한 적용) |
-| `store/taskStore.ts` | 작업 저장소(JSON 파일, 테스트용 `InMemoryTaskStore`) |
+| `domain/phone.ts` | 번호 정규화·마스킹, 차단 번호 판별, `checkTargetNumber`(ok / invalid / blocked) |
+| `domain/scenario.ts` | 시나리오 판별과 템플릿(`detectScenario`, `SCENARIO_TEMPLATES`). `brain/`에서 옮겨 왔다 |
+| `brain/` | 통화 계획·판단 로직: `types.ts`(인터페이스), `openaiBrain.ts`, `heuristicBrain.ts`, `prompts.ts` |
+| `providers/` | 통화 실행: `types.ts`(인터페이스·`ProviderRoutes`), `simulatedProvider.ts`, `realtimeBridge.ts`, `realtimeEvents.ts`(OpenAI Realtime 이벤트 스키마) |
+| `providers/kat/` | KAT Cloud 연동: `katProvider.ts`(자기 라우트를 `routes()`로 선언), `webhook.ts`(서명 검증), `schemas.ts`(KAT API 응답·웹훅·미디어 프레임 zod 스키마) |
+| `services/callService.ts` | 작업 생명주기 조정(계획, 승인, 번호 정책 검사, 발신, 취소, 상한 적용, 종료 중 차단) |
+| `store/taskStore.ts` | 작업 저장소(JSON 파일, 쓰기 실패 격리·제한된 재시도, 테스트용 `InMemoryTaskStore`) |
 | `events/eventBus.ts` | `task.updated` / `task.deleted` 이벤트 전달 |
-| `http/app.ts` | 라우트, 인증, 오류 매핑 |
+| `http/app.ts` | `/v1` 라우트, 인증, 오류 매핑, 제공자가 선언한 라우트 등록(`registerProviderRoutes`) |
 | `http/schemas.ts` | 요청 스키마(zod) |
 
 ### 계층 구조
@@ -52,7 +55,7 @@
             HTTP / WebSocket 클라이언트          KAT Cloud
                        │                            │
                        ▼                            ▼
-             http/app.ts, http/schemas.ts   (/kat/status, /kat/media)
+             http/app.ts, http/schemas.ts ◄── provider.routes() (KAT: /kat/status, /kat/media)
                        │
                        ▼
              services/callService.ts ───────► events/eventBus.ts ──► /v1/stream
@@ -62,13 +65,14 @@
               │          │
               └────┬─────┘
                    ▼
-               domain/  (types, stateMachine, phone)
+               domain/  (types, stateMachine, phone, scenario)
 
    container.ts: config를 읽어 brain·provider·store·bus를 조립해 CallService에 주입
 ```
 
 - `CallService`는 `CallBrain`, `CallProvider`, `TaskStore` 인터페이스에 의존하며, 이 밖에 `EventBus`와 `domain/stateMachine`도 직접 가져온다(`callService.ts`). 두뇌·제공자·저장소의 구체 클래스는 `container.ts`에서만 선택된다.
-- KAT 전용 라우트(`/kat/status`, `/kat/media`)는 `http/app.ts`에 있으며 KAT 제공자가 활성화된 경우에만 등록된다(`app.ts`의 `if (kat)` 블록 안에서 등록되며, `kat`은 `container.ts`에서 `config.provider === "kat"`일 때만 생성된다).
+- 제공자 전용 라우트는 제공자가 직접 선언한다. `CallProvider.routes?()`가 `ProviderRoutes`(HTTP 웹훅과 WebSocket 라우트, 서명 검증용 `rawBody` 여부)를 돌려주면 `http/app.ts`의 `registerProviderRoutes`가 선언대로 등록한다. KAT 제공자는 `/kat/status`(원문 본문 보관)와 `/kat/media`를 선언하며, 시뮬레이션 제공자는 라우트를 선언하지 않으므로 시뮬레이션 모드에서는 등록되는 제공자 라우트가 없다. `http/app.ts`는 `KatCallProvider`나 `providers/kat`을 import하지 않으며, `architecture.test.ts`가 이를 검사한다.
+- 번호 정규화·차단 정책은 HTTP 계층이 아니라 `CallService`(`checkTargetNumber`)가 강제하며, 발신 직전에 저장된 번호를 다시 검사한다.
 
 ### 제공자·두뇌 선택 로직 (`config.ts`, `container.ts`)
 
@@ -130,7 +134,7 @@ lib/
 | POST | `/kat/status` | KAT 상태 웹훅(KAT 모드 전용) |
 | WS | `/kat/media` | KAT 미디어 스트림(KAT 모드 전용) |
 
-오류 응답은 대체로 `{ error, message }` 형식이며 `invalid_request`(400), `unauthorized`(401), `invalid_state`(409), `internal`(500) 등을 쓴다. 동시 통화·일일 상한 초과 시에는 429(`too_many_active_calls`, `daily_limit`, `callService.ts`)를 반환한다. 예외로 `/kat/status` 서명 검증 실패는 `message` 없이 `{ error: "invalid_signature" }`(401)만 돌려준다.
+오류 응답은 대체로 `{ error, message }` 형식이며 `invalid_request`(400), `blocked_number`(400, 긴급·특수번호), `unauthorized`(401), `invalid_state`(409), `internal`(500), `shutting_down`(503, 종료 진행 중) 등을 쓴다. 동시 통화·일일 상한 초과 시에는 429(`too_many_active_calls`, `daily_limit`, `callService.ts`)를 반환한다. 예외로 `/kat/status` 서명 검증 실패는 `message` 없이 `{ error: "invalid_signature" }`(401)만 돌려준다.
 
 ### WebSocket (`/v1/stream`)
 
@@ -145,9 +149,11 @@ lib/
 | 변경 내용 | 위치 |
 |---|---|
 | 상태 추가·전이 규칙 | `server/src/domain/types.ts`, `domain/stateMachine.ts` (+ 앱 `call_models.dart`, `status_chip.dart`) |
-| 차단 번호·번호 형식 | `server/src/domain/phone.ts` |
-| 통화 계획·프롬프트 | `server/src/brain/` |
-| 새 통신사·발신 제공자 | `server/src/providers/`에 `CallProvider` 구현 추가 후 `container.ts`, `config.ts`에 선택 조건 추가 |
+| 차단 번호·번호 형식 | `server/src/domain/phone.ts` (강제 위치는 `services/callService.ts`) |
+| 통화 계획·프롬프트 | `server/src/brain/` (시나리오 템플릿은 `domain/scenario.ts`) |
+| 새 통신사·발신 제공자 | `server/src/providers/`에 `CallProvider` 구현 추가(웹훅이 필요하면 `routes()`로 선언) 후 `container.ts`, `config.ts`에 선택 조건 추가. `http/app.ts`는 고치지 않는다 |
+| 외부 응답 검증 | `server/src/providers/kat/schemas.ts`, `providers/realtimeEvents.ts` |
+| 종료 절차·예산 | `server/src/shutdown.ts`, `index.ts` |
 | 상한·제한 시간 | `server/src/config.ts` 기본값, `CallService` 옵션 |
 | API 라우트·요청 검증 | `server/src/http/app.ts`, `http/schemas.ts` (+ 앱 `api_client.dart`, `calls_repository.dart`) |
 | 저장 방식 | `server/src/store/taskStore.ts` |
@@ -165,4 +171,4 @@ lib/
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f.
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660).

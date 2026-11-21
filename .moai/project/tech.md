@@ -88,18 +88,21 @@
 
 ## 테스트와 CI 현황
 
-테스트 파일(실행 결과는 확인하지 않았다):
+서버 테스트는 10개 파일, 182개이며 모두 통과한다(`npm test`, facb660에서 2026-11-21 측정). `npm run typecheck` 종료 코드 0.
 
-- 서버: `src/domain/domain.test.ts`(상태 전이, 번호 처리, `heuristicBrain`에서 가져온 `isFiller`), `src/http/app.test.ts`(`buildApp`에 `CallService`, `SimulatedCallProvider`, `HeuristicBrain`, `InMemoryTaskStore`, `EventBus`를 조립한 통합 테스트), `src/providers/kat/katProvider.test.ts`(번호 변환, 웹훅 서명 검증)
-- 앱: `test/approval_flow_test.dart`, `test/calls_controller_test.dart`, `test/unit_test.dart`, `test/support/fakes.dart`
+- 서버: `architecture.test.ts`(모듈 경계), `shutdown.test.ts`, `domain/domain.test.ts`, `http/app.test.ts`(제공자 선언 라우트, `/v1/stream` 포함 통합 테스트), `services/callService.test.ts`, `store/taskStore.test.ts`, `brain/heuristicBrain.test.ts`, `brain/openaiBrain.test.ts`, `providers/realtimeBridge.test.ts`, `providers/kat/katProvider.test.ts`
+- 앱: `test/approval_flow_test.dart`, `test/calls_controller_test.dart`, `test/unit_test.dart`, `test/support/fakes.dart` 등(이번 sync에서는 Flutter 테스트를 다시 실행하지 않았다)
 
-직접 테스트가 없는 영역: `realtimeBridge.ts`, `openaiBrain.ts`, `KatCallProvider`의 통화 흐름, JSON 파일 저장소. 커버리지 수치는 미확인.
+실제 OpenAI·KAT 호출을 하는 테스트는 없다. 커버리지 도구가 설치되어 있지 않아 커버리지 수치는 미확인.
 
 CI: `.github/workflows/label-sync.yml`만 있으며 빌드·테스트를 실행하는 CI는 없다.
 
 ## 코드로 확인된 제약
 
-- 긴급·특수번호 112, 119, 113, 114, 117, 118, 122, 125, 182 발신 차단(`domain/phone.ts`)
+- 긴급·특수번호 112, 119, 113, 114, 117, 118, 122, 125, 182 발신 차단(`domain/phone.ts`의 규칙을 `CallService`가 작업 생성 시와 발신 직전에 강제). 차단 시 HTTP 400 `blocked_number`
+- 종료 진행 중에는 신규 작업을 HTTP 503 `shutting_down`으로 거부(`services/callService.ts`)
+- LLM이 검증하지 않은 휴리스틱 요약은 `result: "unverified"`, `source: "heuristic"`으로 기록하며 성공을 주장하지 않는다(`brain/heuristicBrain.ts`, `domain/types.ts`)
+- KAT `timeLimit` = `MAX_CALL_DURATION_SEC`(기본 600) + 30, [10, 14400]으로 제한(`providers/kat/katProvider.ts`). 운영 주의 사항은 `docs/OPERATIONS.md`
 - 승인 코멘트 최대 500자, 작업 `context` 최대 1000자, `callbackNumber` 최대 32자(`http/schemas.ts`)
 - KAT 제공자 사용 시 `API_TOKEN` 필수, `CALL_PROVIDER=kat`이면 KAT·OpenAI 변수 6개 모두 필수(`config.ts`)
 - 저장소는 단일 JSON 파일이며 데이터베이스가 없다

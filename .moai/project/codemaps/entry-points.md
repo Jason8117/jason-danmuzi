@@ -20,7 +20,7 @@
 
 1. `@fastify/formbody`, `@fastify/websocket`(`maxPayload` 1MiB). 본문 한도는 64KiB.
 2. `CORS_ORIGINS`가 있으면 `@fastify/cors`(메서드 GET, POST, DELETE).
-3. `preParsing` 훅: `/kat/`로 시작하는 요청의 원문 본문을 `rawBody`에 보관한다. KAT 서명이 원문 바이트 기준이기 때문이다.
+3. `preParsing` 훅: 제공자가 `rawBody: true`로 선언한 HTTP 라우트(KAT는 `/kat/status`)의 원문 본문을 `rawBody`에 보관한다. 서명이 원문 바이트 기준이기 때문이다(`registerProviderRoutes`).
 4. 오류 처리기: `ZodError` → 400 `invalid_request`, `ServiceError` → 자체 코드, `InvalidTransitionError` → 409 `invalid_state`, 그 밖의 4xx → `bad_request`, 나머지 → 500 `internal`.
 5. `onRequest` 훅: `/v1/`로 시작하고 `API_TOKEN`이 설정된 경우에만 토큰을 `timingSafeEqual`로 비교한다. `/v1/stream`만 `?token=`도 받는다. 요청 로그에서는 `token=` 값을 `***`로 가린다.
 
@@ -34,21 +34,21 @@
 | `GET /v1/config` | `{ provider, brain, realCalls: provider === "kat" }` |
 | `GET /v1/tasks` | `calls.list()` → `{ tasks }` (생성 시각 내림차순) |
 | `GET /v1/tasks/:id` | `calls.get(id)`, 없으면 404 `not_found`. `id`는 UUID 검증 |
-| `POST /v1/tasks` | `CreateTaskBody` 검증 → `normalizePhoneNumber`(실패 시 400 `invalid_phone`) → `isBlockedNumber`(400 `blocked_number`) → `callbackNumber` 정규화 → `calls.create()` → 201 |
+| `POST /v1/tasks` | `CreateTaskBody` 검증 → `calls.create()`(종료 중 503 `shutting_down`, `checkTargetNumber`로 400 `invalid_phone` / `blocked_number`, 상한 429) → 201 |
 | `POST /v1/tasks/:id/approve-plan` | `ApprovePlanBody`(선택적 `plan` 부분 덮어쓰기) → `calls.approvePlan()` |
 | `POST /v1/tasks/:id/cancel` | `calls.cancel()` |
 | `POST /v1/tasks/:id/approvals/:approvalId` | `ApprovalDecisionBody`(`decision`, 선택적 `comment`) → `calls.respondToApproval()` |
 | `DELETE /v1/tasks/:id` | `calls.delete()` → 204 |
 | `WS /v1/stream` | 연결 즉시 `snapshot` 전송 → `bus.subscribe`로 이후 이벤트 전달 → 25초마다 ping → 닫히면 구독·타이머 해제 |
 
-### KAT 전용 라우트 (`if (kat)` 블록)
+### 제공자 선언 라우트 (`registerProviderRoutes`)
 
-`kat`이 있을 때만 등록되므로 시뮬레이션 모드에서는 404다.
+제공자가 `routes()`로 선언한 라우트만 등록된다. KAT 제공자(`KatCallProvider.routes()`)가 아래 두 라우트를 선언하며, 시뮬레이션 제공자는 선언하지 않으므로 시뮬레이션 모드에서는 404다.
 
 | 경로 | 처리 |
 |---|---|
-| `POST /kat/status` | `kat.isValidHttpWebhook(headers, rawBody)`가 거짓이면 401 `{ error: "invalid_signature" }`. 참이면 `kat.handleStatusWebhook(body)` 후 204 |
-| `WS /kat/media` | `kat.attachMediaStream(socket, request.raw)` |
+| `POST /kat/status` | 서명이 유효하지 않으면 401 `{ error: "invalid_signature" }`. 유효하면 `providers/kat/schemas.ts`의 `StatusWebhook`으로 검증해 처리한 뒤 204 |
+| `WS /kat/media` | `KatCallProvider.attachMediaStream`. 시작 프레임은 `StartFrame` 스키마로 검증 |
 
 ## 웹훅 처리 (`providers/kat/katProvider.ts`)
 

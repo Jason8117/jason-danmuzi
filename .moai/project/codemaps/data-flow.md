@@ -36,7 +36,7 @@ stateDiagram-v2
 ## 1. 작업 생성
 
 1. 앱: `NewCallScreen` → `CallsController.create(NewCallRequest)` → `CallsRepository.create` → `POST /v1/tasks`.
-2. 서버: 스키마 검증, 번호 정규화·차단 검사(`http/app.ts`) → `CallService.create`.
+2. 서버: 스키마 검증(`http/app.ts`) → `CallService.create`. 검사 순서는 503 `shutting_down` → 400 번호(`checkTargetNumber`: `invalid_phone` / `blocked_number`) → 429 상한(`services/callService.ts`). 발신 직전에도 저장된 번호를 다시 검사한다.
 3. `create`는 `status: "planning"`, `version: 0`, 빈 대화록·승인 목록, `provider: this.provider.name`으로 작업을 만들어 저장한다(버전 1). 이어서 `plan()`을 기다리지 않고 실행한 뒤 바로 반환하므로 HTTP 응답은 201과 `planning` 상태다.
 4. `plan()`: `brain.createPlan(input)`이 끝나면, 작업이 여전히 `planning`일 때만 `plan`을 채우고 `awaiting_approval`로 전이한다. 실패하면 `error`를 적고 `failed`로 간다. 그사이 취소되었으면 결과를 버린다.
 5. 앱은 계획 완료를 HTTP가 아니라 `/v1/stream`의 `task.updated`로 받는다.

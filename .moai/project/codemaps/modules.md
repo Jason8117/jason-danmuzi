@@ -10,7 +10,8 @@
 |---|---|---|
 | `types.ts` | `Language`, `TaskStatus`, `Speaker`, `TranscriptEntry`, `CallPlan`, `ApprovalStatus`, `ApprovalDecisionReason`, `ApprovalDecision`, `ApprovalRequest`, `OutcomeResult`, `CallOutcome`, `CallTaskInput`, `CallTask`, `ACTIVE_CALL_STATUSES`, `TERMINAL_STATUSES`, `isActiveCall`, `isTerminal` | `services`, `brain`, `providers`, `store`, `events` |
 | `stateMachine.ts` | `canTransition`, `assertTransition`, `InvalidTransitionError` | `services/callService.ts`(`assertTransition`), `http/app.ts`(`InvalidTransitionError`로 409 매핑) |
-| `phone.ts` | `normalizePhoneNumber`, `isBlockedNumber`, `maskPhoneNumber` | `http/app.ts`(정규화·차단), `providers/kat/katProvider.ts`(로그 마스킹) |
+| `phone.ts` | `normalizePhoneNumber`, `isBlockedNumber`, `checkTargetNumber`, `maskPhoneNumber` | `services/callService.ts`(정규화·차단 강제), `providers/kat/katProvider.ts`(로그 마스킹) |
+| `scenario.ts` | `Scenario`, `detectScenario`, `SCENARIO_TEMPLATES` (SPEC-ARCH-001에서 `brain/`에서 이동) | `brain/heuristicBrain.ts`, `providers/simulatedProvider.ts` |
 
 다른 모듈에 의존하지 않는 최하위 계층이다.
 
@@ -23,7 +24,6 @@
 | `types.ts` | `interface CallBrain { name; createPlan(input); summarize(task) }` | `services/callService.ts`, `container.ts` |
 | `openaiBrain.ts` | `class OpenAiBrain` (Chat Completions, `response_format: json_object`). LLM 호출이 실패하면 내부의 `HeuristicBrain`으로 대체한다(`completeJson`의 `fallback`) | `container.ts` |
 | `heuristicBrain.ts` | `class HeuristicBrain`, `isFiller` | `container.ts`, `openaiBrain.ts` |
-| `scenario.ts` | `Scenario`, `detectScenario`, `SCENARIO_TEMPLATES` | `heuristicBrain.ts`, `providers/simulatedProvider.ts` |
 | `prompts.ts` | `openingLine`, `buildAgentInstructions`, `PLAN_SYSTEM_PROMPT`, `SUMMARY_SYSTEM_PROMPT` | `heuristicBrain.ts`, `openaiBrain.ts`, `providers/realtimeBridge.ts` |
 
 ### `providers/`
@@ -35,8 +35,10 @@
 | `types.ts` | `EndOptions`, `CallSession`(`taskId`, `task()`, `signal`, `markRinging`, `markConnected`, `appendTranscript`, `requestApproval`, `end`), `CallProvider`(`name: "simulated" \| "kat"`, `start`, `hangup`) | `services/callService.ts`, `container.ts`, 각 제공자 |
 | `simulatedProvider.ts` | `class SimulatedCallProvider(speed)` — 시나리오 템플릿으로 통화를 재생하고 승인 단계에서 `requestApproval`을 호출 | `container.ts` |
 | `realtimeBridge.ts` | `RealtimeOptions`, `bridgeToRealtime(params)` — OpenAI Realtime WebSocket 연결, `request_user_approval`·`end_call` 도구 처리 | `providers/kat/katProvider.ts` |
-| `kat/katProvider.ts` | `KatOptions`, `toKatPhoneNumber`, `class KatCallProvider`(`start`, `hangup`, `isValidHttpWebhook`, `handleStatusWebhook`, `attachMediaStream`) | `container.ts`, `http/app.ts`(타입 import, KAT 라우트에서 메서드 호출) |
+| `realtimeEvents.ts` | `parseRealtimeEvent`, `ApprovalToolArgs` (OpenAI Realtime 이벤트 zod 검증) | `realtimeBridge.ts` |
+| `kat/katProvider.ts` | `KatOptions`, `toKatPhoneNumber`, `katTimeLimitSec`, `class KatCallProvider`(`start`, `hangup`, `routes`, `handleStatusWebhook`, `attachMediaStream`) | `container.ts` (`http/app.ts`는 `ProviderRoutes`로만 접근) |
 | `kat/webhook.ts` | `verifyKatHttpSignature`, `verifyKatStreamSignature` | `kat/katProvider.ts` |
+| `kat/schemas.ts` | `CreateCallResponse`, `ApiErrorBody`, `StatusWebhook`, `StartFrame`, `parseMediaStreamFrame` | `kat/katProvider.ts`, `realtimeBridge.ts` |
 
 ### `services/callService.ts`
 

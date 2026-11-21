@@ -48,9 +48,12 @@ flowchart TD
   container --> store
   http --> service
   http --> events
-  http --> kat[providers/kat/katProvider.ts]
-  http --> phone[domain/phone.ts]
+  http --> ptypes[providers/types.ts]
   http --> sm[domain/stateMachine.ts]
+  index --> shutdown[shutdown.ts]
+  container --> kat[providers/kat/katProvider.ts]
+  service --> phone[domain/phone.ts]
+  service --> prompts
   http --> schemas[http/schemas.ts]
   service --> brain
   service --> providers
@@ -58,9 +61,11 @@ flowchart TD
   service --> events
   service --> sm
   service --> types[domain/types.ts]
-  providers --> scenario[brain/scenario.ts]
-  providers --> prompts[brain/prompts.ts]
+  providers --> scenario[domain/scenario.ts]
+  brain --> scenario
+  brain --> prompts[brain/prompts.ts]
   kat --> phone
+  kat --> katschemas[providers/kat/schemas.ts]
   brain --> types
   store --> types
   events --> types
@@ -68,9 +73,9 @@ flowchart TD
 
 계층을 벗어나는 지점:
 
-- `http/app.ts`가 `services`를 거치지 않고 `domain/phone.ts`를 직접 써서 번호를 정규화·차단한다. 작업 생성 입력 검증의 일부가 서비스가 아니라 HTTP 계층에 있다.
-- `http/app.ts`가 구체 클래스 `KatCallProvider`를 타입으로 import하고, KAT 라우트에서 그 메서드를 직접 호출한다. `CallProvider` 인터페이스를 우회하는 유일한 경로다.
-- `providers/`가 `brain/`의 `scenario.ts`(`simulatedProvider.ts`)와 `prompts.ts`(`realtimeBridge.ts`)를 가져온다. 두 모듈은 형제 관계지만 이 방향으로만 의존한다.
+SPEC-POLICY-001과 SPEC-ARCH-001로 해소된 이전 예외(참고용): 번호 정책은 이제 `CallService`가 강제하고 `http/app.ts`는 `domain/phone.ts`를 import하지 않는다. `http/app.ts`는 `KatCallProvider`를 모르며 제공자가 선언한 `ProviderRoutes`만 등록한다. `providers/`는 `brain/`을 import하지 않는다(시나리오는 `domain/scenario.ts`, 에이전트 지시문은 `CallService`가 `buildAgentInstructions`로 만들어 `CallSession`에 담아 전달). 세 규칙은 `architecture.test.ts`가 검사한다.
+
+남은 예외:
 - `CallService`는 `CallBrain`·`CallProvider`·`TaskStore`는 인터페이스로 받지만, `EventBus`는 구체 클래스를 타입으로 받는다.
 
 ### 앱 (상대 경로 import 기준)
