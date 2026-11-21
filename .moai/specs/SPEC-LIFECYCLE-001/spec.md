@@ -2,7 +2,7 @@
 id: SPEC-LIFECYCLE-001
 title: "실통화 종료·재기동 복구·제공자 호출 제한"
 version: "0.3.1"
-status: in-progress
+status: implemented
 created: 2026-11-20
 updated: 2026-11-21
 author: jason
