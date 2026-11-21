@@ -7,7 +7,7 @@ const AT = "2026-11-21T10:00:00.000Z";
 const task: CallTask = {
   id: "t-1",
   version: 1,
-  status: "queued",
+  status: "dialing",
   targetName: "라 파스타",
   phoneNumber: "+8221234567",
   goal: "영업시간과 주말 영업 여부 확인",
