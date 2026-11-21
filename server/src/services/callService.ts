@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { CallBrain } from "../brain/types.js";
+import { checkTargetNumber, normalizePhoneNumber } from "../domain/phone.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
   type ApprovalDecision,
@@ -57,6 +58,8 @@ interface RunningSession {
 const now = () => new Date().toISOString();
 
 export const SHUTDOWN_CALL_ERROR = "서버가 종료되어 통화를 끊었습니다.";
+const INVALID_PHONE_MESSAGE = "전화번호 형식이 올바르지 않습니다.";
+const BLOCKED_NUMBER_MESSAGE = "긴급·특수번호에는 전화할 수 없습니다.";
 /** Upper bound on how long startup waits for restart-recovery hang-ups. */
 const RECOVERY_DEADLINE_MS = 10_000;
 
@@ -213,9 +216,15 @@ export class CallService {
 
   create(input: CallTaskInput): CallTask {
     this.assertNotShuttingDown();
+    // Nothing is stored, published or planned before the number passes the policy (SPEC-POLICY-001 REQ-001..003).
+    const checked: CallTaskInput = {
+      ...input,
+      phoneNumber: this.requireDialableNumber(input.phoneNumber),
+      callbackNumber: input.callbackNumber ? normalizePhoneNumber(input.callbackNumber) ?? undefined : undefined,
+    };
     const timestamp = now();
     const task: CallTask = {
-      ...input,
+      ...checked,
       id: randomUUID(),
       version: 0,
       status: "planning",
@@ -226,7 +235,7 @@ export class CallService {
       updatedAt: timestamp,
     };
     this.persist(task);
-    void this.plan(task.id, input);
+    void this.plan(task.id, checked);
     return task;
   }
 
@@ -312,6 +321,14 @@ export class CallService {
     if (this.shuttingDown) {
       throw new ServiceError(503, "shutting_down", "서버가 종료 중입니다. 잠시 후 다시 시도해 주세요.");
     }
+  }
+
+  /** Maps the domain number rule to a ServiceError; returns the E.164 value to dial. */
+  private requireDialableNumber(phoneNumber: string): string {
+    const check = checkTargetNumber(phoneNumber);
+    if (check.kind === "invalid") throw new ServiceError(400, "invalid_phone", INVALID_PHONE_MESSAGE);
+    if (check.kind === "blocked") throw new ServiceError(400, "blocked_number", BLOCKED_NUMBER_MESSAGE);
+    return check.e164;
   }
 
   private assertWithinLimits(): void {

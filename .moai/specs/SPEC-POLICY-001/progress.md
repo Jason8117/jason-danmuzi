@@ -43,7 +43,26 @@ run_start_sha: 6ffe4ba0904444fb9db41bc2c2ebc61a9b9dd008
 - typecheck after GREEN: exit 0
 - files: `server/src/domain/phone.ts`, `server/src/domain/domain.test.ts`
 
-_<M2-M5 pending>_
+- commit: `d8ddb62`
+
+#### M2 — enforce at creation (AC-001..AC-004)
+
+- RED: `npm --prefix server test -- src/services/callService.test.ts` → exit 1
+  ```
+  AssertionError: expected '010-1234-5678' to be '+821012345678' // Object.is equality      (AC-001)
+  AssertionError: expected undefined to match object { statusCode: 400, …(2) }             (AC-002 "12")
+  AssertionError: expected undefined to match object { statusCode: 400, …(2) }             (AC-003 "119", "+82 112")
+  AssertionError: expected '010 9999 8888' to be '+821099998888' // Object.is equality      (AC-004)
+  AssertionError: expected 'abc' to be undefined // Object.is equality                      (AC-004)
+  AssertionError: expected '' to be undefined // Object.is equality                         (AC-004)
+   Test Files  1 failed (1)
+        Tests  7 failed | 12 passed (19)
+  ```
+  (the "callback omitted" case already passed — protection case)
+- GREEN: `npm --prefix server test` → exit 0 — `Test Files  6 passed (6)` / `Tests  107 passed (107)`; typecheck exit 0
+- files: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`
+
+_<M3-M5 pending>_
 
 ## §E.3 Run-phase Audit-Ready Signal
 

@@ -397,3 +397,58 @@ describe("CallService with a hung KAT call creation (AC-011)", () => {
     },
   );
 });
+
+const INVALID_PHONE = { statusCode: 400, code: "invalid_phone", message: "전화번호 형식이 올바르지 않습니다." };
+const BLOCKED_NUMBER = { statusCode: 400, code: "blocked_number", message: "긴급·특수번호에는 전화할 수 없습니다." };
+
+/** Runs a synchronous call and returns what it threw (or undefined). */
+function thrownBy(fn: () => unknown): unknown {
+  try {
+    fn();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+describe("CallService number policy at creation (SPEC-POLICY-001 AC-001..AC-004)", () => {
+  it("create normalizes the target number", () => {
+    const { calls, store } = setup();
+    const task = calls.create({ ...INPUT, phoneNumber: "010-1234-5678" });
+    expect(task.phoneNumber).toBe("+821012345678");
+    expect(store.get(task.id)?.phoneNumber).toBe("+821012345678");
+  });
+
+  it("create rejects an invalid number without side effects", async () => {
+    const { calls, events, brain } = setup();
+    const createPlan = vi.spyOn(brain, "createPlan");
+    expect(thrownBy(() => calls.create({ ...INPUT, phoneNumber: "12" }))).toMatchObject(INVALID_PHONE);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.list()).toEqual([]);
+    expect(events).toHaveLength(0);
+    expect(createPlan).not.toHaveBeenCalled();
+  });
+
+  it.each(["119", "+82 112"])("create blocks emergency and special numbers: %s", async (phoneNumber) => {
+    const { calls, events, brain } = setup();
+    const createPlan = vi.spyOn(brain, "createPlan");
+    expect(thrownBy(() => calls.create({ ...INPUT, phoneNumber }))).toMatchObject(BLOCKED_NUMBER);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.list()).toEqual([]);
+    expect(events).toHaveLength(0);
+    expect(createPlan).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["010 9999 8888", "+821099998888"],
+    ["abc", undefined],
+    ["", undefined],
+    [undefined, undefined],
+  ])("create normalizes or drops the callback number: %s", (callbackNumber, expected) => {
+    const { calls, store } = setup();
+    const input = callbackNumber === undefined ? { ...INPUT } : { ...INPUT, callbackNumber };
+    const task = calls.create(input);
+    expect(task.callbackNumber).toBe(expected);
+    expect(store.get(task.id)?.callbackNumber).toBe(expected);
+  });
+});
