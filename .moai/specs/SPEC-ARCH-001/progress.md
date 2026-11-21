@@ -128,11 +128,79 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - M4 done (commit: see git log `feat(SPEC-ARCH-001): M4`)
 - M5 done (commit: see git log `refactor(SPEC-ARCH-001): M5`)
 - M6 done (commit: see git log `test(SPEC-ARCH-001): M6`)
-- next: evidence-only commit (AC matrix + §E.3)
+- run complete; this section and §E.3 are the evidence-only commit after M6.
+
+### Commits
+
+| Milestone | SHA | Subject |
+|-----------|-----|---------|
+| M1 | d639504 | feat(SPEC-ARCH-001): M1 provider-declared route contract |
+| M2 | 6616576 | feat(SPEC-ARCH-001): M2 inject agent instructions through the call session |
+| M3 | d5231e3 | feat(SPEC-ARCH-001): M3 test the realtime bridge and validate its inputs |
+| M4 | 0309075 | feat(SPEC-ARCH-001): M4 validate KAT API responses, webhooks and start frames |
+| M5 | 01ef45e | refactor(SPEC-ARCH-001): M5 move scenario templates to domain and widen provider ids |
+| M6 | 4e68152 | test(SPEC-ARCH-001): M6 cover /v1/stream and the LLM plan path |
+
+### AC matrix
+
+All "final" observations come from the final regression batch at 4e68152 (`final-*.txt`); RED/protection observations are the per-milestone runs above.
+
+| AC | Status | Verification | Observed | RED / protection |
+|----|--------|--------------|----------|------------------|
+| AC-001 | PASS | architecture.test "http layer does not know concrete providers"; `grep -cE 'providers/kat\|KatCallProvider\|"/kat/"\|=== "kat"' src/http/app.ts` | test passes; grep `0` | RED: grep `4`; test `expected [ …(4) ] to deeply equal []` (M1) |
+| AC-002 | PASS | app.test "registers provider-declared routes with raw bodies" | passes (raw `{"a": 1,  "b":2}` byte-equal, also with `?x=1`; undeclared route gets no raw body; socket route attached) | RED: `expected 404 to be 202` (M1) |
+| AC-003 | PASS | app.test "registers no provider routes in simulation mode" | passes | protection: passed before M1 change |
+| AC-004 | PASS | app.test "keeps the KAT webhook contract" | passes: 401 `{"error":"invalid_signature"}`, 204 without API token, 204 with query string | protection: passed on old `kat` wiring before M1 |
+| AC-005 | PASS | app.test "serves /v1/config values for simulation and KAT deployments" + "serves /v1/config from wiring-provided provider info" | both pass | values: protection (pre-M1 pass); wiring: RED `expected { provider: 'kat', …(2) } to deeply equal …` (M1) |
+| AC-006 | PASS | architecture.test "providers do not import brain" + "the realtime bridge does not import brain"; `grep -rn 'from "\.\./brain\|from "\.\./\.\./brain' src/providers` | tests pass; grep no output (exit 1); `src/brain/scenario.ts` absent | RED: bridge test (M2), full rule `simulatedProvider.ts:2` (M5) |
+| AC-007 | PASS | callService.test "session exposes the agent instructions for its task"; realtimeBridge.test "(a) sends session-provided instructions…" | both pass; bridge sends the session's unique string, `agentInstructions` called once | RED: `TypeError: session.agentInstructions is not a function` (M2) |
+| AC-008 | PASS | katProvider.test "parses KAT API responses safely" (1)~(8) | all 8 pass | (1)~(6) protection (pre-M4 pass); (7)(8) null bodies RED `TypeError` (M4) |
+| AC-009 | PASS | katProvider.test "ignores malformed status webhooks"; app.test "answers signed but malformed status webhooks with 204" | 0 session calls, 4 warns `Ignored malformed KAT status webhook` with `{}` payload; route 204 | RED: `expected [] to deeply equal [ …(4) ]` (M4); route-204 test has no pre-change run (gap) |
+| AC-010 | PASS | katProvider.test "ignores malformed media frames and keeps waiting for start" + "still terminates a signed stream with no active session before looking at a malformed start frame" + LIFECYCLE AC-014 (a)~(d) unchanged | all pass | RED: malformed start was bridged (`markConnected` called) (M4); orphan exception protection passed pre-change |
+| AC-011 | PASS | realtimeBridge.test "validates handled realtime events and ignores the rest" + "ignores malformed KAT media frames without logging" | both pass | RED: `payload: undefined` media frame sent; `"audio": 42` forwarded (M3) |
+| AC-012 | PASS | architecture.test "no any for external data"; `grep -cE 'Record<string, any>\|: any\b\|as any\b' …` | test passes; `realtimeBridge.ts:0`, `katProvider.ts:0` | RED: baseline `5`, `2`; test `expected [ …(5) ]` (M4) |
+| AC-013 | PASS | `grep -n 'provider: "simulated" \| "kat"\|name: "simulated" \| "kat"' src/domain/types.ts src/providers/types.ts`; typecheck; callService.test "accepts any provider id" | grep no output (exit 1); typecheck exit 0; test passes | RED: grep 2 lines (baseline); test is protection (passed pre-change, as acceptance.md says) |
+| AC-014 | PASS | `flutter --suppress-analytics test test/unit_test.dart` ("treats unknown providers as real calls") | `+11: All tests passed!` | protection: passed with no app code change |
+| AC-015 | PASS | realtimeBridge.test (a)~(i), 9 tests | all pass | protection: passed right after the injection point, before zod (M3) |
+| AC-016 | PASS | katProvider.test AC-016 (a)~(f) (e = 5 statuses) | all pass | protection: passed before M4 change |
+| AC-017 | PASS | katProvider.test AC-017 (a)~(d) | all pass | protection: passed before M4 change |
+| AC-018 | PASS | openaiBrain.test "validates LLM plans against schema bounds" (1)~(4) | all pass; warn `{ op: "plan", reason: "schema_mismatch" }` | protection (M6, no production change) |
+| AC-019 | PASS | app.test "streams snapshots and task updates" + "rejects stream connections without a token" | both pass; 401 → `Unexpected server response: 401` | protection (M6, no production change) |
+| AC-020 | PASS | `npm --prefix server test`; typecheck; `flutter test`; `flutter analyze`; `git diff --stat <run_start_sha>..HEAD -- server/src/events/` | `Tests 182 passed (182)`; exit 0; `+17: All tests passed!`; `1 issue found` (baseline); events diff empty | removed lines in pre-existing test files: only 2 import lines (widened) and the `FakeProvider` constructor type (`"simulated" \| "kat"` → `ProviderId`); no test body changed |
+
+| Invariant | Status | Observed |
+|-----------|--------|----------|
+| No network in tests (KAT/OpenAI) | PASS | all KAT calls go through injected `fetch`; bridge uses injected socket factory; openaiBrain uses `vi.stubGlobal("fetch")` |
+| No new runtime dependency | PASS | `server/package.json` unchanged in `git diff --stat b5bde14..HEAD` |
+| Providers do not depend on Fastify | PASS | `grep -rn 'fastify' src/providers` → no output |
+| Handshake-rejected log keeps the 400-char body (spec.md §4 exception) | PASS | AC-015 (h) asserts `body: "x".repeat(400)` for both attempts |
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+```yaml
+run_complete_at: 2026-11-21
+run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
+run_commit_sha: 4e68152b9815fe9764e144be4329346487cf2e12   # last implementation commit (M6); this evidence commit follows it
+run_status: audit-ready
+ac_pass_count: 20
+ac_fail_count: 0
+preserve_list_post_run_count: 0   # no PRESERVE list in plan.md; prior-SPEC behavior pinned by the unchanged pre-existing tests
+l44_pre_commit_fetch: not-run     # worktree branch, no push requested
+l44_post_push_fetch: not-run      # no push requested
+new_warnings_or_lints_introduced: 0   # tsc exit 0; flutter analyze 1 info = baseline
+cross_platform_build:
+  server_typecheck: pass
+  server_tests: "10 files / 182 tests pass"
+  app_tests: "17 pass"
+  app_analyze: "1 info (baseline, test/support/fakes.dart:53)"
+total_run_phase_files: 20   # plus spec.md and progress.md
+m1_to_mN_commit_strategy: one commit per milestone (M1-M6) on the worktree branch, then one evidence-only commit
+plan_deviations:
+  - "container.ts / index.ts wiring done in M1 instead of M6 (typecheck would break otherwise)"
+  - "AC-006 full providers/** rule added in M5; M2 asserted the bridge file only, to keep every commit green"
+  - "AC-008 gained cases (7)(8) (null bodies) as the concrete REQ-009 (b) RED"
+open_decisions: "OD-1, OD-2 implemented as DEFAULT (pending owner review)"
+```
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
