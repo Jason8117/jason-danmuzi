@@ -3,7 +3,7 @@
 ## §E.1 Plan-phase Audit-Ready Signal
 
 - plan_status: revised after plan-audit iteration 1 (FAIL 0.82; D5-D8 fixed, D9-D12 applied, OD-7 added) — re-audit pending
-- spec_version: 0.2.0
+- spec_version: 0.3.0 (plan-audit iteration 2: PASS 0.89; N2, N3, N4 fixed; A2, A3, A8 applied)
 - execution: Route B (Tier L PR route); single serial writer (callService.ts touched by M1 and M4); design-phase skip decided by the orchestrator at Kickoff
 - plan_complete_at: 2026-11-21
 - base_sha: c664596

@@ -54,10 +54,10 @@
 | `server/src/brain/heuristicBrain.ts` | 수정 | 결정적 해석 |
 | `server/src/brain/heuristicBrain.test.ts` | 수정 | AC-010 |
 | `server/src/brain/openaiBrain.ts` | 수정 | LLM 해석·대체 |
-| `server/src/brain/openaiBrain.test.ts` | 수정 | AC-007 (a) 요청 본문, AC-008 (brain 단: 검증된 원값 반환), AC-009 |
+| `server/src/brain/openaiBrain.test.ts` | 수정 | AC-007 (a) brain 단(받은 글을 그대로 보냄), AC-008 (brain 단: 검증된 원값 반환), AC-009 |
 | `server/src/brain/prompts.ts` | 수정 | 의뢰 해석 프롬프트 |
 | `server/src/services/callService.ts` | 수정 | `draftIntake`, 자동 시작, `autoStartBlocked` 지우기 |
-| `server/src/services/callService.test.ts` | 수정 | AC-003, AC-005, AC-006, AC-007 (b)~(e), AC-008 (서비스 후처리), AC-011, AC-012, AC-014~AC-016 |
+| `server/src/services/callService.test.ts` | 수정 | AC-003, AC-005, AC-006, AC-007 (a) 요청 본문·(b)~(e), AC-008 (서비스 후처리), AC-011, AC-012, AC-014~AC-016 |
 | `server/src/http/schemas.ts` | 수정 | `IntakeBody`, `autoStart` |
 | `server/src/http/app.ts` | 수정 | `POST /v1/intake` |
 | `server/src/http/app.test.ts` | 수정 | AC-001, AC-002, AC-013, AC-014 (통합) — 새 테스트만 추가 |
@@ -96,11 +96,11 @@ RED: AC-004(`intake.test.ts`, `design.md` §2 표 18행), 정규화 벡터(§3.1
 
 ### M3 — brain 의뢰 해석 (Priority High)
 
-RED: AC-010(`heuristicBrain.test.ts`), AC-008 brain 단·AC-009·AC-007 (a) 요청 본문(`openaiBrain.test.ts`).
+RED: AC-010(`heuristicBrain.test.ts`), AC-008 brain 단·AC-009·AC-007 (a) brain 단(`openaiBrain.test.ts`). AC-007 (a)의 "요청 본문에 원문 번호 없음"은 가리기가 서비스에 있으므로 M4의 `callService.test.ts`에서 본다.
 
 ### M4 — 서비스와 엔드포인트 (Priority High)
 
-RED: AC-001, AC-002(`app.test.ts`), AC-003, AC-005, AC-006, AC-007 (b)~(e), AC-008 서비스 후처리, AC-011, AC-012(`callService.test.ts`).
+RED: AC-001, AC-002(`app.test.ts`), AC-003, AC-005, AC-006, AC-007 (a) 요청 본문·(b)~(e), AC-008 서비스 후처리, AC-011, AC-012(`callService.test.ts`).
 
 ### M5 — 앱 모델과 계획 카드 (Priority Medium)
 

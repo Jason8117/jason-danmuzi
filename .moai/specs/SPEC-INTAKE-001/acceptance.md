@@ -73,7 +73,7 @@ flutter --suppress-analytics analyze
 - **Given** 요청 본문을 기록하는 가짜 `fetch`가 `{"targetName":"라 파스타","goal":"010-9999-8888로 예약","conditions":[],"context":"번호 02-555-5555"}`를 돌려주는 `OpenAiBrain`, 빈 저장소
 - **When** `"라 파스타에 010-1234-5678로 전화해서 예약"`으로 의뢰 해석을 하면
 - **Then** (a) `fetch`가 받은 요청 본문 문자열에 `010-1234-5678`, `01012345678`이 없고 `[전화번호]`가 있다. 가리기 벡터(`design.md` §2 가리기 표 6행: 국내 후보, `1588-1234`, `+1 415 555 0100`은 `[전화번호]`로, `2024. 12. 25`·`금요일 7시 2명`·`119`는 그대로)를 도메인 함수 단위로도 확인한다. (b) `draft.phoneNumber`는 `+821012345678`(글의 번호), `phoneSource "text"`. (c) 응답 JSON을 문자열로 바꿨을 때 `010-9999-8888`, `01099998888`, `+821099998888`, `02-555-5555`, `+82255555555`가 하나도 없고, `draft.goal`은 `"로 예약"`, `draft.context`는 `"번호"`다(번호 모양을 지우고 공백 정리). (d) 같은 가짜 응답에서 원문에 번호가 없는 `"라 파스타에 전화해서 예약"`이면 `phoneNumber: null`, `missing`에 `"phoneNumber"` 포함, (c)와 같은 문자열이 응답에 없음. (e) 가짜 `fetch`가 `content`로 `{"targetName":"1588-9999 고객센터","goal":"+1 202 555 0199로 문의","conditions":["02 777 7777도 가능"],"context":null}`를 줄 때 원문 `"고객센터에 전화해서 문의"` → 응답에 `1588-9999`, `+1 202 555 0199`, `02 777 7777`이 없고, 번호를 지운 뒤 포함 검사를 하므로 `targetName "고객센터"`, `goal "로 문의"`, `conditions ["도 가능"]`
-- 테스트: `server/src/domain/intake.test.ts` — "masks number-shaped text before it reaches the LLM" (가리기 벡터); `server/src/brain/openaiBrain.test.ts` — "never sends phone numbers to the LLM" ((a) 요청 본문); `callService.test.ts` — "uses only numbers from the text or history" ((b)~(e), 서비스 + 가짜 `fetch`의 `OpenAiBrain`)
+- 테스트: `server/src/domain/intake.test.ts` — "masks number-shaped text before it reaches the LLM" (가리기 벡터); `callService.test.ts` — "masks numbers before calling the LLM" ((a) 요청 본문: 가짜 `fetch`의 `OpenAiBrain`을 주입한 `CallService`에 원문을 넣고 `fetch`가 받은 본문을 검사), "uses only numbers from the text or history" ((b)~(e), 같은 준비); `server/src/brain/openaiBrain.test.ts` — "sends the text it receives unchanged" (brain 단: `draftIntake`에 넣은 글이 요청 본문의 사용자 메시지에 그대로 들어감 — brain은 가리지 않음을 고정)
 - RED: 해석 경로가 없다.
 
 ### AC-008 — LLM 해석 (REQ-008)
@@ -169,7 +169,8 @@ flutter --suppress-analytics analyze
 
 ### AC-018 — 홈 제안 (REQ-018)
 
-- **Given** 작업 6개: `라 파스타`(+8221234567, 연결됨, 11-01), `라파스타`(같은 번호, 연결됨, 11-10), `미용실`(+82311112222, 연결됨, 11-05), `세탁소`(+82311113333, 연결 안 됨, 11-12), `치과`(+82311114444, 연결됨, 11-03), `빵집`(+82311115555, 연결됨, 11-02)
+- **Given** 끝난(`completed`) 작업 6개: `라 파스타`(+8221234567, 연결됨, 11-01), `라파스타`(같은 번호, 연결됨, 11-10), `미용실`(+82311112222, 연결됨, 11-05), `세탁소`(+82311113333, 연결 안 됨, 11-12), `치과`(+82311114444, 연결됨, 11-03), `빵집`(+82311115555, 연결됨, 11-02). 그리고 진행 중(`in_progress`, 연결됨, 11-20) 작업 `피자집`(+82311116666) 1개
+- 추가 단언: `피자집`은 "최근 통화한 곳"에 없다(진행 중 목록에만 한 번, `find.text('피자집')` `findsOneWidget`). 첫 제안 항목은 `Text` 하나이며 그 글이 정확히 `라파스타 · 02-123-4567 · 2번 통화`다
 - **When** 홈을 렌더링하고, 첫 제안을 누르고, 이어서 "식당 예약" 칩을 누르면
 - **Then** "최근 통화한 곳"에 정확히 3개가 위에서부터 `라파스타`(2번), `미용실`(1번), `치과`(1번) 순서로 보이고 `세탁소`는 없다. 첫 제안을 누르면 입력칸 글이 `라파스타에 `이고 커서 위치가 글 끝이다. "식당 예약" 칩을 누르면 입력칸 글이 템플릿 목적 문장(`call_templates.dart:17`)과 같다. 기존 테스트 "shows the empty state with quick-start templates"는 수정 없이 통과한다
 - (3) 작업 0개인 홈: "식당 예약" 칩이 정확히 하나(`findsOneWidget`)이고, 누르면 입력칸 글이 템플릿 목적 문장이 되며 기존 양식 화면("통화 계획 만들기")은 열리지 않는다. 빈 상태 안내 "귀찮은 전화, 대신 걸어드릴게요"는 보인다
@@ -224,6 +225,7 @@ flutter --suppress-analytics analyze
 - 서버 `npm --prefix server test` 전체 통과(기존 테스트 무수정), `npm --prefix server run typecheck` 종료 코드 0, `architecture.test.ts` 무수정 통과.
 - 앱 `flutter test` 전체 통과. `git diff <run_start_sha> -- app/test/approval_flow_test.dart server/src/http/app.test.ts`에서 기존 테스트 본문은 바뀌지 않고 새 테스트만 추가된다. `flutter analyze`가 run-phase 기준선보다 늘지 않는다.
 - 기존 양식 경로: 위젯 테스트 — `/calls/new`에서 만든 요청의 `toJson()`에 `autoStart` 키가 없다(`intake_flow_test.dart` — "the manual form never auto-starts").
+- 이름을 들어 확인하는 기존 앱 테스트(수정 없이 통과해야 함): `approval_flow_test.dart` "shows the empty state with quick-start templates"(빈 상태 칩 제거, REQ-018 (b)), "user approves a mid-call request from the live call screen"(진행 중 작업은 제안에 들지 않고 제안 항목은 한 덩어리 글, REQ-018 (a)), `outcome_card_test.dart`, `calls_controller_test.dart`, `unit_test.dart`. 규칙: 이 SPEC은 기존 테스트 파일에 새 테스트만 추가하고 기존 테스트 본문을 바꾸지 않는다.
 
 ## 엣지 케이스
 
@@ -232,6 +234,9 @@ flutter --suppress-analytics analyze
 - 계획 카드를 연 채 서버가 재시작 → 작업이 아직 없으므로 영향 없음. [이대로 시작]이 503이면 스낵바.
 
 ## 잔여 위험
+
+- 가리기 집합은 번호가 아닌 숫자도 가릴 수 있다(과잉 가리기). 예: `15000000원`은 대표번호 모양(`1[5-8]\d{2}` + 4자리)에 걸려 LLM에 `[전화번호]원`으로 가고, 결정적 해석의 목적에서도 금액이 빠진다. `0`으로 시작하는 주문번호(`0123-4567-8901`)는 국내 후보 모양이라 가려질 뿐 아니라 `checkTargetNumber`가 `ok`를 내면 번호로 제안될 수 있다. 두 경우 모두 계획 카드에 보이므로 사용자가 고칠 수 있다.
+- 기기에서 처음 거는 통화는 계획 카드 확인([이대로 시작])과 첫 통화 전 신뢰 안내 확인(SPEC-FOLLOWUP-001 REQ-014)을 둘 다 거친다. 소유자 결정 3("한 번 확인 후 시작")에서 첫 통화에 한해 한 번 더 누르는 차이이며, 소유자에게 알릴 항목으로 sync-phase 문서에 남긴다.
 
 - 의뢰 해석 LLM 제한(15 s) + 서버 처리 + 네트워크 왕복이 앱 제한(20 s)에 가까우면 여전히 앱이 먼저 끝날 수 있다. 그 경우 앱은 네트워크 오류 스낵바를 보여 주고, 서버는 결과를 버린다(부작용 없음, REQ-003).
 - 가리기 집합(국내 후보, `+` 국제 표기, 15xx·16xx·18xx 대표번호) 밖의 드문 번호 표기(예: 지역번호 없는 7~8자리 `123-4567`)는 LLM에 그대로 갈 수 있다. 날짜·시각·인원을 LLM이 받을 수 있게 하려고 좁게 정했다(REQ-007 (a)). LLM 응답에서 같은 집합 밖 숫자는 지우지 않는다.

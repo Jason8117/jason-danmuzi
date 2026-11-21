@@ -1,7 +1,7 @@
 ---
 id: SPEC-INTAKE-001
 title: "한 줄 부탁을 계획 카드로 — 번호 찾기, 한 번 확인 후 바로 통화"
-version: "0.2.0"
+version: "0.3.0"
 status: draft
 created: 2026-11-21
 updated: 2026-11-21
@@ -24,6 +24,7 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 |------|------|------|------|
 | 0.1.0 | 2026-11-21 | jason (manager-spec) | 최초 작성 (draft). 에픽 EPIC-ASSISTANT-UX의 두 번째 SPEC |
 | 0.2.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 1 반영: D5 템플릿 칩은 제안 줄 한 곳에서만, D6 LLM에 보내기 전 가리는 번호 모양을 넓히고 범위를 정직하게 적음, D7 LLM 응답 문자열의 번호 모양 제거, D8 후처리는 서비스 한 계층으로, D9 자동 시작 오류 근거 정정, D10 "너무 길어요" 문구를 REQ-021에, D11 의뢰 해석 LLM 제한 시간 15 s, D12 실행 경로·직렬 작업 기록, 자동 시작 첫 인사 템플릿 고정(OD-7). REQ/AC 번호·개수 불변 |
+| 0.3.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 2 반영: N2 "최근 통화한 곳"은 끝난 작업만, 항목은 한 덩어리 글로 그리고 기존 테스트 이름을 AC-024에 명시, N3 AC-007 (a) 요청 본문 검사를 서비스 테스트로 옮김, N4 REQ-014 "첫 인사 외의 계획 수정값은 없다", A2·A8 잔여 위험 추가, A3 국제 표기 정의에 "숫자로 끝나는". REQ/AC 번호·개수 불변 |
 
 ## 1. 배경과 목적
 
@@ -70,14 +71,14 @@ related_specs: [SPEC-POLICY-001, SPEC-OUTCOME-001, SPEC-LIFECYCLE-001, SPEC-STOR
 ### 3.4 한 번 확인 후 자동 시작 (서버)
 
 - **REQ-013** [Ubiquitous] `POST /v1/tasks`는 선택 필드 `autoStart`(불리언, 기본 `false`)를 받아야 하며(**shall**), 참이면 작업에 `autoStart: true`를 저장한다. 그 밖의 작업 생성 동작(번호 정책, 201 응답, 오류 코드)은 바뀌지 않는다(OD-1 DEFAULT: 자동 시작은 서버가 한다).
-- **REQ-014** [Event-driven] **When** `autoStart: true`인 작업의 계획이 준비되어 `awaiting_approval`이 되면, 서비스는 별도 요청 없이 계획 승인과 같은 검사와 순서(503 `shutting_down` → 409 상태 → 400 번호 재검사 → 429 한도)로 통화를 시작해야 한다(**shall**). 계획 수정값은 없다. 성공하면 수동 승인과 똑같이 `dialing`부터 진행한다. 자동 시작 통화의 첫 인사는 LLM이 만든 값 대신 AI임을 밝히는 템플릿 첫 인사(`brain/prompts.ts`의 `openingLine(task)`)로 계획 수정값을 넣어 고정한다(OD-7 DEFAULT) — 사용자가 계획 본문을 보지 않고 시작하므로, AI 고지 문장을 모델 출력에 맡기지 않기 위해서다.
+- **REQ-014** [Event-driven] **When** `autoStart: true`인 작업의 계획이 준비되어 `awaiting_approval`이 되면, 서비스는 별도 요청 없이 계획 승인과 같은 검사와 순서(503 `shutting_down` → 409 상태 → 400 번호 재검사 → 429 한도)로 통화를 시작해야 한다(**shall**). 첫 인사 외의 계획 수정값은 없다. 성공하면 수동 승인과 똑같이 `dialing`부터 진행한다. 자동 시작 통화의 첫 인사는 LLM이 만든 값 대신 AI임을 밝히는 템플릿 첫 인사(`brain/prompts.ts`의 `openingLine(task)`)로 계획 수정값을 넣어 고정한다(OD-7 DEFAULT) — 사용자가 계획 본문을 보지 않고 시작하므로, AI 고지 문장을 모델 출력에 맡기지 않기 위해서다.
 - **REQ-015** [Event-driven] **When** 자동 시작의 검사 하나라도 실패하면, 서비스는 작업을 `awaiting_approval`로 두고 `autoStartBlocked: { code, message }`(실패한 `ServiceError`의 코드와 문구)를 저장·발행해야 하며(**shall**), 다시 시도하지 않는다. 그 뒤 사용자의 수동 계획 승인이 성공하면 `autoStartBlocked`는 지워진다.
 - **REQ-016** [Unwanted] 서비스는 같은 프로세스에서 그 작업의 계획이 막 끝난 순간 외에는 자동 시작해서는 안 된다(**shall not**): 기동 시 불러온 작업, 계획 중 취소된 작업, 계획에 실패한 작업은 자동 시작하지 않으며, 재기동 복구(`recoverInterruptedTasks`)는 어떤 작업도 발신하지 않는다.
 
 ### 3.5 홈 화면 (앱)
 
 - **REQ-017** [Ubiquitous] 홈 화면은 맨 위에 입력칸 하나("무엇을 도와드릴까요?")와 보내기 버튼을 보여야 한다(**shall**). 버튼은 공백을 지운 글이 2자 이상일 때만 눌리고, 누르면 `POST /v1/intake`를 부르는 동안 진행 표시와 함께 비활성화된 뒤 계획 카드 화면으로 간다. 내 정보(이름)가 없으면 먼저 설정 화면으로 보내고 입력한 글은 지우지 않는다. 기존 "전화 맡기기" 떠 있는 버튼은 없애고, "직접 입력하기" 링크로 기존 양식(`/calls/new`)을 연다.
-- **REQ-018** [Ubiquitous] 홈 화면은 입력칸 아래에 제안을 보여야 한다(**shall**): (a) "최근 통화한 곳" — 상대가 받은 적 있는 작업(`connectedAt` 있음)을 정규화한 이름과 번호로 묶어, 가장 최근 통화 순으로 최대 3개, 각 항목에 표시 이름(가장 최근 작업의 이름)·번호·통화 횟수(OD-5 DEFAULT). 누르면 입력칸이 `<이름>에 `로 바뀌고 커서가 끝에 간다. (b) "이런 부탁도 할 수 있어요" — 기존 템플릿 칩, 누르면 입력칸이 템플릿 목적 문장으로 바뀐다(더 이상 `/calls/new`로 가지 않음). 템플릿 칩은 화면 전체에서 이 줄 한 곳에만 그려지며 작업 수와 관계없이 항상 보인다. 작업이 없을 때의 빈 상태는 기존 안내 문구(`MessageView`의 제목·설명)만 남기고 그 아래의 기존 칩 줄(`home_screen.dart:196-208`)은 없앤다. 그래서 기존 테스트 "shows the empty state with quick-start templates"(`approval_flow_test.dart:34-39`, `find.text('식당 예약')` `findsOneWidget`)는 수정 없이 통과한다. 진행 중·지난 통화 목록은 그대로다.
+- **REQ-018** [Ubiquitous] 홈 화면은 입력칸 아래에 제안을 보여야 한다(**shall**): (a) "최근 통화한 곳" — **끝난 작업**(`completed`/`failed`/`canceled`) 중 상대가 받은 적 있는 작업(`connectedAt` 있음)만 정규화한 이름과 번호로 묶어, 가장 최근 통화 순으로 최대 3개(OD-5 DEFAULT). 진행 중이거나 계획 단계인 작업은 넣지 않는다(목록의 "진행 중" 줄과 같은 이름이 겹치지 않게). 각 항목은 표시 이름(가장 최근 작업의 이름)·번호·통화 횟수를 `<이름> · <번호> · N번 통화` 한 덩어리 글(`Text` 하나, 의미 라벨 하나)로 그린다. 그래서 기존 테스트 "user approves a mid-call request from the live call screen"(`approval_flow_test.dart:41-47`, 진행 중 작업 `라 파스타`로 `find.text('라 파스타')` `findsOneWidget` 단언 뒤 탭)은 수정 없이 통과한다. 누르면 입력칸이 `<이름>에 `로 바뀌고 커서가 끝에 간다. (b) "이런 부탁도 할 수 있어요" — 기존 템플릿 칩, 누르면 입력칸이 템플릿 목적 문장으로 바뀐다(더 이상 `/calls/new`로 가지 않음). 템플릿 칩은 화면 전체에서 이 줄 한 곳에만 그려지며 작업 수와 관계없이 항상 보인다. 작업이 없을 때의 빈 상태는 기존 안내 문구(`MessageView`의 제목·설명)만 남기고 그 아래의 기존 칩 줄(`home_screen.dart:196-208`)은 없앤다. 그래서 기존 테스트 "shows the empty state with quick-start templates"(`approval_flow_test.dart:34-39`, `find.text('식당 예약')` `findsOneWidget`)는 수정 없이 통과한다. 진행 중·지난 통화 목록은 그대로다.
 
 ### 3.6 계획 카드 (앱)
 
