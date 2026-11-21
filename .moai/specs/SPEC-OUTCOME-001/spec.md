@@ -2,7 +2,7 @@
 id: SPEC-OUTCOME-001
 title: "LLM 미사용·실패 시 통화 결과를 정직하게 보고"
 version: "0.3.0"
-status: in-progress
+status: implemented
 created: 2026-11-20
 updated: 2026-11-21
 author: jason
