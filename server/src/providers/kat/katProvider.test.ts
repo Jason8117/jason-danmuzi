@@ -474,6 +474,26 @@ describe("KatCallProvider status webhooks (SPEC-ARCH-001 AC-016)", () => {
   });
 });
 
+// Audit finding F3: the start frame and the create-call response already accept a numeric call id.
+describe("KatCallProvider status webhooks with a numeric callId (SPEC-ARCH-001 audit F3)", () => {
+  it("a numeric callId with metadata.taskId still reaches the call", async () => {
+    const { kat, session, warns } = await activeCall();
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.ringing", callId: 12345, metadata: { taskId: "t-1" } } });
+    expect(session.markRinging).toHaveBeenCalledTimes(1);
+    expect(warns).toEqual([]);
+  });
+
+  it("a numeric callId alone is matched to the call created with that id", async () => {
+    const { log, warns } = recordingLog();
+    const kat = new KatCallProvider(katOptions(fakeFetch(() => json({ result: { callId: 12345 } })).fn), log);
+    const { session } = fakeSession("t-1");
+    await kat.start(session);
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.ringing", callId: 12345 } });
+    expect(session.markRinging).toHaveBeenCalledTimes(1);
+    expect(warns).toEqual([]);
+  });
+});
+
 describe("KatCallProvider media streams (SPEC-ARCH-001 AC-017)", () => {
   it("(a) an invalid upgrade signature closes the socket without bridging", async () => {
     const { kat, bridge } = await activeCall();

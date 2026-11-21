@@ -33,7 +33,8 @@ export const StatusWebhook = z.object({
   data: z
     .object({
       type: z.string().optional(),
-      callId: z.string().optional(),
+      // Same rule as the start frame: a numeric call id is kept as a string (audit F3).
+      callId: CallIdValue.optional(),
       status: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     })

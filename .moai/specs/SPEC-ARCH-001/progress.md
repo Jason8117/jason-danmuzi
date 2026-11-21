@@ -218,3 +218,12 @@ frontmatter_status_transitions:
 changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
 mx_scan: skipped   # --skip-mx semantics
 ```
+
+## Audit-fix addendum
+
+Source: independent sync audit `FIVE-SPECS-audit-1` finding **F3** (Medium). Fix cycle base `534a53e` (run_start_sha `534a53edfdf9efaecb6c142997d20ea6fd563319`); commit: `fix(SPEC-ARCH-001): ...` on the fix worktree branch (resolve via `git log --grep "fix(SPEC-ARCH-001)"`). Evidence: `.moai/state/verify/fix-audit-1/` (gitignored, local).
+
+- Change: `StatusWebhook.data.callId` uses the same `CallIdValue` (string or number, kept as a string) as the start frame and the create-call response. A numeric `callId` no longer makes the whole webhook "malformed"; it is also matched through `byCallId` now (the pre-ARCH code only reached the call via `metadata.taskId`).
+- RED (`f3-red.log`): `AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times` (x2) / `Tests 2 failed | 47 passed (49)`.
+- GREEN (`f3-green.log`): `Test Files 11 passed (11)` / `Tests 213 passed (213)`; "ignores malformed status webhooks" (AC-009/AC-010) unchanged and green. Probe `green-probe-webhook.out`: `numeric callId + metadata.taskId: markRinging=1 warns=[]` (base: `markRinging=0 warns=["Ignored malformed KAT status webhook"]`).
+- Not changed (outside the owner decision): `metadata` as a JSON string and a numeric `status` are still rejected as malformed (REQ-010 behavior); the audit's per-field `.catch(undefined)` suggestion was not applied.
