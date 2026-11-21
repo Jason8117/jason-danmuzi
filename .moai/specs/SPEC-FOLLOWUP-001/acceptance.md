@@ -89,7 +89,7 @@ flutter --suppress-analytics analyze
 
 | # | 상태 | 결과 | 기대 버튼 |
 |---|------|------|-----------|
-| 1 | completed | `success`, `source llm`, appointment 있음 | 다시 걸기, 요약 복사, 공유, 캘린더에 추가 |
+| 1 | completed | `success`, `source llm`, appointment 있음 | 다시 걸기, 요약 복사, 공유, 캘린더 파일 보내기 |
 | 2 | completed | `partial`, `source llm`, appointment 있음 | 네 개 모두 |
 | 3 | completed | `success`, `source llm`, appointment 없음 | 캘린더 없음 |
 | 4 | completed | `unverified`, `source heuristic`, appointment 있음(서버 규칙을 어긴 가정) | 캘린더 없음 |
@@ -175,7 +175,7 @@ flutter --suppress-analytics analyze
 ### AC-012 — 캘린더 공유 (REQ-012)
 
 - **Given** 결과 화면(#1), 가짜 후속 행동 서비스
-- **When** (1) "캘린더에 추가"를 누르고, (2) 파일 공유가 예외를 던지게 한 뒤 다시 누르면
+- **When** (1) "캘린더 파일 보내기"를 누르고, (2) 파일 공유가 예외를 던지게 한 뒤 다시 누르면
 - **Then** (1) `sharedFiles`가 한 건이고 이름 `appointment.ics`, 형식 `text/calendar`, 내용이 AC-011의 결과와 같다. (2) 스낵바 "캘린더 초안을 열 수 없어요"
 - 테스트: `follow_up_test.dart` — "shares the calendar draft as a file"
 
@@ -192,7 +192,8 @@ flutter --suppress-analytics analyze
 | (3) | `grep -c 'app.delete("/v1/tasks/:id"' server/src/http/app.ts` | `1` |
 | (4) | `grep -ci "audio" server/src/domain/types.ts` 그리고 `grep -rln "writeFile\|createWriteStream\|appendFile" server/src \| grep -v "\.test\.ts"` | `0`, 그리고 `server/src/store/taskStore.ts` 한 줄 |
 | (5) | `grep -c "Never give card numbers, passwords" server/src/brain/prompts.ts` | `1` |
-| (6) | `grep -c 'api.openai.com/v1/chat/completions' server/src/brain/openaiBrain.ts`, `grep -c 'goal: input.goal' server/src/brain/openaiBrain.ts`, `grep -c 'userComment: a.userComment' server/src/brain/openaiBrain.ts`, `grep -c 'transcript: task.transcript' server/src/brain/openaiBrain.ts` | 각각 `1` 이상(계획 입력 `openaiBrain.ts:59-68`, 요약 입력 `:72-90`; 의뢰 해석 입력은 SPEC-INTAKE-001 REQ-008) |
+| (6) | `grep -c 'api.openai.com/v1/chat/completions' server/src/brain/openaiBrain.ts`, `grep -c 'goal: input.goal' server/src/brain/openaiBrain.ts`, `grep -c 'userComment: a.userComment' server/src/brain/openaiBrain.ts`, `grep -c 'transcript: task.transcript' server/src/brain/openaiBrain.ts` | 각각 `1` 이상(계획 입력 `openaiBrain.ts:62-69`, 요약 입력 `:74-90`; 의뢰 해석 입력은 SPEC-INTAKE-001 REQ-008) |
+| (6) 내 이름·알려줘도 되는 정보·회신 번호 | `grep -c 'requesterName: input.requesterName' server/src/brain/openaiBrain.ts`, `grep -c 'shareableInfo: input.context' server/src/brain/openaiBrain.ts`, `grep -c 'Callback number: ' server/src/brain/prompts.ts`, `grep -c 'agentInstructions: () => buildAgentInstructions' server/src/services/callService.ts`, `grep -c 'session.agentInstructions()' server/src/providers/realtimeBridge.ts` | 각각 `1` 이상(계획 요청 `openaiBrain.ts:65,68`; 통화 지시문 `prompts.ts:17,27` → `callService.ts:377` → `realtimeBridge.ts:77,164`에서 Realtime `session.update`로 전송) |
 
 - 테스트: `app/test/trust_notice_test.dart`(새 파일) — "trust statements are exactly the agreed six"; 명령 표는 run-phase 증거로 `progress.md`에 원문 기록
 
@@ -212,7 +213,7 @@ flutter --suppress-analytics analyze
 
 - **Given** (1) 설정 화면, (2) `in_progress` 작업의 상세 화면, (3) `completed` 작업의 상세 화면
 - **When** 렌더링하면
-- **Then** (1) "AI 비서와 기록" 제목과 여섯 문장이 보인다. (2) "AI 비서는 AI임을 밝히도록 정해져 있어요 · 대화는 글로 기록돼요"가 보인다. (3) 그 한 줄이 없다
+- **Then** (1) "AI 비서와 기록" 제목과 여섯 문장이 보인다. (2) "AI 비서는 AI임을 밝히도록 정해져 있어요 · 대화는 글로 기록돼요"가 보인다. (3) 그 한 줄이 없다. (4) 기존 양식 화면(`/calls/new`)의 안내 문단에 "정해져 있어요"가 들어 있고, 예전 보장형 문구 "AI임을 밝혀요.", "꼭 먼저 물어봐요", "절대 말하지 않아요"가 없다
 - 테스트: `trust_notice_test.dart` — "shows trust statements in settings and during calls"
 
 ### AC-016 — 호환·회귀·의존성 (REQ-016)
@@ -232,7 +233,8 @@ flutter --suppress-analytics analyze
 
 - LLM이 대화를 잘못 이해해 틀린 일정을 낼 수 있다. 초안 문구(REQ-011)와 캘린더 앱에서의 저장 전 확인으로 막으며, 자동 검증하지 않는다.
 - `share_plus`의 파일 공유 동작은 플랫폼마다 다르다(웹은 브라우저의 공유 기능에 따름). run-phase에서 패키지 문서로 확인한다.
-- Android·iOS 기본 캘린더가 공유 시트로 `.ics`를 받는지는 확인되지 않은 가설이다. 아래 완료 정의의 기기 수동 확인으로 판정하고, 받지 못하면 OD-6에 따라 라벨을 바꾼다.
+- Android·iOS 기본 캘린더가 공유 시트로 `.ics`를 받는지는 확인되지 않은 가설이다. 그래서 기본 라벨은 하는 일을 그대로 말하는 "캘린더 파일 보내기"이며(OD-6), 아래 완료 정의의 기기 수동 확인에서 받는 것이 확인될 때만 "캘린더에 추가"로 올린다.
+- 기기에서 처음 거는 통화는 계획 카드 확인([이대로 시작])과 신뢰 안내 확인(REQ-014)을 둘 다 거친다. 소유자 결정 3("한 번 확인 후 시작")과 첫 통화에 한해 한 번 더 누르는 차이이며, 소유자에게 알릴 항목으로 sync-phase 문서에 남긴다.
 - 신뢰 안내 문구는 법률 검토 전 기본값이다(OD-3).
 - 공유 문구의 요약·알아낸 내용에 상대가 말한 번호(예: 예약 번호)가 들어 있으면 그대로 나간다. 공유는 사용자가 직접 고르는 행동이다.
 
@@ -240,4 +242,4 @@ flutter --suppress-analytics analyze
 
 - AC-001 ~ AC-016 충족, RED/GREEN 원문과 AC-013 명령 표 결과를 `progress.md` §E.2에 기록.
 - OD-1 ~ OD-6 DEFAULT 구현과 소유자 검토 대기를 sync-phase 문서에 기록. 새 의존성 `share_plus`를 `.moai/project/tech.md`에 반영할 항목으로 남김.
-- **기기 수동 확인(사람이 판정, 자동 AC 아님)**: Android 기기 1대와 iOS 기기 1대에서 결과 화면의 캘린더 행동을 눌러 (a) 공유 시트에 기본 캘린더 앱이 보이는지, (b) 고르면 일정 초안이 열리는지 확인해 결과(기기·OS 버전·예/아니오)를 `progress.md`에 적는다. 하나라도 "아니오"이면 OD-6에 따라 라벨을 "캘린더 파일 보내기"로 바꾼다. 기기를 쓸 수 없으면 이 항목을 "확인 못 함"으로 적고 라벨을 "캘린더 파일 보내기"로 둔다.
+- **기기 수동 확인(사람이 판정, 자동 AC 아님)**: Android 기기 1대와 iOS 기기 1대에서 결과 화면의 캘린더 행동을 눌러 (a) 공유 시트에 기본 캘린더 앱이 보이는지, (b) 고르면 일정 초안이 열리는지 확인해 결과(기기·OS 버전·예/아니오)를 `progress.md`에 적는다. 라벨은 기본값 "캘린더 파일 보내기"로 구현한다(OD-6). 두 기기 모두 "예"일 때만 OD-6의 올리는 변경("캘린더에 추가")을 소유자에게 제안한다. run-phase에서 기기를 쓸 수 없으면 이 항목을 "확인 못 함"으로 적고 기본 라벨을 그대로 둔다(자동 인수 기준에는 영향 없음).

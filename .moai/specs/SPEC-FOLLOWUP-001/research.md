@@ -41,7 +41,7 @@
 | (3) 대화가 글로 서버에 저장, 끝난 통화는 지울 수 있음 | `CallTask.transcript`(`domain/types.ts:91`), 저장소 `store/taskStore.ts`, 삭제 `http/app.ts:182-185`, 끝난·계획 대기 작업만 삭제(`callService.ts:300-307`), 앱 삭제 버튼(`call_detail_screen.dart:119-120`) |
 | (4) 음성은 서버에 저장하지 않음, 실통화 음성은 KAT·OpenAI를 거침 | `domain/types.ts`에 audio 필드 없음(`grep -ci audio` → 0), 서버에서 파일을 쓰는 곳은 `store/taskStore.ts`뿐(`grep -rln "writeFile\|createWriteStream\|appendFile" server/src`, 테스트 제외). 브리지는 음성 조각을 그대로 넘기기만 함(`providers/realtimeBridge.ts:191-193, 289-290`) |
 | (5) 카드번호·비밀번호를 말하지 않도록 정해져 있음(지시) | `prompts.ts:43-44` 규칙 3 |
-| (6) 부탁 내용·승인 코멘트·대화 글이 OpenAI로 전송됨(LLM이 연결된 경우) | `server/src/brain/openaiBrain.ts:59-68`(계획 요청: 요청자 이름, 상대 이름, `goal`, `shareableInfo`), `:72-90`(요약 요청: `goal`, 승인 질문·상태·`userComment`, 대화 기록), `:113`(전송 주소 `api.openai.com/v1/chat/completions`). LLM 키가 없으면 `HeuristicBrain`만 쓰므로 전송하지 않는다(`container.ts`). 의뢰 해석 글은 SPEC-INTAKE-001 REQ-007·008(번호 모양을 가린 뒤 전송) |
+| (6) 부탁 내용·내 이름·알려줘도 되는 정보·승인 코멘트·대화 글이 OpenAI로 전송됨(LLM이 연결된 경우), 실통화에서는 회신 번호도 | `server/src/brain/openaiBrain.ts:62-69`(계획 요청: 요청자 이름 `:65`, 상대 이름, `goal`, `shareableInfo` `:68`), `:74-90`(요약 요청: `goal`, 승인 질문·상태·`userComment`, 대화 기록), `:113`(전송 주소 `api.openai.com/v1/chat/completions`). 실통화 지시문: `brain/prompts.ts:17`(요청자 이름), `:27`(알려줘도 되는 정보, 회신 번호) → `services/callService.ts:377`(`agentInstructions`) → `providers/realtimeBridge.ts:77, 164`(Realtime `session.update`의 `instructions`). LLM 키가 없으면 `HeuristicBrain`만 쓰므로 전송하지 않는다(`container.ts`). 의뢰 해석 글은 SPEC-INTAKE-001 REQ-007·008(번호 모양을 가린 뒤 전송) |
 
 KAT Cloud나 OpenAI가 자기 쪽에서 음성·글을 보관하는지는 이 저장소로 알 수 없다. 그래서 (4)는 "이 앱의 서버"로 범위를 한정하고, (6)은 "전송된다"는 사실만 말한다.
 

@@ -61,12 +61,13 @@
 | `app/lib/features/calls/presentation/trust_notice.dart` | 신규 | 문구, 시트 |
 | `app/lib/core/config/app_settings.dart` | 수정 | 안내 확인 기록 |
 | `app/lib/features/settings/settings_screen.dart` | 수정 | "AI 비서와 기록" |
+| `app/lib/features/calls/presentation/new_call_screen.dart` | 수정 | 양식 화면 안내 문단(`:175-176`)을 지시 수준 문구 상수로(REQ-015, plan-audit A6) |
 | `app/test/follow_up_test.dart` | 신규 | AC-006~AC-012 |
 | `app/test/trust_notice_test.dart` | 신규 | AC-013~AC-015 |
 | `app/test/unit_test.dart` | 수정 | AC-005 |
 | `app/test/plan_card_test.dart`, `app/test/intake_flow_test.dart` | 수정 | AC-016 의도된 준비 줄 변경 |
 
-합계 21개(서버 5, 앱 16 — 앱은 신규 5·수정 11이며, 그중 테스트 5개, `pubspec.yaml`·`pubspec.lock` 2개, 제품 코드 9개). Tier 판단: 제품 코드는 서버 3·앱 9로, 새 코드는 순수 함수 하나와 작은 위젯 둘이다. 파일 수는 Tier M 안내치(5~15)를 넘지만 크기는 Tier M 범위(300~1000 LOC)로 보고 M을 유지한다. plan-auditor가 Tier L이 맞다고 보면 design.md를 더해 올린다.
+합계 22개(서버 5, 앱 17 — 앱은 신규 5·수정 12이며, 그중 테스트 5개, `pubspec.yaml`·`pubspec.lock` 2개, 제품 코드 10개). Tier 판단: 제품 코드는 서버 3·앱 10으로, 새 코드는 순수 함수 하나와 작은 위젯 둘이다. 파일 수는 Tier M 안내치(5~15)를 넘지만 크기는 Tier M 범위(300~1000 LOC)로 보고 M을 유지한다. plan-auditor가 Tier L이 맞다고 보면 design.md를 더해 올린다.
 
 ## C. 마일스톤 (우선순위 순, 하나씩 순서대로)
 
@@ -115,7 +116,7 @@ SPEC-INTAKE-001과 `call_models.dart`, `intake_models.dart`, `plan_card_screen.d
 |------|-----|
 | Tier | M (파일 수 초과 사유는 §B) |
 | 도메인 수 | 2 (server brain, app UI·모델) |
-| 변경 파일 수 | 21 (서버 수정 5, 앱 신규 5·수정 11) |
+| 변경 파일 수 | 22 (서버 수정 5, 앱 신규 5·수정 12) |
 | REQ / AC | 16 / 16 |
 | 외부 연동 | OpenAI(가짜 `fetch`), 기기 공유 시트(가짜 서비스) |
 | 새 의존성 | `share_plus` (앱, OD-1) |
