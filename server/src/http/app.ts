@@ -8,7 +8,7 @@ import { ZodError } from "zod";
 import type { AppConfig } from "../config.js";
 import { InvalidTransitionError } from "../domain/stateMachine.js";
 import type { EventBus } from "../events/eventBus.js";
-import type { KatCallProvider } from "../providers/kat/katProvider.js";
+import type { ProviderRoutes } from "../providers/types.js";
 import { type CallService, ServiceError } from "../services/callService.js";
 import { ApprovalDecisionBody, ApprovalParams, ApprovePlanBody, CreateTaskBody, TaskParams } from "./schemas.js";
 
@@ -16,7 +16,10 @@ export interface AppDeps {
   config: Pick<AppConfig, "API_TOKEN" | "CORS_ORIGINS" | "provider" | "llm">;
   calls: CallService;
   bus: EventBus;
-  kat?: KatCallProvider;
+  /** Routes the active provider declares; registered exactly as declared. */
+  providerRoutes?: ProviderRoutes;
+  /** Whether the active provider dials real phones. Decided by the wiring (container.ts); default false. */
+  realCalls?: boolean;
   logger?: boolean;
 }
 
@@ -37,8 +40,60 @@ function providedToken(request: FastifyRequest): string | undefined {
   return request.url.startsWith("/v1/stream") ? query.token : undefined;
 }
 
+/** Path without the query string, so "/hook?x=1" matches a route declared as "/hook". */
+function pathOf(url: string): string {
+  const query = url.indexOf("?");
+  return query === -1 ? url : url.slice(0, query);
+}
+
+// @MX:ANCHOR: [AUTO] The only place provider-declared routes become HTTP routes; every provider's webhooks pass through here.
+// @MX:REASON: Providers must stay framework-neutral (SPEC-ARCH-001 REQ-001/002); raw-body capture and the /v1/ auth boundary are enforced here.
+// @MX:SPEC: SPEC-ARCH-001
+function registerProviderRoutes(app: FastifyInstance, routes: ProviderRoutes): void {
+  for (const route of [...routes.http, ...routes.sockets]) {
+    if (route.path.startsWith("/v1/")) {
+      throw new Error(`Provider route ${route.path} must not live under /v1/ (the token-protected API)`);
+    }
+  }
+
+  // Signatures are computed over the exact raw body bytes, so declared routes get them captured.
+  const rawBodyPaths = new Set(routes.http.filter((route) => route.rawBody).map((route) => route.path));
+  if (rawBodyPaths.size > 0) {
+    app.addHook("preParsing", async (request, _reply, payload) => {
+      if (!rawBodyPaths.has(pathOf(request.url))) return payload;
+      const chunks: Buffer[] = [];
+      for await (const chunk of payload) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const raw = Buffer.concat(chunks);
+      (request as RequestWithRawBody).rawBody = raw.toString("utf8");
+      return Readable.from(raw);
+    });
+  }
+
+  for (const route of routes.http) {
+    app.route({
+      method: route.method,
+      url: route.path,
+      handler: async (request, reply) => {
+        const response = await route.handle({
+          headers: request.headers,
+          rawBody: route.rawBody ? ((request as RequestWithRawBody).rawBody ?? "") : undefined,
+          body: request.body,
+        });
+        reply.status(response.status);
+        return response.body === undefined ? reply.send() : reply.send(response.body);
+      },
+    });
+  }
+
+  for (const route of routes.sockets) {
+    app.get(route.path, { websocket: true }, (socket, request) => route.attach(socket, request.raw));
+  }
+}
+
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
-  const { config, calls, bus, kat } = deps;
+  const { config, calls, bus, providerRoutes } = deps;
   const app = Fastify({
     logger:
       deps.logger === false
@@ -63,18 +118,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       methods: ["GET", "POST", "DELETE"],
     });
   }
-
-  // KAT webhook signatures are computed over the exact raw body bytes.
-  app.addHook("preParsing", async (request, _reply, payload) => {
-    if (!request.url.startsWith("/kat/")) return payload;
-    const chunks: Buffer[] = [];
-    for await (const chunk of payload) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    const raw = Buffer.concat(chunks);
-    (request as RequestWithRawBody).rawBody = raw.toString("utf8");
-    return Readable.from(raw);
-  });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {
@@ -106,7 +149,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/v1/config", async () => ({
     provider: config.provider,
     brain: config.llm,
-    realCalls: config.provider === "kat",
+    realCalls: deps.realCalls ?? false,
   }));
 
   app.get("/v1/tasks", async () => ({ tasks: calls.list() }));
@@ -154,20 +197,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   });
 
-  if (kat) {
-    app.post("/kat/status", async (request, reply) => {
-      const rawBody = (request as RequestWithRawBody).rawBody ?? "";
-      if (!kat.isValidHttpWebhook(request.headers, rawBody)) {
-        return reply.status(401).send({ error: "invalid_signature" });
-      }
-      kat.handleStatusWebhook(request.body as { data?: Record<string, unknown> });
-      return reply.status(204).send();
-    });
-
-    app.get("/kat/media", { websocket: true }, (socket, request) => {
-      kat.attachMediaStream(socket, request.raw);
-    });
-  }
+  if (providerRoutes) registerProviderRoutes(app, providerRoutes);
 
   return app;
 }

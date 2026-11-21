@@ -7,11 +7,11 @@ import { JsonFileTaskStore } from "./store/taskStore.js";
 
 const config = loadConfig();
 const store = await JsonFileTaskStore.open(config.DATA_FILE, { logger });
-const { calls, bus, kat } = createContainer(config, store, logger);
+const { calls, bus, providerRoutes, realCalls } = createContainer(config, store, logger);
 // Before listen(): hangs up calls a previous process left behind (bounded to 10 s).
 await calls.recoverInterruptedTasks();
 
-const app = await buildApp({ config, calls, bus, kat });
+const app = await buildApp({ config, calls, bus, providerRoutes, realCalls });
 
 if (!config.API_TOKEN) {
   logger.warn({}, "API_TOKEN is not set: the API is open to anyone who can reach it. Use only on a trusted network.");

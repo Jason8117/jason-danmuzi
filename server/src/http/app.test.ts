@@ -1,9 +1,12 @@
+import { createHmac } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HeuristicBrain } from "../brain/heuristicBrain.js";
 import type { CallTask } from "../domain/types.js";
 import { EventBus } from "../events/eventBus.js";
+import { KatCallProvider } from "../providers/kat/katProvider.js";
 import { SimulatedCallProvider } from "../providers/simulatedProvider.js";
+import type { ProviderHttpRequest, ProviderRoutes } from "../providers/types.js";
 import { CallService } from "../services/callService.js";
 import { InMemoryTaskStore } from "../store/taskStore.js";
 import { buildApp } from "./app.js";
@@ -183,5 +186,206 @@ describe("CallMate API", () => {
       payload: { decision: "approve", comment: tooLong },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // SPEC-ARCH-001 AC-003 / REQ-003, REQ-021 (b)
+  it("registers no provider routes in simulation mode", async () => {
+    const status = await app.inject({ method: "POST", url: "/kat/status", payload: {} });
+    const media = await app.inject({ method: "GET", url: "/kat/media" });
+    expect(status.statusCode).toBe(404);
+    expect(media.statusCode).toBe(404);
+  });
+});
+
+const KAT_SECRET = "whsec_" + "ef".repeat(32);
+
+function katForRoutes() {
+  const fetchFn = (async () =>
+    new Response(JSON.stringify({ result: { callId: "c-1" } }), { status: 200 })) as typeof fetch;
+  return new KatCallProvider(
+    {
+      apiKey: "key",
+      groupId: "g-1",
+      fromNumber: "07012345678",
+      webhookSecret: KAT_SECRET,
+      publicBaseUrl: "https://example.test",
+      apiBaseUrl: "https://kat.test/v1",
+      realtime: { apiKey: "sk", model: "m", voice: "v" },
+      fetch: fetchFn,
+      maxCallDurationSec: 600,
+    },
+    { info: () => {}, warn: () => {} },
+  );
+}
+
+function signedHeaders(rawBody: string) {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = "v1=" + createHmac("sha256", KAT_SECRET).update(`${timestamp}.`).update(rawBody).digest("hex");
+  return { "content-type": "application/json", "x-webhook-timestamp": timestamp, "x-webhook-signature": signature };
+}
+
+function serviceDeps() {
+  const bus = new EventBus();
+  const calls = new CallService(new InMemoryTaskStore(), bus, new HeuristicBrain(), new SimulatedCallProvider(200), {
+    maxConcurrentCalls: 1,
+    maxCallsPerDay: 10,
+    approvalTimeoutMs: 2000,
+    maxCallDurationMs: 60_000,
+  });
+  return { bus, calls };
+}
+
+/** Builds the app the way container.ts wires a KAT deployment. */
+function buildKatApp(kat: KatCallProvider) {
+  return buildApp({
+    config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "kat", llm: "heuristic" },
+    ...serviceDeps(),
+    providerRoutes: kat.routes(),
+    realCalls: true,
+    logger: false,
+  });
+}
+
+describe("provider routes (SPEC-ARCH-001)", () => {
+  let app: FastifyInstance | undefined;
+  afterEach(() => app?.close());
+
+  // AC-004 / REQ-004, REQ-005 — protection test, written before the route contract existed.
+  it("keeps the KAT webhook contract", async () => {
+    app = await buildKatApp(katForRoutes());
+    const rawBody = '{"data":{"type":"media_stream.call.ringing","callId":"c-unknown"}}';
+
+    const unsigned = await app.inject({
+      method: "POST",
+      url: "/kat/status",
+      headers: { "content-type": "application/json" },
+      payload: rawBody,
+    });
+    expect(unsigned.statusCode).toBe(401);
+    expect(unsigned.json()).toEqual({ error: "invalid_signature" });
+
+    // Signed, and no API token: /v1/* auth does not apply to provider routes.
+    const signed = await app.inject({ method: "POST", url: "/kat/status", headers: signedHeaders(rawBody), payload: rawBody });
+    expect(signed.statusCode).toBe(204);
+    expect(signed.body).toBe("");
+
+    // The signature covers the exact raw bytes, query string or not.
+    const withQuery = await app.inject({
+      method: "POST",
+      url: "/kat/status?x=1",
+      headers: signedHeaders(rawBody),
+      payload: rawBody,
+    });
+    expect(withQuery.statusCode).toBe(204);
+  });
+
+  // AC-005 / REQ-006 — the protected values.
+  it("serves /v1/config values for simulation and KAT deployments", async () => {
+    const { bus, calls } = serviceDeps();
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+      calls,
+      bus,
+      logger: false,
+    });
+    expect((await app.inject({ method: "GET", url: "/v1/config", headers: auth })).json()).toEqual({
+      provider: "simulated",
+      brain: "heuristic",
+      realCalls: false,
+    });
+    await app.close();
+
+    app = await buildKatApp(katForRoutes());
+    expect((await app.inject({ method: "GET", url: "/v1/config", headers: auth })).json()).toEqual({
+      provider: "kat",
+      brain: "heuristic",
+      realCalls: true,
+    });
+  });
+
+  // AC-005 / REQ-006 — realCalls comes from the wiring, not from comparing provider names.
+  it("serves /v1/config from wiring-provided provider info", async () => {
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "kat", llm: "heuristic" },
+      ...serviceDeps(),
+      realCalls: false,
+      logger: false,
+    });
+    expect((await app.inject({ method: "GET", url: "/v1/config", headers: auth })).json()).toEqual({
+      provider: "kat",
+      brain: "heuristic",
+      realCalls: false,
+    });
+  });
+
+  // AC-002 / REQ-002, REQ-004, REQ-021 (a)
+  it("registers provider-declared routes with raw bodies", async () => {
+    const received: ProviderHttpRequest[] = [];
+    const attached: string[] = [];
+    const routes: ProviderRoutes = {
+      http: [
+        {
+          method: "POST",
+          path: "/fake/hook",
+          rawBody: true,
+          handle: (req) => {
+            received.push(req);
+            return { status: 202, body: { ok: true } };
+          },
+        },
+        {
+          method: "POST",
+          path: "/fake/plain",
+          rawBody: false,
+          handle: async (req) => {
+            received.push(req);
+            return { status: 204 };
+          },
+        },
+      ],
+      sockets: [{ path: "/fake/ws", attach: (_socket, req) => attached.push(req.url ?? "") }],
+    };
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+      ...serviceDeps(),
+      providerRoutes: routes,
+      logger: false,
+    });
+    const raw = '{"a": 1,  "b":2}';
+
+    const hook = await app.inject({ method: "POST", url: "/fake/hook", headers: { "content-type": "application/json" }, payload: raw });
+    expect(hook.statusCode).toBe(202);
+    expect(hook.json()).toEqual({ ok: true });
+    expect(received[0]?.rawBody).toBe(raw);
+    expect(received[0]?.body).toEqual({ a: 1, b: 2 });
+    expect(received[0]?.headers["content-type"]).toBe("application/json");
+
+    await app.inject({ method: "POST", url: "/fake/hook?x=1", headers: { "content-type": "application/json" }, payload: raw });
+    expect(received[1]?.rawBody).toBe(raw);
+
+    const plain = await app.inject({ method: "POST", url: "/fake/plain", headers: { "content-type": "application/json" }, payload: raw });
+    expect(plain.statusCode).toBe(204);
+    expect(received[2]?.rawBody).toBeUndefined();
+    expect(received[2]?.body).toEqual({ a: 1, b: 2 });
+
+    await app.ready();
+    const ws = await app.injectWS("/fake/ws?y=2");
+    ws.terminate();
+    expect(attached).toEqual(["/fake/ws?y=2"]);
+  });
+
+  // Edge case (acceptance.md): a provider route under /v1/ would bypass the API-token hook.
+  it("refuses provider routes under /v1/", async () => {
+    await expect(
+      buildApp({
+        config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+        ...serviceDeps(),
+        providerRoutes: {
+          http: [{ method: "POST", path: "/v1/hook", rawBody: false, handle: () => ({ status: 204 }) }],
+          sockets: [],
+        },
+        logger: false,
+      }),
+    ).rejects.toThrow("/v1/");
   });
 });

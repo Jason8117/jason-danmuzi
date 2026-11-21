@@ -6,14 +6,17 @@ import { EventBus } from "./events/eventBus.js";
 import type { Logger } from "./logger.js";
 import { KatCallProvider } from "./providers/kat/katProvider.js";
 import { SimulatedCallProvider } from "./providers/simulatedProvider.js";
-import type { CallProvider } from "./providers/types.js";
+import type { CallProvider, ProviderRoutes } from "./providers/types.js";
 import { CallService } from "./services/callService.js";
 import type { TaskStore } from "./store/taskStore.js";
 
 export interface Container {
   calls: CallService;
   bus: EventBus;
-  kat?: KatCallProvider;
+  /** Routes the active provider declares (none for the simulated provider). */
+  providerRoutes?: ProviderRoutes;
+  /** True when the active provider dials real phones. */
+  realCalls: boolean;
 }
 
 /** Wires concrete implementations from configuration. The only place that knows which ones exist. */
@@ -25,10 +28,10 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
       ? new OpenAiBrain(config.OPENAI_API_KEY, config.OPENAI_MODEL, log)
       : new HeuristicBrain();
 
-  let kat: KatCallProvider | undefined;
   let provider: CallProvider;
+  let realCalls: boolean;
   if (config.provider === "kat") {
-    kat = new KatCallProvider(
+    provider = new KatCallProvider(
       {
         apiKey: config.KAT_API_KEY!,
         groupId: config.KAT_GROUP_ID!,
@@ -45,9 +48,10 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
       },
       log,
     );
-    provider = kat;
+    realCalls = true;
   } else {
     provider = new SimulatedCallProvider(config.SIMULATION_SPEED);
+    realCalls = false;
   }
 
   const calls = new CallService(store, bus, brain, provider, {
@@ -57,5 +61,5 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
     maxCallDurationMs: config.MAX_CALL_DURATION_SEC * 1000,
   });
 
-  return { calls, bus, kat };
+  return { calls, bus, providerRoutes: provider.routes?.(), realCalls };
 }

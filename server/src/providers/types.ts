@@ -1,4 +1,41 @@
+import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
+import type WebSocket from "ws";
 import type { ApprovalDecision, CallTask, Speaker } from "../domain/types.js";
+
+/** What a provider route handler sees of an HTTP request. Framework-neutral on purpose. */
+export interface ProviderHttpRequest {
+  headers: IncomingHttpHeaders;
+  /** The exact request body bytes as UTF-8; set only on routes declared with `rawBody: true`. */
+  rawBody?: string;
+  /** The parsed request body. */
+  body: unknown;
+}
+
+export interface ProviderHttpResponse {
+  status: number;
+  /** JSON body; omitted for empty responses (e.g. 204). */
+  body?: object;
+}
+
+export interface ProviderHttpRoute {
+  method: "POST" | "GET";
+  /** Absolute path. Must not start with /v1/ (that prefix is the token-protected user API). */
+  path: string;
+  /** Capture the raw body, e.g. for signature checks over the exact bytes. */
+  rawBody: boolean;
+  handle(request: ProviderHttpRequest): ProviderHttpResponse | Promise<ProviderHttpResponse>;
+}
+
+export interface ProviderSocketRoute {
+  path: string;
+  attach(socket: WebSocket, request: IncomingMessage): void;
+}
+
+/** Webhook and WebSocket routes a provider needs; the HTTP layer registers them as declared. */
+export interface ProviderRoutes {
+  http: ProviderHttpRoute[];
+  sockets: ProviderSocketRoute[];
+}
 
 export interface EndOptions {
   /** Set when the call could not be completed (no answer, busy, provider error). */
@@ -39,4 +76,6 @@ export interface CallProvider {
    * Optional: providers that never report a call id (simulated) do not implement it.
    */
   terminateByProviderCallId?(providerCallId: string): Promise<void>;
+  /** Routes this provider needs (webhooks, media streams). Optional: the simulated provider has none. */
+  routes?(): ProviderRoutes;
 }

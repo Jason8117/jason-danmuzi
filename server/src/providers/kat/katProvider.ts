@@ -2,9 +2,13 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type WebSocket from "ws";
 import { maskPhoneNumber } from "../../domain/phone.js";
-import type { CallProvider, CallSession } from "../types.js";
+import type { CallProvider, CallSession, ProviderRoutes } from "../types.js";
 import { bridgeToRealtime, type RealtimeOptions } from "../realtimeBridge.js";
 import { verifyKatHttpSignature, verifyKatStreamSignature } from "./webhook.js";
+
+/** Routes KAT calls back on; also sent to KAT as statusCallbackUrl / streamUrl when a call is created. */
+const STATUS_PATH = "/kat/status";
+const MEDIA_PATH = "/kat/media";
 
 export interface KatOptions {
   apiKey: string;
@@ -109,7 +113,7 @@ export class KatCallProvider implements CallProvider {
     );
 
     const base = this.options.publicBaseUrl.replace(/\/$/, "");
-    const streamUrl = `${base.replace(/^http/, "ws")}/kat/media`;
+    const streamUrl = `${base.replace(/^http/, "ws")}${MEDIA_PATH}`;
     const from = toKatPhoneNumber(this.options.fromNumber);
     const to = toKatPhoneNumber(task.phoneNumber);
 
@@ -117,7 +121,7 @@ export class KatCallProvider implements CallProvider {
       from,
       to,
       streamUrl,
-      statusCallbackUrl: `${base}/kat/status`,
+      statusCallbackUrl: `${base}${STATUS_PATH}`,
       metadata: { taskId: task.id, token: streamToken },
       timeLimit: katTimeLimitSec(this.options.maxCallDurationSec),
       codec: "PCMU",
@@ -148,7 +152,7 @@ export class KatCallProvider implements CallProvider {
         callId,
         to: maskPhoneNumber(task.phoneNumber),
         streamHost: new URL(streamUrl.replace(/^ws/, "http")).host,
-        statusHost: new URL(`${base}/kat/status`).host,
+        statusHost: new URL(`${base}${STATUS_PATH}`).host,
       },
       "Outbound call created",
     );
@@ -172,6 +176,27 @@ export class KatCallProvider implements CallProvider {
     } catch (error) {
       this.log.warn({ taskId, callId, err: (error as Error).message }, "Hangup request failed");
     }
+  }
+
+  /** KAT's status webhook (signed over the raw body) and its media stream WebSocket. */
+  routes(): ProviderRoutes {
+    return {
+      http: [
+        {
+          method: "POST",
+          path: STATUS_PATH,
+          rawBody: true,
+          handle: (request) => {
+            if (!this.isValidHttpWebhook(request.headers, request.rawBody ?? "")) {
+              return { status: 401, body: { error: "invalid_signature" } };
+            }
+            this.handleStatusWebhook(request.body as Parameters<KatCallProvider["handleStatusWebhook"]>[0]);
+            return { status: 204 };
+          },
+        },
+      ],
+      sockets: [{ path: MEDIA_PATH, attach: (socket, request) => this.attachMediaStream(socket, request) }],
+    };
   }
 
   isValidHttpWebhook(headers: IncomingMessage["headers"], rawBody: string | Buffer): boolean {
