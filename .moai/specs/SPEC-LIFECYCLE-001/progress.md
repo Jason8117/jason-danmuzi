@@ -223,6 +223,45 @@ $ (app) flutter --suppress-analytics analyze → exit 1, "1 issue found." — in
 - 커버리지는 측정하지 않았다(`@vitest/coverage-v8` 미설치, 의존성 추가는 범위 밖). 린터 설정이 없어 lint도 실행하지 않았다.
 - SIGTERM 수신 후 실제 플랫폼 유예 시간(10 s 가정)은 확인되지 않았다.
 
+### 잔여 위험
+
+- 종료 단계 1에서 3 s 안에 끝나지 않은 종료 요청은 버려진 채 백그라운드에서 계속되다 `process.exit`로 끊긴다. 그 통화가 KAT에서 실제로 끊겼는지는 알 수 없다(마지막 안전장치는 KAT `timeLimit`).
+- 통화 생성 응답을 기다리는 중(`dialing`, 통화 ID 없음)에 종료되면 끊을 방법이 없다. 단계 1은 `Shutdown hangup without a provider call id` warn만 남긴다(plan.md §D 잔여 위험).
+- `providerCallId` 저장은 저장소의 300 ms 디바운스를 따른다. 통화 생성 직후 그 사이에 프로세스가 죽으면 ID가 파일에 남지 않는다.
+- 신호 처리기는 `listen` 뒤에 설치된다(기존과 같음). 기동 복구(최대 10 s) 중에 온 신호는 기본 동작으로 프로세스를 끝내고, 그 경우 작업 상태는 파일에 그대로 남아 다음 기동에서 다시 복구된다.
+- 단일 인스턴스 가정(spec.md §4): 같은 `DATA_FILE`을 쓰는 두 인스턴스에서는 복구와 주인 없는 스트림 처리가 정상 통화를 끊는다.
+- 기본 설정에서 KAT `timeLimit`이 900에서 630으로 바뀐다(OD-3 DEFAULT).
+
+### 기록 정정
+
+M6 커밋(`702648a`)에서 §E.2를 갱신하는 편집이 `## §E.3` 제목까지 덮어써 그 커밋에는 §E.3가 빠졌다. 후속 커밋에서 §E.3를 복구하고 `run_commit_sha`를 채웠다(`--amend` 금지 지시에 따라 새 커밋).
+
+## §E.3 Run-phase Audit-Ready Signal
+
+```yaml
+run_complete_at: 2026-11-21
+run_start_sha: f17a1880b334a5d24c554f67de8ee763fdd512c8
+run_commit_sha: 702648a   # M6 (마지막 구현 마일스톤) 커밋
+milestone_commits: [ee36872 (M1), 34bc706 (M2), 0341ed9 (M3), d1ce301 (M4), 165efcd (M5), 702648a (M6)]
+run_status: complete-with-debt
+ac_pass_count: 16          # AC-014는 (c)만 PASS-WITH-DEBT
+ac_fail_count: 0
+ac_pass_with_debt: [AC-014 (c)]
+server_tests: "6 files / 81 passed (baseline 4 / 46)"
+server_typecheck_exit: 0
+flutter_test: "+13 All tests passed (baseline 12)"
+flutter_analyze: "1 info, unchanged from baseline"
+preserve_list_post_run_count: "existing tests unmodified; simulatedProvider.ts unchanged (plan §B '확인')"
+l44_pre_commit_fetch: not-run          # worktree 격리, push 금지 지시
+l44_post_push_fetch: not-applicable    # push 하지 않음
+new_warnings_or_lints_introduced: 0    # typecheck 0 errors, flutter analyze 증가 없음; 린터 미구성
+cross_platform_build:
+  typecheck: pass
+  windows: not-applicable              # Node/TS, OS별 빌드 태그 없음
+total_run_phase_files: 13              # 코드 11 + SPEC 문서 2 (spec.md 상태, progress.md)
+m1_to_mN_commit_strategy: one commit per milestone on the worktree branch + one record-fix commit, explicit pathspec staging, no push
+```
+
 ## §E.4 Sync-phase Audit-Ready Signal
 
 _<pending sync-phase>_
