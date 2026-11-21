@@ -56,10 +56,18 @@ interface RunningSession {
 
 const now = () => new Date().toISOString();
 
+export const SHUTDOWN_CALL_ERROR = "서버가 종료되어 통화를 끊었습니다.";
+
+export interface TerminateActiveCallsOptions {
+  /** The termination step's share of the shutdown budget; unfinished hang-ups are abandoned after it. */
+  deadlineMs: number;
+}
+
 export class CallService {
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly sessions = new Map<string, RunningSession>();
   private readonly log: Logger;
+  private shuttingDown = false;
 
   constructor(
     private readonly store: TaskStore,
@@ -83,6 +91,64 @@ export class CallService {
     }
   }
 
+  /** Shutdown step 0: from now on no new task, no new call and no new mid-call approval. */
+  beginShutdown(): void {
+    this.shuttingDown = true;
+  }
+
+  /**
+   * Shutdown step 1: asks the provider to hang up every live call, waits at most `deadlineMs`,
+   * then closes each call as failed without a summary. Must run before the HTTP server closes,
+   * because app.close() also closes the provider's media sockets.
+   */
+  // @MX:WARN: [AUTO] Races provider hang-ups against a timer; abandoned hang-ups keep running in the background.
+  // @MX:REASON: The shutdown budget (SPEC-LIFECYCLE-001 REQ-003) must hold even when the provider never answers.
+  // @MX:SPEC: SPEC-LIFECYCLE-001
+  async terminateActiveCalls({ deadlineMs }: TerminateActiveCallsOptions): Promise<void> {
+    const tasks = this.store.list().filter((task) => isActiveCall(task.status));
+    if (tasks.length === 0) return;
+
+    for (const task of tasks) {
+      const session = this.sessions.get(task.id);
+      if (!session) continue;
+      // Ignore provider callbacks that would end the call normally and summarize it meanwhile.
+      session.ending = true;
+      clearTimeout(session.durationTimer);
+    }
+
+    const pending = new Set(tasks.map((task) => task.id));
+    const hangups = tasks.map((task) => {
+      if (this.provider.terminateByProviderCallId && !task.providerCallId) {
+        this.log.warn({ taskId: task.id, status: task.status }, "Shutdown hangup without a provider call id");
+      }
+      return this.provider
+        .hangup(task.id)
+        .catch((error: unknown) => this.log.warn({ taskId: task.id, err: (error as Error).message }, "Shutdown hangup failed"))
+        .finally(() => pending.delete(task.id));
+    });
+
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, deadlineMs);
+    });
+    try {
+      await Promise.race([Promise.all(hangups), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (pending.size > 0) {
+      this.log.warn({ taskIds: [...pending], deadlineMs }, "Shutdown hangup did not finish in time");
+    }
+
+    for (const task of tasks) {
+      const current = this.store.get(task.id);
+      if (!current || !isActiveCall(current.status)) continue;
+      for (const approval of current.approvals) if (approval.status === "pending") approval.status = "expired";
+      current.error = SHUTDOWN_CALL_ERROR;
+      this.finishWithoutCall(current, "failed");
+    }
+  }
+
   list(): CallTask[] {
     return this.store.list();
   }
@@ -94,6 +160,7 @@ export class CallService {
   }
 
   create(input: CallTaskInput): CallTask {
+    this.assertNotShuttingDown();
     const timestamp = now();
     const task: CallTask = {
       ...input,
@@ -113,6 +180,8 @@ export class CallService {
 
   /** User reviewed the plan (optionally edited it) and wants the call placed now. */
   async approvePlan(id: string, planOverride?: Partial<CallPlan>): Promise<CallTask> {
+    // Check order is fixed: 503 shutting_down -> 404 -> 409 -> 429 (SPEC-LIFECYCLE-001 REQ-001 (d)).
+    this.assertNotShuttingDown();
     const task = this.get(id);
     if (task.status !== "awaiting_approval" || !task.plan) {
       throw new ServiceError(409, "invalid_state", "The plan is not waiting for approval");
@@ -187,6 +256,12 @@ export class CallService {
     }
   }
 
+  private assertNotShuttingDown(): void {
+    if (this.shuttingDown) {
+      throw new ServiceError(503, "shutting_down", "서버가 종료 중입니다. 잠시 후 다시 시도해 주세요.");
+    }
+  }
+
   private assertWithinLimits(): void {
     const tasks = this.store.list();
     if (tasks.filter((t) => isActiveCall(t.status)).length >= this.options.maxConcurrentCalls) {
@@ -247,7 +322,7 @@ export class CallService {
   private requestApproval(taskId: string, question: string, signal: AbortSignal): Promise<ApprovalDecision> {
     const declined: ApprovalDecision = { approved: false, reason: "canceled" };
     const task = this.store.get(taskId);
-    if (!task || !isActiveCall(task.status) || signal.aborted) return Promise.resolve(declined);
+    if (!task || !isActiveCall(task.status) || signal.aborted || this.shuttingDown) return Promise.resolve(declined);
 
     const requestedAt = new Date();
     const approval: ApprovalRequest = {

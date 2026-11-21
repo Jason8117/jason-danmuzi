@@ -54,6 +54,27 @@ GREEN (같은 명령, exit 0): `Tests  7 passed (7)`; `npm --prefix server run t
 
 AC-009 (앱 보호 테스트): `flutter --suppress-analytics test test/unit_test.dart` exit 0, `00:00 +6: CallTask.fromJson ignores providerCallId when parsing tasks` / `00:00 +9: All tests passed!`. 앱 코드를 바꾸지 않는다는 계약을 고정하는 테스트이므로 구현 전 RED가 존재하지 않는다(설계상 첫 실행부터 통과). 서버 쪽 "필드 없는 작업 적재"는 AC-008 (a)가 함께 검증한다.
 
+커밋: `ee36872`
+
+#### M2 — 종료 순서와 예산 (AC-001 ~ AC-005)
+
+RED (`npm --prefix server test -- src/shutdown.test.ts src/services/callService.test.ts`, exit 1):
+
+```
+     × rejects new work and new approvals while shutting down 12ms
+     × approvePlan checks shutting_down before state and limits 2ms
+     × the termination step is bounded to its deadline 1ms
+     × a call ended by shutdown is closed as failed without a summary (hangup completes) 1ms
+     × a call ended by shutdown is closed as failed without a summary (hangup hangs past the 3 s deadline) 1ms
+ FAIL  src/shutdown.test.ts [ src/shutdown.test.ts ]
+Error: Cannot find module './shutdown.js' imported from …/server/src/shutdown.test.ts
+TypeError: calls.beginShutdown is not a function
+ Test Files  2 failed (2)
+      Tests  5 failed | 1 passed (6)
+```
+
+GREEN (같은 명령, exit 0): `Test Files  2 passed (2)` / `Tests  14 passed (14)`; typecheck exit 0.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
