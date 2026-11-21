@@ -110,6 +110,16 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - GREEN: `git mv server/src/brain/scenario.ts server/src/domain/scenario.ts` (content byte-identical — its `../domain/types.js` import still resolves from `domain/`; no re-export left behind), importers updated; `ProviderId = string` in `domain/types.ts`, used by `CallTask.provider` and `CallProvider.name`; `SIMULATED_PROVIDER_ID` / `KAT_PROVIDER_ID` constants (`satisfies ProviderId`). `config.ts` `CALL_PROVIDER` enum unchanged.
 - Results: typecheck exit 0; full suite `Test Files 10 passed (10)` / `Tests 176 passed (176)` (`m5-full.txt`); AC-013 grep → no output (exit 1); AC-006 grep → no output (exit 1); app `flutter test` → `+17: All tests passed!`; `flutter analyze` → `1 issue found` (the same baseline info at `test/support/fakes.dart:53:5`).
 
+### M6 — remaining test gaps and regression
+
+- M6 changes no production code (the wiring moved to M1), so its tests are protection tests run on the code they protect: `npm --prefix server test -- src/http/app.test.ts src/brain/openaiBrain.test.ts` → `Tests  31 passed (31)`, exit 0 (`m6-protect.txt`). New: `/v1/stream` "streams snapshots and task updates" + "rejects stream connections without a token" (AC-019), `openaiBrain` "validates LLM plans against schema bounds" (1)~(4) (AC-018).
+- Final regression batch (this run, tree at the M6 commit's content):
+  - `npm --prefix server test` → `Test Files 10 passed (10)` / `Tests 182 passed (182)`, exit 0 (`final-server-test.txt`)
+  - `npm --prefix server run typecheck` → exit 0 (`final-typecheck.txt`)
+  - acceptance.md common command (5 files) → `Test Files 5 passed (5)` / `Tests 92 passed (92)`, exit 0 (`final-targeted.txt`)
+  - informational: `tsc -p .moai/state/verify/arch-run/arch/tsconfig.tests.json` (server tsconfig with `*.test.ts` included, 10 test files listed) → exit 0, 0 `error TS` (`final-tsc-tests.txt`)
+  - app `flutter --suppress-analytics test` → `+17: All tests passed!`; `test/unit_test.dart` → `+11: All tests passed!`; `flutter --suppress-analytics analyze` → `1 issue found` (baseline info only)
+
 ### Milestone log
 
 - M1 done (commit: see git log `feat(SPEC-ARCH-001): M1`)
@@ -117,7 +127,8 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - M3 done (commit: see git log `feat(SPEC-ARCH-001): M3`)
 - M4 done (commit: see git log `feat(SPEC-ARCH-001): M4`)
 - M5 done (commit: see git log `refactor(SPEC-ARCH-001): M5`)
-- next: M6
+- M6 done (commit: see git log `test(SPEC-ARCH-001): M6`)
+- next: evidence-only commit (AC matrix + §E.3)
 
 ## §E.3 Run-phase Audit-Ready Signal
 

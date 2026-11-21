@@ -140,6 +140,37 @@ describe("OpenAiBrain (SPEC-OUTCOME-001)", () => {
     expect(JSON.stringify(log.warns[0]!.obj) + log.warns[0]!.msg).not.toContain(API_KEY);
   });
 
+  // SPEC-ARCH-001 AC-018 / REQ-019
+  describe("validates LLM plans against schema bounds", () => {
+    const plan = {
+      openingLine: "안녕하세요, 김민수님을 대신해 전화드린 AI 비서입니다.",
+      steps: ["인사", "예약 요청", "확인"],
+      questionsToAsk: ["금요일 7시 2명 가능한가요?"],
+      approvalPoints: ["예약금"],
+      fallback: "다른 시간을 여쭤본다",
+    };
+
+    it("(1) passes a valid plan through", async () => {
+      stubFetch(async () => completion(JSON.stringify(plan)));
+      const { brain, log } = setup();
+      expect(await brain.createPlan(input)).toEqual(plan);
+      expect(log.warns).toHaveLength(0);
+    });
+
+    it.each([
+      { name: "(2) 9 steps", override: { steps: Array.from({ length: 9 }, (_, i) => `단계 ${i + 1}`) } },
+      { name: "(3) 6 approval points", override: { approvalPoints: Array.from({ length: 6 }, (_, i) => `승인 ${i + 1}`) } },
+      { name: "(4) empty opening line", override: { openingLine: "" } },
+    ])("falls back to the heuristic plan on $name", async ({ override }) => {
+      stubFetch(async () => completion(JSON.stringify({ ...plan, ...override })));
+      const { brain, log } = setup();
+
+      expect(await brain.createPlan(input)).toEqual(await new HeuristicBrain().createPlan(input));
+      expect(log.warns).toHaveLength(1);
+      expect(log.warns[0]!.obj).toEqual({ op: "plan", reason: "schema_mismatch" });
+    });
+  });
+
   // AC-008 / REQ-010
   it("the LLM schema only accepts the three LLM result values", async () => {
     stubFetch(async () =>

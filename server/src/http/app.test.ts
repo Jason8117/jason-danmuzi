@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HeuristicBrain } from "../brain/heuristicBrain.js";
 import type { CallTask } from "../domain/types.js";
 import { EventBus } from "../events/eventBus.js";
@@ -194,6 +194,67 @@ describe("CallMate API", () => {
     const media = await app.inject({ method: "GET", url: "/kat/media" });
     expect(status.statusCode).toBe(404);
     expect(media.statusCode).toBe(404);
+  });
+});
+
+describe("/v1/stream (SPEC-ARCH-001 AC-019)", () => {
+  let app: FastifyInstance;
+  beforeEach(async () => {
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+      ...serviceDeps(),
+      logger: false,
+    });
+    await app.ready();
+  });
+  afterEach(() => app.close());
+
+  /** Opens the stream and records every message from the first one on. */
+  async function connect(path: string, headers: Record<string, string> = {}) {
+    const messages: Record<string, any>[] = [];
+    const ws = await app.injectWS(path, { headers }, {
+      onInit: (socket) => socket.on("message", (data) => messages.push(JSON.parse(data.toString()) as Record<string, any>)),
+    });
+    return { ws, messages };
+  }
+
+  const create = () =>
+    app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      headers: auth,
+      payload: { targetName: "라 파스타", phoneNumber: "010-1234-5678", goal: "영업시간 문의", requesterName: "김민수" },
+    });
+
+  it("streams snapshots and task updates", async () => {
+    const first = (await create()).json<CallTask>();
+
+    // (a) header token: the first message is the snapshot
+    const header = await connect("/v1/stream", auth);
+    await vi.waitFor(() => expect(header.messages.length).toBeGreaterThan(0));
+    expect(header.messages[0]!.type).toBe("snapshot");
+    expect(header.messages[0]!.tasks.map((t: CallTask) => t.id)).toEqual([first.id]);
+
+    // (b) a task created afterwards arrives as task.updated
+    const second = (await create()).json<CallTask>();
+    await vi.waitFor(() =>
+      expect(header.messages.some((m) => m.type === "task.updated" && m.task.id === second.id)).toBe(true),
+    );
+    expect(new Set(header.messages.map((m) => m.type))).toEqual(new Set(["snapshot", "task.updated"]));
+    header.ws.terminate();
+
+    // (c) ?token= query: the same first message
+    const query = await connect(`/v1/stream?token=${TOKEN}`);
+    await vi.waitFor(() => expect(query.messages.length).toBeGreaterThan(0));
+    expect(query.messages[0]!.type).toBe("snapshot");
+    expect(query.messages[0]!.tasks.map((t: CallTask) => t.id).sort()).toEqual([first.id, second.id].sort());
+    query.ws.terminate();
+  });
+
+  // (d)
+  it("rejects stream connections without a token", async () => {
+    await expect(app.injectWS("/v1/stream")).rejects.toThrow("Unexpected server response: 401");
+    await expect(app.injectWS("/v1/stream?token=wrong")).rejects.toThrow("Unexpected server response: 401");
   });
 });
 
