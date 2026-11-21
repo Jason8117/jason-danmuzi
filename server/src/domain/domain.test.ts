@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isFiller } from "../brain/heuristicBrain.js";
-import { isBlockedNumber, maskPhoneNumber, normalizePhoneNumber } from "./phone.js";
+import { checkTargetNumber, isBlockedNumber, maskPhoneNumber, normalizePhoneNumber } from "./phone.js";
 import { assertTransition, canTransition } from "./stateMachine.js";
 
 describe("normalizePhoneNumber", () => {
@@ -24,6 +24,42 @@ describe("normalizePhoneNumber", () => {
 
   it("masks all but the last four digits", () => {
     expect(maskPhoneNumber("+821012345678")).toBe("+82••••••5678");
+  });
+});
+
+describe("checkTargetNumber (SPEC-POLICY-001)", () => {
+  // AC-008: the block list fires for every notation, judged on the raw text with the leading "+" kept.
+  it.each(["119", "112", "182", "(119)", "+82 119", "+82-182", "0082-112", "0119", "+82 112"])(
+    "classifies Korean emergency and special codes as blocked in every notation: %s",
+    (raw) => {
+      expect(checkTargetNumber(raw)).toEqual({ kind: "blocked" });
+    },
+  );
+
+  // AC-009: normal numbers keep their normalized value; malformed input stays invalid.
+  it.each([
+    ["010-1234-5678", "+821012345678"],
+    ["02 123 4567", "+8221234567"],
+    ["+1 (415) 555-0100", "+14155550100"],
+    ["0082 10 1234 5678", "+821012345678"],
+  ])("keeps normal numbers and the block list unchanged: %s is ok", (raw, e164) => {
+    expect(checkTargetNumber(raw)).toEqual({ kind: "ok", e164 });
+    expect(normalizePhoneNumber(raw)).toBe(e164);
+  });
+
+  it.each(["+1 911", "", "abc", "+12"])("keeps normal numbers and the block list unchanged: %s is invalid", (raw) => {
+    expect(checkTargetNumber(raw)).toEqual({ kind: "invalid" });
+  });
+
+  it("keeps the block list unchanged", () => {
+    for (const code of ["112", "119", "113", "114", "117", "118", "122", "125", "182"]) {
+      expect(checkTargetNumber(code)).toEqual({ kind: "blocked" });
+      expect(isBlockedNumber(`+82${code}`)).toBe(true);
+    }
+    for (const code of ["111", "115", "116", "120", "123", "124", "126", "181", "183"]) {
+      expect(checkTargetNumber(code)).toEqual({ kind: "invalid" });
+      expect(isBlockedNumber(`+82${code}`)).toBe(false);
+    }
   });
 });
 
