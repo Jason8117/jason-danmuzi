@@ -355,3 +355,239 @@ describe("KatCallProvider timeLimit (AC-013)", () => {
     expect(await timeLimitFor(-25)).toBe(10);
   });
 });
+
+// ---------------------------------------------------------------------------
+// SPEC-ARCH-001: status webhooks, media streams and API responses
+// ---------------------------------------------------------------------------
+
+class MediaSocket extends EventEmitter {
+  readonly close = vi.fn();
+}
+
+function signedUpgrade(options: { callId?: string; valid?: boolean } = {}) {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const streamId = "MZ" + "c".repeat(32);
+  const callId = options.callId ?? "";
+  const signature =
+    "v1=" +
+    createHmac("sha256", options.valid === false ? "wrong-secret" : SECRET)
+      .update(`${timestamp}.${callId}.${streamId}`)
+      .digest("hex");
+  const headers: Record<string, string> = {
+    "x-webhook-timestamp": timestamp,
+    "x-webhook-signature": signature,
+    "x-kat-stream-id": streamId,
+  };
+  if (options.callId) headers["x-kat-call-id"] = options.callId;
+  return { headers } as unknown as IncomingMessage;
+}
+
+const frame = (payload: unknown) => Buffer.from(typeof payload === "string" ? payload : JSON.stringify(payload));
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+/** A KAT provider with one active call (task t-1, KAT callId c-1) and the Realtime bridge intercepted. */
+async function activeCall() {
+  const fetch = fakeFetch(() => json({ result: { callId: "c-1" } }));
+  const bridge = vi.fn();
+  const { log, warns } = recordingLog();
+  const kat = new KatCallProvider(katOptions(fetch.fn, { bridge }), log);
+  const { session } = fakeSession("t-1");
+  await kat.start(session);
+  const terminations = () => fetch.calls.filter((c) => c.url.endsWith("/termination")).map((c) => c.url);
+  /** Session methods a webhook or media frame could have triggered. */
+  const sessionCalls = () =>
+    [session.markRinging, session.markConnected, session.end, session.appendTranscript].reduce(
+      (count, fn) => count + vi.mocked(fn).mock.calls.length,
+      0,
+    );
+  return { kat, session, bridge, warns, terminations, sessionCalls };
+}
+
+/** Bridges the active call's media stream, as a real answered call would. */
+function bridgeMedia(kat: KatCallProvider) {
+  const socket = new MediaSocket();
+  kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade({ callId: "c-1" }));
+  socket.emit("message", frame({ event: "start", start: { streamSid: "s-1" } }));
+  return socket;
+}
+
+const MEDIA_FAILURE =
+  "상대가 전화를 받았지만 음성 스트림이 연결되지 않아 통화가 종료되었습니다. PUBLIC_BASE_URL(터널)과 WSS(/kat/media)를 확인해 주세요.";
+
+describe("KatCallProvider status webhooks (SPEC-ARCH-001 AC-016)", () => {
+  it("(a) ringing marks the call ringing", async () => {
+    const { kat, session } = await activeCall();
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.ringing", callId: "c-1" } });
+    expect(session.markRinging).toHaveBeenCalledTimes(1);
+  });
+
+  it("(b) answered or in-progress marks the call connected", async () => {
+    const first = await activeCall();
+    first.kat.handleStatusWebhook({ data: { type: "media_stream.call.answered", callId: "c-1" } });
+    expect(first.session.markConnected).toHaveBeenCalledTimes(1);
+
+    const second = await activeCall();
+    second.kat.handleStatusWebhook({ data: { status: "in-progress", metadata: { taskId: "t-1" } } });
+    expect(second.session.markConnected).toHaveBeenCalledTimes(1);
+  });
+
+  it("(c) completed before any audio was bridged ends with the media failure message", async () => {
+    const { kat, session } = await activeCall();
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.completed", callId: "c-1", status: "completed" } });
+    expect(session.end).toHaveBeenCalledWith({ error: MEDIA_FAILURE });
+  });
+
+  it("(d) completed after audio was bridged ends without an error", async () => {
+    const { kat, session } = await activeCall();
+    bridgeMedia(kat);
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.completed", callId: "c-1", status: "completed" } });
+    expect(session.end).toHaveBeenCalledTimes(1);
+    expect(session.end).toHaveBeenCalledWith();
+  });
+
+  it.each([
+    ["busy", "상대방이 통화 중입니다."],
+    ["no-answer", "상대방이 전화를 받지 않았습니다."],
+    ["rejected", "상대방이 전화를 거절했습니다."],
+    ["canceled", "전화가 취소되었습니다."],
+    ["failed", "전화 연결에 실패했습니다."],
+  ])("(e) failure status %s ends with its message", async (status, message) => {
+    const { kat, session } = await activeCall();
+    bridgeMedia(kat);
+    kat.handleStatusWebhook({ data: { type: "media_stream.call.failed", callId: "c-1", status } });
+    expect(session.end).toHaveBeenCalledWith({ error: message });
+  });
+
+  it("(f) a webhook for an unknown task touches no session", async () => {
+    const { kat, sessionCalls } = await activeCall();
+    kat.handleStatusWebhook({
+      data: { type: "media_stream.call.ringing", callId: "c-unknown", metadata: { taskId: "t-unknown" } },
+    });
+    expect(sessionCalls()).toBe(0);
+  });
+});
+
+describe("KatCallProvider media streams (SPEC-ARCH-001 AC-017)", () => {
+  it("(a) an invalid upgrade signature closes the socket without bridging", async () => {
+    const { kat, bridge } = await activeCall();
+    const socket = new MediaSocket();
+    kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade({ callId: "c-1", valid: false }));
+    socket.emit("message", frame({ event: "start", start: { streamSid: "s-1" } }));
+    expect(socket.close).toHaveBeenCalled();
+    expect(bridge).not.toHaveBeenCalled();
+  });
+
+  it("(b) a valid start frame marks the call connected and bridges it once", async () => {
+    const { kat, session, bridge } = await activeCall();
+    const socket = bridgeMedia(kat);
+    expect(session.markConnected).toHaveBeenCalledTimes(1);
+    expect(bridge).toHaveBeenCalledTimes(1);
+    expect(bridge.mock.calls[0]![0]).toMatchObject({ media: socket, streamSid: "s-1", session });
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it("(c) a token mismatch without a call id closes, ends the session and terminates the call", async () => {
+    const { kat, session, bridge, terminations } = await activeCall();
+    // A signed upgrade without x-kat-call-id cannot be built (see AC-014 (c)); stub the separately tested check.
+    vi.spyOn(kat, "isValidStreamUpgrade").mockReturnValue(true);
+    const socket = new MediaSocket();
+    kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade());
+    socket.emit(
+      "message",
+      frame({ event: "start", start: { streamSid: "s-1", customParameters: { taskId: "t-1", token: "wrong" } } }),
+    );
+    await flush();
+    expect(socket.close).toHaveBeenCalled();
+    expect(session.end).toHaveBeenCalledWith({ error: "미디어 스트림 인증에 실패해 통화를 종료했습니다." });
+    expect(terminations()).toEqual(["https://kat.test/v1/group/g-1/media-stream/calls/c-1/termination"]);
+    expect(bridge).not.toHaveBeenCalled();
+  });
+
+  it("(d) with an active session, no start frame for 10 s closes the socket", async () => {
+    vi.useFakeTimers();
+    const { kat, terminations } = await activeCall();
+    const socket = new MediaSocket();
+    kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade({ callId: "c-1" }));
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(socket.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(socket.close).toHaveBeenCalled();
+    expect(terminations()).toEqual([]);
+  });
+});
+
+describe("KatCallProvider API responses (SPEC-ARCH-001 AC-008)", () => {
+  const CREATE = "KAT Cloud POST /group/g-1/media-stream/calls";
+  const text = (body: string, status = 200) => new Response(body, { status });
+
+  it.each([
+    { name: "(1) top-level callId", reply: () => json({ callId: "c-1" }), callId: "c-1" },
+    { name: "(2) callId inside result", reply: () => json({ code: 0, result: { callId: "c-2" } }), callId: "c-2" },
+    { name: "(3) result without callId", reply: () => json({ result: {} }), error: "KAT Cloud did not return a callId" },
+    { name: "(4) 200 with a non-JSON body", reply: () => text("not json"), error: "KAT Cloud did not return a callId" },
+    { name: "(5) 500 with a message", reply: () => json({ message: "boom" }, 500), error: `${CREATE} failed (500): boom` },
+    { name: "(6) 500 with an array body", reply: () => json([1, 2], 500), error: `${CREATE} failed (500): [1,2]` },
+    { name: "(7) 500 with a null body", reply: () => text("null", 500), error: `${CREATE} failed (500): null` },
+    { name: "(8) 200 with a null body", reply: () => text("null"), error: "KAT Cloud did not return a callId" },
+  ])("parses KAT API responses safely $name", async ({ reply, callId, error }) => {
+    const { fn } = fakeFetch(reply);
+    const kat = new KatCallProvider(katOptions(fn), recordingLog().log);
+    const { session, recorded } = fakeSession();
+
+    if (callId) {
+      await kat.start(session);
+      expect(recorded).toEqual([callId]);
+    } else {
+      await expect(kat.start(session)).rejects.toThrow(new Error(error));
+    }
+  });
+});
+
+describe("KatCallProvider input validation (SPEC-ARCH-001 AC-009, AC-010)", () => {
+  it("ignores malformed status webhooks", async () => {
+    const { kat, warns, sessionCalls } = await activeCall();
+    const payloads: unknown[] = [{ data: { type: 123 } }, { data: "x" }, [], { data: { type: 123, metadata: { taskId: "t-1" } } }];
+
+    for (const payload of payloads) {
+      kat.handleStatusWebhook(payload as Parameters<KatCallProvider["handleStatusWebhook"]>[0]);
+    }
+
+    expect(sessionCalls()).toBe(0);
+    expect(warns.map((w) => w.msg)).toEqual(Array(4).fill("Ignored malformed KAT status webhook"));
+    // Nothing from the body reaches the log.
+    expect(warns.map((w) => w.obj)).toEqual([{}, {}, {}, {}]);
+  });
+
+  it("ignores malformed media frames and keeps waiting for start", async () => {
+    const { kat, session, bridge, warns } = await activeCall();
+    const socket = new MediaSocket();
+    kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade({ callId: "c-1" }));
+
+    socket.emit("message", frame({ event: "start", start: { streamSid: "s-1", customParameters: 5 } }));
+    expect(session.markConnected).not.toHaveBeenCalled();
+    expect(warns.map((w) => w.msg)).toEqual(["Ignored malformed media start frame"]);
+
+    socket.emit("message", frame("not json"));
+    socket.emit("message", frame({ event: "media", streamSid: "s-1" }));
+    expect(warns).toHaveLength(1);
+
+    socket.emit("message", frame({ event: "start", start: { streamSid: "s-1" } }));
+    expect(session.markConnected).toHaveBeenCalledTimes(1);
+    expect(bridge).toHaveBeenCalledTimes(1);
+    expect(socket.close).not.toHaveBeenCalled();
+  });
+
+  it("still terminates a signed stream with no active session before looking at a malformed start frame", async () => {
+    const { kat, bridge, terminations, warns } = await activeCall();
+    const socket = new MediaSocket();
+    kat.attachMediaStream(socket as unknown as WebSocket, signedUpgrade({ callId: "c-9" }));
+
+    socket.emit("message", frame({ event: "start", start: { streamSid: "s-1", customParameters: 5 } }));
+    await flush();
+
+    expect(terminations()).toEqual(["https://kat.test/v1/group/g-1/media-stream/calls/c-9/termination"]);
+    expect(socket.close).toHaveBeenCalled();
+    expect(bridge).not.toHaveBeenCalled();
+    expect(warns.map((w) => w.msg)).toEqual(["Hanging up a signed media stream with no active session"]);
+  });
+});

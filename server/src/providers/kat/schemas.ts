@@ -20,10 +20,13 @@ const CallIdValue = z.union([z.string(), z.number()]).transform(String);
 /** Call creation result (already unwrapped from `{ code, message, result }` when wrapped). */
 export const CreateCallResponse = z.object({ callId: CallIdValue.pipe(z.string().min(1)) });
 
-/** Error body fields worth showing; anything else falls back to the raw text. */
+/**
+ * Error body fields worth showing. A field of the wrong type is dropped on its own (so a string `message`
+ * survives an object `error`); a body that is not an object at all falls back to the raw text.
+ */
 export const ApiErrorBody = z.object({
-  message: z.string().optional(),
-  error: z.string().optional(),
+  message: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
 });
 
 export const StatusWebhook = z.object({

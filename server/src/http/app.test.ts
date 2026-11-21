@@ -279,6 +279,15 @@ describe("provider routes (SPEC-ARCH-001)", () => {
     expect(withQuery.statusCode).toBe(204);
   });
 
+  // AC-009 / REQ-010 (OD-2 DEFAULT): a signed but malformed body is still accepted with 204 and ignored.
+  it("answers signed but malformed status webhooks with 204", async () => {
+    app = await buildKatApp(katForRoutes());
+    for (const rawBody of ['{"data":{"type":123}}', '{"data":"x"}', "[]"]) {
+      const res = await app.inject({ method: "POST", url: "/kat/status", headers: signedHeaders(rawBody), payload: rawBody });
+      expect(res.statusCode).toBe(204);
+    }
+  });
+
   // AC-005 / REQ-006 — the protected values.
   it("serves /v1/config values for simulation and KAT deployments", async () => {
     const { bus, calls } = serviceDeps();

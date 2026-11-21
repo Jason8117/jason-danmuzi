@@ -22,6 +22,18 @@ describe("module boundaries (SPEC-ARCH-001)", () => {
   });
 
   // AC-006 / REQ-007, REQ-008 (bridge part; the full providers/** rule lands with the scenario move in M5)
+  // AC-012 / REQ-013
+  it("no any for external data", () => {
+    const anyPattern = /Record<string, any>|:\s*any\b|as any\b/;
+    for (const file of ["providers/kat/katProvider.ts", "providers/realtimeBridge.ts"]) {
+      const offending = source(file)
+        .split("\n")
+        .map((line, index) => `${file}:${index + 1}: ${line.trim()}`)
+        .filter((line) => anyPattern.test(line));
+      expect(offending).toEqual([]);
+    }
+  });
+
   it("the realtime bridge does not import brain", () => {
     expect(linesContaining(source("providers/realtimeBridge.ts"), ['from "../brain/', 'from "../../brain/'])).toEqual([]);
   });

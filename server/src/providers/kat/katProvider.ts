@@ -3,7 +3,8 @@ import type { IncomingMessage } from "node:http";
 import type WebSocket from "ws";
 import { maskPhoneNumber } from "../../domain/phone.js";
 import type { CallProvider, CallSession, ProviderRoutes } from "../types.js";
-import { bridgeToRealtime, type RealtimeOptions } from "../realtimeBridge.js";
+import { type BridgeParams, bridgeToRealtime, type RealtimeOptions } from "../realtimeBridge.js";
+import { ApiErrorBody, CreateCallResponse, parseJson, StartFrame, StatusWebhook } from "./schemas.js";
 import { verifyKatHttpSignature, verifyKatStreamSignature } from "./webhook.js";
 
 /** Routes KAT calls back on; also sent to KAT as statusCallbackUrl / streamUrl when a call is created. */
@@ -24,6 +25,8 @@ export interface KatOptions {
   requestTimeoutMs?: number;
   /** Server-side call duration limit (MAX_CALL_DURATION_SEC); KAT's own timeLimit is derived from it. */
   maxCallDurationSec: number;
+  /** Injectable for tests; defaults to the OpenAI Realtime bridge. */
+  bridge?: (params: BridgeParams) => void;
 }
 
 export const DEFAULT_KAT_REQUEST_TIMEOUT_MS = 10_000;
@@ -127,7 +130,7 @@ export class KatCallProvider implements CallProvider {
       codec: "PCMU",
     };
 
-    let response: Record<string, any>;
+    let response: unknown;
     try {
       response = await this.api("POST", `/group/${this.options.groupId}/media-stream/calls`, body, {
         "Idempotency-Key": task.id,
@@ -139,10 +142,11 @@ export class KatCallProvider implements CallProvider {
       }
       throw error;
     }
-    const callId = paramString(response.callId);
-    if (!callId) {
+    const created = CreateCallResponse.safeParse(response);
+    if (!created.success) {
       throw new Error("KAT Cloud did not return a callId");
     }
+    const { callId } = created.data;
     active.callId = callId;
     this.byCallId.set(callId, task.id);
     session.recordProviderCallId(callId);
@@ -190,7 +194,7 @@ export class KatCallProvider implements CallProvider {
             if (!this.isValidHttpWebhook(request.headers, request.rawBody ?? "")) {
               return { status: 401, body: { error: "invalid_signature" } };
             }
-            this.handleStatusWebhook(request.body as Parameters<KatCallProvider["handleStatusWebhook"]>[0]);
+            this.handleStatusWebhook(request.body);
             return { status: 204 };
           },
         },
@@ -218,15 +222,15 @@ export class KatCallProvider implements CallProvider {
     });
   }
 
-  handleStatusWebhook(payload: {
-    data?: {
-      type?: string;
-      callId?: string;
-      status?: string;
-      metadata?: Record<string, unknown>;
-    };
-  }): void {
-    const data = payload.data ?? {};
+  /** Accepts any signed body; one that does not match the webhook schema is ignored (the route still answers 204). */
+  handleStatusWebhook(payload: unknown): void {
+    const parsed = StatusWebhook.safeParse(payload);
+    if (!parsed.success) {
+      // Only the event type and call id, and only when they are readable strings; never the body itself.
+      this.log.warn(readableWebhookIds(payload), "Ignored malformed KAT status webhook");
+      return;
+    }
+    const data = parsed.data.data ?? {};
     const taskId =
       paramString(data.metadata?.taskId) ||
       (data.callId ? this.byCallId.get(data.callId) : undefined) ||
@@ -321,22 +325,16 @@ export class KatCallProvider implements CallProvider {
         }
       }
 
-      let event: {
-        event?: string;
-        streamSid?: string;
-        start?: {
-          streamSid?: string;
-          streamId?: string;
-          callId?: string;
-          customParameters?: Record<string, unknown> | string;
-        };
-      };
-      try {
-        event = JSON.parse(raw.toString());
-      } catch {
+      // Non-JSON frames and frames other than "start" are ignored silently while waiting.
+      const data = parseJson(raw.toString());
+      if (!isRecord(data) || data.event !== "start") return;
+      const parsed = StartFrame.safeParse(data);
+      if (!parsed.success) {
+        // Keep waiting for a well-formed start frame; the 10 s deadline still applies.
+        this.log.warn({ callId: headerCallId || undefined }, "Ignored malformed media start frame");
         return;
       }
-      if (event.event !== "start") return;
+      const event = parsed.data;
 
       socket.off("message", onMessage);
       clearTimeout(timeout);
@@ -386,7 +384,7 @@ export class KatCallProvider implements CallProvider {
       this.log.info({ taskId, callId: callId || undefined, streamSid }, "Media stream bridged to Realtime");
       // Capture callId so hangup still works after session.abort() clears the active map.
       const pstnCallId = active.callId || callId;
-      bridgeToRealtime({
+      (this.options.bridge ?? bridgeToRealtime)({
         media: socket,
         streamSid,
         session: active.session,
@@ -404,7 +402,7 @@ export class KatCallProvider implements CallProvider {
     path: string,
     body?: unknown,
     extraHeaders?: Record<string, string>,
-  ): Promise<Record<string, any>> {
+  ): Promise<unknown> {
     const url = `${this.options.apiBaseUrl.replace(/\/$/, "")}${path}`;
     const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_KAT_REQUEST_TIMEOUT_MS;
     // AbortController + setTimeout instead of AbortSignal.timeout(), so tests can drive the timer.
@@ -436,23 +434,25 @@ export class KatCallProvider implements CallProvider {
     } finally {
       clearTimeout(timer);
     }
-    let json: Record<string, any> = {};
+    let json: unknown = {};
     if (text) {
       try {
-        json = JSON.parse(text) as Record<string, any>;
+        json = JSON.parse(text);
       } catch {
         json = { raw: text };
       }
     }
 
     if (!response.ok) {
-      const message = json.message ?? json.error ?? text.slice(0, 200) ?? response.statusText;
+      // Any body shape (array, string, null) falls back to the raw text instead of throwing.
+      const fields = ApiErrorBody.safeParse(json);
+      const message = fields.data?.message ?? fields.data?.error ?? text.slice(0, 200) ?? response.statusText;
       throw new Error(`KAT Cloud ${method} ${path} failed (${response.status}): ${message}`);
     }
 
     // Some KAT endpoints wrap the payload as { code, message, result }.
     if (json && typeof json === "object" && "result" in json && json.result != null) {
-      return json.result as Record<string, any>;
+      return json.result;
     }
     return json;
   }
@@ -461,6 +461,20 @@ export class KatCallProvider implements CallProvider {
 function headerValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Event type and call id from a webhook body that failed validation, only where they are strings. */
+function readableWebhookIds(payload: unknown): { type?: string; callId?: string } {
+  const data = isRecord(payload) ? payload.data : undefined;
+  if (!isRecord(data)) return {};
+  return {
+    ...(typeof data.type === "string" && { type: data.type }),
+    ...(typeof data.callId === "string" && { callId: data.callId }),
+  };
 }
 
 function normalizeCustomParameters(
