@@ -3,7 +3,7 @@
 ## §E.1 Plan-phase Audit-Ready Signal
 
 - plan_status: revised after plan-audit iteration 1 (PASS-with-fixes 0.86; D18, D19 fixed, D20, D21 applied) — re-audit pending
-- spec_version: 0.2.0
+- spec_version: 0.3.0 (plan-audit iteration 2: FAIL 0.84 -> N5, N6, N7 fixed; A1 applied — injectable `now`, sendAnnouncement or a separate live-region node, jumpTo when motion is zero)
 - plan_complete_at: 2026-11-21
 - base_sha: c664596
 - tier: M (file count 19 exceeds the M guidance; rationale in plan.md §B; auditor D23 accepted M), harness: standard (recommended)

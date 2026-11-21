@@ -71,7 +71,8 @@ git diff --stat <run_start_sha> -- server/
 - **Given** 같은 위젯 트리를 `MediaQuery(disableAnimations: true)`와 `false`로 각각 띄움
 - **When** 움직임 시간 도우미로 `medium`을 묻고, 진행 중 작업의 상태 칩을 띄운 뒤 1 s를 진행하면
 - **Then** 켜짐: 도우미가 `Duration.zero`, 상태 칩의 진행 점 `FadeTransition`의 `opacity` 값이 1 s 동안 변하지 않음(또는 애니메이션 위젯이 없음). 꺼짐: 도우미가 250 ms, 점의 `opacity`가 변함. 켜짐 상태에서 승인 대기 작업이 들어오면 승인 카드가 한 번의 `pump()`로 최종 위치에 있다
-- 테스트: `theme_test.dart` — "respects reduce motion"
+- 스크롤(N7): 켜짐 상태에서 `in_progress` 작업의 상세 화면을 띄우고 가짜 실시간 채널로 대화 기록 20줄을 더한 작업을 보내면 → `tester.takeException()`이 `null`이고(`animateTo`의 0 시간 assert가 나지 않음) 한 번의 `pump()` 뒤 스크롤 위치가 `maxScrollExtent`와 같다(`jumpTo`). 같은 작업을 `completed`로 바꿔 보내면 한 번의 `pump()` 뒤 위치가 0이다. 꺼짐 상태에서는 같은 순서에서 예외가 없고 250 ms(`medium`)·400 ms(`slow`)가 지난 뒤 같은 위치에 닿는다
+- 테스트: `theme_test.dart` — "respects reduce motion"; `accessibility_test.dart` — "scrolls without animation when motion is reduced"
 
 ## AC-007 — 진행 표시와 진동 (REQ-007)
 
@@ -113,11 +114,16 @@ git diff --stat <run_start_sha> -- server/
 
 ## AC-012 — 화면 읽기 (REQ-012)
 
-- **Given** (A) 화면(질문 "예약금 1만 원 결제가 필요합니다. 진행할까요?"), (H) 화면, `SystemChannels.accessibility`로 가는 알림을 기록하는 대역
+- **Given (준비)**
+  - 가짜 시각: 테스트가 `var fakeNow = DateTime.utc(2026, 11, 21, 10)`를 두고, 승인 카드를 `ApprovalCard(taskId: …, approval: …, now: () => fakeNow)`로 직접 띄운다(`ProviderScope` + `MaterialApp` + `Scaffold`, 가짜 저장소). 승인의 `expiresAt`은 `fakeNow`에 남은 초를 더한 값. "1초 진행"은 `fakeNow = fakeNow.add(const Duration(seconds: 1)); await tester.pump(const Duration(seconds: 1));` 한 쌍이다(뒤의 `pump`가 카드의 1초 `Timer.periodic`을 돌려 다시 그리게 하고, 다시 그릴 때 주입된 `fakeNow`를 읽는다). `package:clock`이나 실제 대기는 쓰지 않는다.
+  - 알림 기록: `tester.binding.defaultBinaryMessenger.setMockDecodedMessageHandler(SystemChannels.accessibility, …)`로 `type == 'announce'`인 메시지의 `data.message`를 모은다.
+  - 알림 지원 여부: (가) `MediaQuery(data: MediaQuery.of(context).copyWith(supportsAnnounce: true))`로 감싼 경우, (나) `supportsAnnounce: false`인 경우.
+  - 질문: "예약금 1만 원 결제가 필요합니다. 진행할까요?"
 - **When / Then**
-  1. 남은 90초로 승인 카드가 나타나면 → 카드 영역의 의미 노드가 `liveRegion` 플래그를 가지고 `label`이 "승인 요청: 예약금 1만 원 결제가 필요합니다. 진행할까요?"를 포함하며 숫자·`초`를 포함하지 않는다. 1초씩 5번 `pump`한 뒤에도 그 `label`이 처음과 같다(매초 바뀌지 않음). 화면의 남은 초 글자(예: `90초`)는 의미 트리에 나오지 않는다(`find.bySemanticsLabel(RegExp(r'^\d+초$'))` 0개)
-  2. 남은 32초로 나타난 카드를 1초씩 3번 `pump` → 기록된 알림이 "30초 남았어요" 정확히 1건. 이어서 20번 더 `pump`(남은 9초) → "10초 남았어요"가 정확히 1건 더해져 모두 2건이고, 그 밖의 알림은 없다
-  3. 남은 8초로 나타난 카드 → 30초·10초 알림 없음(이미 지난 시점)
+  1. 남은 90초로 카드를 띄우면 → 카드 영역의 의미 노드가 `liveRegion` 플래그를 가지고 `label`이 "승인 요청: 예약금 1만 원 결제가 필요합니다. 진행할까요?"를 포함한다(질문의 `1만` 같은 숫자는 그대로 둠). 그 `label`에 남은 초 형태가 없다: `RegExp(r'\d+\s*초')`와 일치하지 않는다. "1초 진행"을 5번 한 뒤에도 `label`이 처음과 같다. 화면의 남은 초 글자(예: `85초`)는 의미 트리에 나오지 않는다(`find.bySemanticsLabel(RegExp(r'\d+\s*초$'))` 0개)
+  2. (가) 남은 32초로 띄우고 "1초 진행" 3번(남은 29초) → 모은 알림이 `['30초 남았어요']`. 이어서 "1초 진행" 20번(남은 9초) → `['30초 남았어요', '10초 남았어요']`이고 그 밖의 알림이 없다
+  3. (나) 같은 순서 → 모은 알림은 0건이다. 대신 남은 29초에서 카드 안 별도 실시간 영역 노드의 `label`이 "30초 남았어요", 남은 9초에서 "10초 남았어요"이고, 그 사이 "1초 진행"마다 그 `label`이 바뀌지 않는다
+  4. (가) 남은 8초로 띄우고 "1초 진행" 3번 → 알림 0건(이미 지난 시점)
 - **Then (공통)** 상태 칩의 `label`은 `상태: 통화 중`(또는 해당 라벨). 설정·삭제·보내기·수정 아이콘 버튼은 `tooltip`이 비어 있지 않다(`find.byTooltip('설정')`, `'삭제'`, `'보내기'`, `'수정'`)
 - 테스트: `accessibility_test.dart` — "screen reader labels are present", "announces the remaining time only at 30 and 10 seconds"
 - 참고: 화면 읽기 프로그램이 실시간 영역 라벨 변화를 어떻게 다시 읽는지는 플랫폼 동작이며 자동으로 확인하지 않는다. 이 AC는 라벨이 매초 바뀌지 않음과 알림 횟수를 고정한다.
@@ -148,6 +154,8 @@ git diff --stat <run_start_sha> -- server/
 
 - `textContrastGuideline`은 그려진 픽셀 기준이 아니라 위젯의 글자·배경 색 추정이므로, 겹친 반투명 배경에서는 실제와 다를 수 있다. AC-002의 직접 계산이 이를 보완한다.
 - 실제 화면 읽기 프로그램(TalkBack·VoiceOver)의 읽기 순서·말투는 자동으로 확인하지 않는다.
+- Android에서는 알림 이벤트 대신 별도 실시간 영역 노드로 남은 시간을 알린다(REQ-012). TalkBack이 그 노드 라벨 변화를 언제·어떻게 읽는지는 기기에서 확인하지 않았다. 알림 지원 여부(`supportsAnnounce`)는 플랫폼이 정하며, 테스트는 두 경우를 모두 흉내 낸다(AC-012 (가)(나)).
+- 남은 초의 기준 시각은 주입된 `now`이며 통화 상세 화면은 기본값 `DateTime.now`를 쓴다. 기기 시계와 서버 시계의 차이(`expiresAt`은 서버 시각)는 지금처럼 남는다.
 - 시스템 글꼴은 기기마다 달라 같은 글자 크기에서도 줄바꿈 위치가 다르다.
 - AC-001 grep은 한 줄 단위다. 인자가 여러 줄로 나뉜 생성자(`EdgeInsets.fromLTRB(` 다음 줄의 숫자 등)는 잡지 못하고, 간격용 `SizedBox(height: N)`은 검사 대상이 아니다. run-phase는 `dart format` 뒤 같은 grep을 다시 돌리고, 여러 줄 인자는 `grep -nA3 "EdgeInsets\."`로 눈으로 확인한 결과를 기록한다. analyzer 규칙으로 강제하는 일은 이 SPEC 밖이다.
 

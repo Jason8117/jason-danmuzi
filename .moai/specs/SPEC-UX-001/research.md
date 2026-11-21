@@ -30,6 +30,10 @@
 - 승인 카드는 `Timer.periodic` 1초마다 `setState`로 다시 그린다(`approval_card.dart:37`). 남은 초를 실시간 영역 라벨에 넣으면 라벨이 매초 바뀌므로 REQ-012는 남은 초를 라벨에서 빼고 30초·10초에만 알린다(plan-audit D18; 화면 읽기 프로그램의 실제 재낭독 동작은 확인하지 않음).
 - 진동: 승인 카드가 뜰 때 `HapticFeedback.heavyImpact()`(`approval_card.dart:36`), 다른 화면에서 승인 요청 알림 때도(`approval_listener.dart:32`).
 
+- 남은 초는 `widget.approval.expiresAt.difference(DateTime.now())`로 계산된다(`approval_card.dart:69`). 위젯 테스트의 `pump`는 `DateTime.now()`를 앞당기지 않으므로(plan-audit iteration 2 N6), REQ-012는 현재 시각 함수 `now`를 매개변수로 주입하게 한다. `package:clock`은 `pubspec.lock`에 전이 의존성으로만 있고 직접 의존성으로 쓰지 않는다.
+- 움직임 줄이기에서 스크롤 시간을 0으로 주면 `ScrollController.animateTo`가 만드는 `DrivenScrollActivity`가 `assert(duration > Duration.zero)`로 멈춘다(설치된 Flutter `/opt/homebrew/share/flutter/packages/flutter/lib/src/widgets/scroll_activity.dart:703`에서 확인). 그래서 0이면 `jumpTo`를 쓴다(N7).
+- 설치된 Flutter의 `semantics_service.dart`: `announce`는 `@Deprecated('Use sendAnnouncement instead. … deprecated after v3.35.0-0.1.pre.')`(:51-55), `sendAnnouncement(FlutterView view, String message, TextDirection textDirection, …)`가 있다(:81). 같은 문서 :42-46은 Android가 알림 이벤트를 권장하지 않으니 `Semantics`로 알리라고 한다. 지원 여부는 `MediaQuery.supportsAnnounceOf`(`media_query.dart:2108`)로 판단한다(A1).
+
 ## 4. 화면 읽기와 누르는 영역
 
 - 아이콘 버튼 툴팁: 설정(`home_screen.dart:30`), 삭제(`call_detail_screen.dart:120`), 토큰 보기(`settings_screen.dart:129`)는 있다. 실시간 연결 점은 `Tooltip`으로 감싼 장식(`home_screen.dart:74-80`).

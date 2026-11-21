@@ -1,7 +1,7 @@
 ---
 id: SPEC-UX-001
 title: "친근하고 정돈된 비서 화면 — 디자인 토큰, 공용 카드, 쉬운 상태 문구, 접근성"
-version: "0.2.0"
+version: "0.3.0"
 status: draft
 created: 2026-11-21
 updated: 2026-11-21
@@ -24,6 +24,7 @@ related_specs: [SPEC-APPROVAL-001, SPEC-INTAKE-001, SPEC-OUTCOME-001]
 |------|------|------|------|
 | 0.1.0 | 2026-11-21 | jason (manager-spec) | 최초 작성 (draft). 에픽 EPIC-ASSISTANT-UX의 마지막 SPEC |
 | 0.2.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 1 반영: D18 승인 카드의 실시간 영역은 나타날 때 질문만 알리고 남은 시간은 30초·10초에만 한 번씩 알림, D19 진행 점 주기 1100 ms를 `pulse` 토큰으로 추가하고 대화 따라가기 스크롤 300 ms를 `medium` 250 ms로 바꿈, D20 grep 검사의 한계 기록, D21 빈 홈의 칩 위치를 SPEC-INTAKE-001 REQ-018 (b)에 맞춤. REQ/AC 번호·개수 불변 |
+| 0.3.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 2 반영: N5 AC-012 (1)은 남은 초 형태(`\d+\s*초`)만 금지, N6 승인 카드가 현재 시각 함수 `now`를 받게 하고(`package:clock` 직접 의존 없음) AC-012 준비를 가짜 시각으로, N7 움직임 시간이 0이면 스크롤은 `jumpTo`, A1 알림은 `SemanticsService.sendAnnouncement`(지원 안 하면 별도 실시간 영역 노드), 제안 항목 와이어프레임을 한 덩어리 글로, 캘린더 라벨 "캘린더 파일 보내기". REQ/AC 번호·개수 불변 |
 
 ## 1. 배경과 목적
 
@@ -54,7 +55,7 @@ related_specs: [SPEC-APPROVAL-001, SPEC-INTAKE-001, SPEC-OUTCOME-001]
 
 ### 3.3 움직임·피드백·빈 상태
 
-- **REQ-006** [State-driven] **While** 기기의 움직임 줄이기 설정(`MediaQuery.disableAnimations`)이 켜져 있으면, 앱의 모든 토큰 기반 움직임 시간은 0이어야 하고(**shall**) 진행 중 표시 점(`PulsingDot`)은 깜박이지 않는다. 꺼져 있으면 상태 칩 바뀜, 승인 카드 나타남, 계획 카드 행 펼침은 토큰 시간(250 ms)으로 움직인다.
+- **REQ-006** [State-driven] **While** 기기의 움직임 줄이기 설정(`MediaQuery.disableAnimations`)이 켜져 있으면, 앱의 모든 토큰 기반 움직임 시간은 0이어야 하고(**shall**) 진행 중 표시 점(`PulsingDot`)은 깜박이지 않는다. 꺼져 있으면 상태 칩 바뀜, 승인 카드 나타남, 계획 카드 행 펼침은 토큰 시간(250 ms)으로 움직인다. 스크롤(대화 따라가기, 결과로 올라가기)은 움직임 시간이 `Duration.zero`이면 `jumpTo`, 아니면 `animateTo`를 쓴다(`ScrollController.animateTo`는 0 시간을 받지 않는다 — 설치된 Flutter `scroll_activity.dart:703`의 `assert(duration > Duration.zero)`).
 - **REQ-007** [Event-driven] **When** 사용자가 비동기 작업 버튼([이대로 시작], 승인·거절, 다시 걸기를 제외한 후속 행동, 이대로 전화 걸기, 연결 테스트)을 누르면, 그 버튼은 끝날 때까지 진행 표시와 함께 비활성이어야 하고(**shall**), [이대로 시작]과 승인·거절이 성공하면 가벼운 진동(`HapticFeedback.lightImpact`)을 한 번 낸다. 승인 요청이 도착할 때의 강한 진동(현행 `approval_card.dart:36`)은 유지한다.
 - **REQ-008** [Ubiquitous] 빈 상태(작업 없음, 대화 기록 없음, 서버 연결 실패, 통화를 찾을 수 없음)는 같은 빈 상태 위젯(아이콘, 제목 한 줄, 설명, 행동 최대 2개 — 기존 `MessageView`를 이 역할로 정리)으로 보여야 하며(**shall**), 제목·설명은 지금 문구를 유지하되 제목이 없던 "대화 기록 없음"에만 제목 "대화를 기다리고 있어요"를 더한다(`design.md` §5 표).
 
@@ -63,7 +64,7 @@ related_specs: [SPEC-APPROVAL-001, SPEC-INTAKE-001, SPEC-OUTCOME-001]
 - **REQ-009** [Ubiquitous] 홈, 계획 카드, 승인 카드가 있는 통화 상세, 결과 화면의 모든 누를 수 있는 요소는 Flutter 접근성 지침 `androidTapTargetGuideline`(48×48), `iOSTapTargetGuideline`(44×44), `labeledTapTargetGuideline`을 통과해야 한다(**shall**).
 - **REQ-010** [Ubiquitous] 같은 네 화면은 밝은·어두운 모드 각각에서 `textContrastGuideline`을 통과해야 한다(**shall**).
 - **REQ-011** [State-driven] **While** 글자 크기 배율이 2.0이면, 같은 네 화면은 360×640 논리 크기에서 넘침 오류 없이 그려져야 하며(**shall**), 화면 아래 고정 영역(승인 카드·행동 버튼)은 화면 높이의 절반을 넘으면 그 안에서 스크롤된다. 주요 버튼([이대로 시작], 승인, 거절, 다시 걸기)은 스크롤로 닿을 수 있다.
-- **REQ-012** [Ubiquitous] 화면 읽기 지원이 다음을 갖춰야 한다(**shall**): 승인 카드는 나타날 때 한 번 "승인 요청: <질문>"을 알리는 실시간 영역(`liveRegion`)이며, 이 영역의 읽기 문구에는 남은 초를 넣지 않는다(카드가 1초마다 다시 그려지므로(`approval_card.dart:37`) 라벨이 바뀌면 화면 읽기 프로그램이 매초 다시 읽을 수 있다). 1초마다 바뀌는 남은 초 글자는 읽기 대상에서 빼고, 남은 시간은 남은 초가 30초와 10초를 지나는 순간에만 접근성 알림("30초 남았어요", "10초 남았어요")으로 각각 한 번 알린다. 카드가 그 시점 이후에 나타나면 이미 지난 시점의 알림은 하지 않는다. 상태 칩의 읽기 문구는 "상태: <라벨>"이다. 아이콘만 있는 버튼(설정, 삭제, 계획 카드의 수정, 보내기)은 툴팁이 있다.
+- **REQ-012** [Ubiquitous] 화면 읽기 지원이 다음을 갖춰야 한다(**shall**): 승인 카드는 나타날 때 한 번 "승인 요청: <질문>"을 알리는 실시간 영역(`liveRegion`)이며, 이 영역의 읽기 문구에는 남은 초를 넣지 않는다(카드가 1초마다 다시 그려지므로(`approval_card.dart:37`) 라벨이 바뀌면 화면 읽기 프로그램이 매초 다시 읽을 수 있다). 1초마다 바뀌는 남은 초 글자는 읽기 대상에서 빼고, 남은 시간은 남은 초가 30초와 10초를 지나는 순간에만 "30초 남았어요", "10초 남았어요"로 각각 한 번 알린다. 알림 방식: 플랫폼이 알림을 지원하면(`MediaQuery.supportsAnnounceOf(context)`가 참) `SemanticsService.sendAnnouncement(View.of(context), …)`로 보낸다(설치된 Flutter의 `semantics_service.dart:81`; `SemanticsService.announce`는 v3.35 이후 deprecated라 쓰지 않는다). 지원하지 않으면(Android는 알림 이벤트를 권장하지 않음, 같은 파일 :42-46) 카드 안의 별도 실시간 영역 노드 하나의 라벨을 그 두 순간에만 "30초 남았어요"·"10초 남았어요"로 바꿔 알린다. 카드가 그 시점 이후에 나타나면 이미 지난 시점의 알림은 하지 않는다. 남은 초의 기준 시각은 승인 카드가 받는 현재 시각 함수(`DateTime Function() now`, 기본값 `DateTime.now`)에서 얻는다 — 지금처럼 `DateTime.now()`를 직접 부르지 않는다(`approval_card.dart:69`). 위젯 테스트는 이 매개변수로 가짜 시각을 넘긴다. `package:clock`을 직접 의존성으로 추가하지 않는다(지금은 전이 의존성일 뿐이다). 상태 칩의 읽기 문구는 "상태: <라벨>"이다. 아이콘만 있는 버튼(설정, 삭제, 계획 카드의 수정, 보내기)은 툴팁이 있다.
 
 ### 3.5 배치와 회귀
 
