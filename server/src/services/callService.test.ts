@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildAgentInstructions } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
 import type { CallTask, TaskStatus } from "../domain/types.js";
 import { EventBus, type ServerEvent } from "../events/eventBus.js";
@@ -146,6 +147,22 @@ describe("CallService provider call id (AC-006)", () => {
 
     expect(calls.get("t-1").providerCallId).toBe("c-1");
     expect(events.some((e) => e.type === "task.updated" && e.task.providerCallId === "c-1")).toBe(true);
+  });
+});
+
+describe("CallService session instructions (SPEC-ARCH-001 AC-007)", () => {
+  it("session exposes the agent instructions for its task", async () => {
+    const provider = new FakeProvider();
+    const { calls } = setup({
+      provider,
+      tasks: [makeTask({ context: "2명, 창가 자리 선호", callbackNumber: "+821099998888" })],
+    });
+
+    await calls.approvePlan("t-1");
+    const session = provider.sessions.get("t-1")!;
+
+    expect(session.agentInstructions()).toBe(buildAgentInstructions(calls.get("t-1")));
+    expect(session.agentInstructions()).toContain("2명, 창가 자리 선호");
   });
 });
 

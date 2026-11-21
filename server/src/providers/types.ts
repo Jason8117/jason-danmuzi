@@ -50,6 +50,8 @@ export interface CallSession {
   readonly taskId: string;
   /** Latest task snapshot. */
   task(): CallTask;
+  /** The live agent's instructions for this task, built by the service layer from the current task. */
+  agentInstructions(): string;
   /** Aborted when the user hangs up or the call ends for any reason. */
   readonly signal: AbortSignal;
   markRinging(): void;

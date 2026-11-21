@@ -1,5 +1,4 @@
 import WebSocket from "ws";
-import { buildAgentInstructions } from "../brain/prompts.js";
 import type { ApprovalDecision } from "../domain/types.js";
 import type { CallSession } from "./types.js";
 
@@ -59,6 +58,8 @@ export function bridgeToRealtime(params: {
 }): void {
   const { media, streamSid, session, options, hangup, log } = params;
   const task = session.task();
+  // Built once per bridge from the same snapshot, as before; reused on every reconnect attempt.
+  const instructions = session.agentInstructions();
 
   let ai: WebSocket | undefined;
   let intentionalClose = false;
@@ -139,7 +140,7 @@ export function bridgeToRealtime(params: {
           type: "realtime",
           model: options.model,
           output_modalities: ["audio"],
-          instructions: buildAgentInstructions(task),
+          instructions,
           audio: {
             input: {
               format: { type: "audio/pcmu" },

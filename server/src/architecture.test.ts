@@ -20,4 +20,9 @@ describe("module boundaries (SPEC-ARCH-001)", () => {
       linesContaining(app, ["providers/kat", "KatCallProvider", "simulatedProvider", "realtimeBridge", '"/kat/"', '=== "kat"']),
     ).toEqual([]);
   });
+
+  // AC-006 / REQ-007, REQ-008 (bridge part; the full providers/** rule lands with the scenario move in M5)
+  it("the realtime bridge does not import brain", () => {
+    expect(linesContaining(source("providers/realtimeBridge.ts"), ['from "../brain/', 'from "../../brain/'])).toEqual([]);
+  });
 });

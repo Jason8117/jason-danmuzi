@@ -55,10 +55,23 @@ run_start_sha: b5bde14719593cf491672288d5bc5b6228da49e8
 - GREEN: same command → `Tests  16 passed (16)`, exit 0 (`m1-green.txt`); full suite `Test Files 9 passed (9)` / `Tests 134 passed (134)` (`m1-full.txt`); typecheck exit 0; AC-001 grep → `0`.
 - Plan deviation (recorded): `container.ts` / `index.ts` wiring moved from M6 into M1, because removing `AppDeps.kat` breaks `npm run typecheck` until the wiring changes.
 
+### M2 — session-provided agent instructions
+
+- RED (`npm --prefix server test -- src/architecture.test.ts src/services/callService.test.ts`, exit 1, `m2-red.txt`):
+  ```
+  × the realtime bridge does not import brain            AssertionError: expected [ Array(1) ] to deeply equal []
+  × session exposes the agent instructions for its task  TypeError: session.agentInstructions is not a function
+  Tests  2 failed | 22 passed (24)
+  ```
+- GREEN: full suite `Test Files 9 passed (9)` / `Tests 136 passed (136)`, exit 0 (`m2-full.txt`); typecheck exit 0.
+- The bridge reads `session.agentInstructions()` once at bridge start (same moment it already took the `session.task()` snapshot), so the string sent on every (re)connect is unchanged. The bridge-side AC-007 assertion lands in M3 with the WebSocket injection point.
+- Plan deviation (recorded): the AC-006 rule for all of `providers/**` cannot pass until `scenario.ts` moves (M5). M2 asserts only the bridge file so the M2 commit stays green; the full rule is added (RED → GREEN) in M5.
+
 ### Milestone log
 
 - M1 done (commit: see git log `feat(SPEC-ARCH-001): M1`)
-- next: M2
+- M2 done (commit: see git log `feat(SPEC-ARCH-001): M2`)
+- next: M3
 
 ## §E.3 Run-phase Audit-Ready Signal
 

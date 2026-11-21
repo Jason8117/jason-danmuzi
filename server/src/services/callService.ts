@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buildAgentInstructions } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
 import { checkTargetNumber, normalizePhoneNumber } from "../domain/phone.js";
 import { assertTransition } from "../domain/stateMachine.js";
@@ -363,6 +364,7 @@ export class CallService {
       taskId,
       signal: controller.signal,
       task: () => this.get(taskId),
+      agentInstructions: () => buildAgentInstructions(this.get(taskId)),
       markRinging: () =>
         updateActive((task) => {
           if (task.status === "dialing") this.transition(task, "ringing");
