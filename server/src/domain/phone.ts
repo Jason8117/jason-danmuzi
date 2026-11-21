@@ -51,7 +51,7 @@ export type TargetNumberCheck = { kind: "ok"; e164: string } | { kind: "invalid"
  * The block list is checked on the raw text first, because normalizePhoneNumber rejects short codes
  * as malformed and would otherwise hide them behind "invalid".
  */
-// @MX:ANCHOR: [AUTO] Safety gate for every outbound call: CallService.create and CallService.approvePlan both rely on it.
+// @MX:ANCHOR: [AUTO] Safety gate for every outbound call: CallService.create and CallService.approvePlan both rely on it; create also uses it to drop blocked callback numbers.
 // @MX:REASON: Emergency/special numbers must never be auto-dialed; a weaker rule here silently weakens every entry point.
 // @MX:SPEC: SPEC-POLICY-001
 export function checkTargetNumber(raw: string): TargetNumberCheck {

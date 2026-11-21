@@ -481,6 +481,18 @@ describe("CallService number policy at creation (SPEC-POLICY-001 AC-001..AC-004)
     expect(task.callbackNumber).toBe(expected);
     expect(store.get(task.id)?.callbackNumber).toBe(expected);
   });
+
+  // Owner decision: a callback number the number policy blocks is dropped, never stored and never an error.
+  it.each(["112-0000-0000", "119", "+82 112", "119 1234 5678"])(
+    "create drops a blocked callback number and still creates the task: %s",
+    (callbackNumber) => {
+      const { calls, store } = setup();
+      const task = calls.create({ ...INPUT, callbackNumber });
+      expect(task.callbackNumber).toBeUndefined();
+      expect(store.get(task.id)?.callbackNumber).toBeUndefined();
+      expect(calls.list()).toHaveLength(1);
+    },
+  );
 });
 
 describe("CallService number policy before dialing (SPEC-POLICY-001 AC-010)", () => {

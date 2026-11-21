@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildAgentInstructions } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
-import { checkTargetNumber, normalizePhoneNumber } from "../domain/phone.js";
+import { checkTargetNumber } from "../domain/phone.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
   type ApprovalDecision,
@@ -221,7 +221,7 @@ export class CallService {
     const checked: CallTaskInput = {
       ...input,
       phoneNumber: this.requireDialableNumber(input.phoneNumber),
-      callbackNumber: input.callbackNumber ? normalizePhoneNumber(input.callbackNumber) ?? undefined : undefined,
+      callbackNumber: this.allowedCallbackNumber(input.callbackNumber),
     };
     const timestamp = now();
     const task: CallTask = {
@@ -333,6 +333,16 @@ export class CallService {
     if (check.kind === "invalid") throw new ServiceError(400, "invalid_phone", INVALID_PHONE_MESSAGE);
     if (check.kind === "blocked") throw new ServiceError(400, "blocked_number", BLOCKED_NUMBER_MESSAGE);
     return check.e164;
+  }
+
+  /**
+   * Same number rule as the target, but never an error: invalid or blocked callback numbers are
+   * dropped (stored as undefined) so the task is still created (SPEC-POLICY-001 REQ-004, owner decision).
+   */
+  private allowedCallbackNumber(raw: string | undefined): string | undefined {
+    if (!raw) return undefined;
+    const check = checkTargetNumber(raw);
+    return check.kind === "ok" ? check.e164 : undefined;
   }
 
   private assertWithinLimits(): void {

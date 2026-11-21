@@ -95,6 +95,32 @@ describe("CallMate API", () => {
     },
   );
 
+  // SPEC-POLICY-001 owner decision: blocked callback numbers are dropped, the task is still created.
+  it.each(["112-0000-0000", "119", "+82 112", "119 1234 5678"])(
+    "drops a blocked callback number and still returns 201: %s",
+    async (callbackNumber) => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/tasks",
+        headers: auth,
+        payload: { targetName: "x", phoneNumber: "010-1234-5678", goal: "문의", requesterName: "김", callbackNumber },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json<CallTask>().callbackNumber).toBeUndefined();
+    },
+  );
+
+  it("still normalizes a normal callback number", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      headers: auth,
+      payload: { targetName: "x", phoneNumber: "010-1234-5678", goal: "문의", requesterName: "김", callbackNumber: "010 9999 8888" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<CallTask>().callbackNumber).toBe("+821099998888");
+  });
+
   it("keeps invalid_request for schema violations", async () => {
     const res = await app.inject({
       method: "POST",
