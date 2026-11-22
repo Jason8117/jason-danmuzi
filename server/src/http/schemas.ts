@@ -14,6 +14,12 @@ export const CreateTaskBody = z.object({
   autoStart: z.boolean().optional(),
 });
 
+/** One-line request for POST /v1/intake; 1-1000 UTF-16 units after trimming, like CreateTaskBody.goal (REQ-001). */
+export const IntakeBody = z.object({
+  text: text(1000),
+  language: z.enum(["ko", "en"]).default("ko"),
+});
+
 export const ApprovePlanBody = z
   .object({
     plan: z

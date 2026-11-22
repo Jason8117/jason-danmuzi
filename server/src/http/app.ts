@@ -10,7 +10,7 @@ import { InvalidTransitionError } from "../domain/stateMachine.js";
 import type { EventBus } from "../events/eventBus.js";
 import type { ProviderRoutes } from "../providers/types.js";
 import { type CallService, ServiceError } from "../services/callService.js";
-import { ApprovalDecisionBody, ApprovalParams, ApprovePlanBody, CreateTaskBody, TaskParams } from "./schemas.js";
+import { ApprovalDecisionBody, ApprovalParams, ApprovePlanBody, CreateTaskBody, IntakeBody, TaskParams } from "./schemas.js";
 
 export interface AppDeps {
   config: Pick<AppConfig, "API_TOKEN" | "CORS_ORIGINS" | "provider" | "llm">;
@@ -161,6 +161,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { autoStart, ...input } = CreateTaskBody.parse(request.body);
     const task = calls.create(input, { autoStart });
     return reply.status(201).send(task);
+  });
+
+  // Interpretation, masking and number rules live in CallService; this route only validates and delegates.
+  app.post("/v1/intake", async (request) => {
+    const { text, language } = IntakeBody.parse(request.body);
+    return calls.draftIntake(text, language);
   });
 
   app.post("/v1/tasks/:id/approve-plan", async (request) => {

@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { HeuristicBrain } from "../brain/heuristicBrain.js";
 import { buildAgentInstructions, openingLine } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
 import { sanitizeApprovalComment } from "../domain/approvalComment.js";
+import {
+  answeredHistory,
+  findHistoryNumber,
+  findKnownName,
+  findPhoneNumberInText,
+  maskPhoneNumbers,
+  normalizeName,
+  stripPhoneNumbers,
+} from "../domain/intake.js";
 import { checkTargetNumber } from "../domain/phone.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
@@ -13,6 +23,8 @@ import {
   type CallTask,
   type CallTaskInput,
   type CreateTaskOptions,
+  type IntakeMissingField,
+  type IntakeResult,
   type Language,
   type Speaker,
   type TaskStatus,
@@ -66,6 +78,8 @@ const INVALID_PHONE_MESSAGE = "전화번호 형식이 올바르지 않습니다.
 const BLOCKED_NUMBER_MESSAGE = "긴급·특수번호에는 전화할 수 없습니다.";
 /** Recorded when an auto start fails outside the ServiceError checks (SPEC-INTAKE-001 design.md §5). */
 const AUTO_START_FAILED_MESSAGE = "자동으로 통화를 시작하지 못했어요.";
+/** Deterministic intake for brains that do not implement draftIntake (REQ-010). */
+const INTAKE_RULES = new HeuristicBrain();
 /** Upper bound on how long startup waits for restart-recovery hang-ups. */
 const RECOVERY_DEADLINE_MS = 10_000;
 /** Prefix of the transcript line that records a user's approval comment (SPEC-APPROVAL-001 OD-3). */
@@ -246,6 +260,58 @@ export class CallService {
     this.persist(task);
     void this.plan(task.id, checked);
     return task;
+  }
+
+  /**
+   * Turns a one-line request into a plan-card draft. Creates nothing: no task, no event, no provider call, and
+   * nothing about the request is logged (SPEC-INTAKE-001 REQ-001..012). Numbers come only from the request text or
+   * from a counterparty who answered before, and every one passes checkTargetNumber.
+   */
+  // @MX:ANCHOR: [AUTO] Sole owner of intake post-processing: masking before the brain, invented-number removal and
+  // the name-containment check after it. Both brains and the HTTP route rely on this being the only place.
+  // @MX:REASON: REQ-007/REQ-008 put masking and post-processing in one service layer; a second copy would drift.
+  // @MX:SPEC: SPEC-INTAKE-001
+  async draftIntake(text: string, language: Language = "ko"): Promise<IntakeResult> {
+    this.assertNotShuttingDown();
+    const fromText = findPhoneNumberInText(text);
+    const masked = maskPhoneNumbers(text);
+    const content = this.brain.draftIntake
+      ? await this.brain.draftIntake(masked, language)
+      : await INTAKE_RULES.draftIntake(masked, language);
+
+    const cleanName = content.targetName === null ? "" : stripPhoneNumbers(content.targetName);
+    const mentioned = cleanName !== "" && normalizeName(text).includes(normalizeName(cleanName));
+    const history = answeredHistory(this.store.list());
+    const targetName = mentioned ? cleanName : findKnownName(history, text);
+
+    let phoneNumber = fromText.phoneNumber;
+    let phoneSource: IntakeResult["phoneSource"] = phoneNumber ? "text" : null;
+    if (!phoneNumber && !fromText.numberIssue && targetName) {
+      phoneNumber = findHistoryNumber(history, targetName);
+      if (phoneNumber) phoneSource = "history";
+    }
+
+    const goal = stripPhoneNumbers(content.goal);
+    const context = content.context === null ? "" : stripPhoneNumbers(content.context);
+    const missing: IntakeMissingField[] = [];
+    if (!targetName) missing.push("targetName");
+    if (!phoneNumber) missing.push("phoneNumber");
+    if (!goal) missing.push("goal");
+
+    return {
+      draft: {
+        targetName: targetName || null,
+        phoneNumber,
+        goal,
+        conditions: content.conditions.map(stripPhoneNumbers).filter((condition) => condition !== ""),
+        context: context || null,
+        language,
+      },
+      missing,
+      phoneSource,
+      numberIssue: fromText.numberIssue,
+      source: content.source,
+    };
   }
 
   /** User reviewed the plan (optionally edited it) and wants the call placed now. */

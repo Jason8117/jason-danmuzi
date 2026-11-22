@@ -619,3 +619,106 @@ describe("autoStart (SPEC-INTAKE-001)", () => {
     expect(waiting.plan?.openingLine).toContain("AI 비서");
   });
 });
+
+/** Counts intake interpretations so a test can prove none started. */
+class CountingIntakeBrain extends HeuristicBrain {
+  intakeCalls = 0;
+  override async draftIntake(maskedText: string, language: "ko" | "en") {
+    this.intakeCalls++;
+    return super.draftIntake(maskedText, language);
+  }
+}
+
+describe("POST /v1/intake (SPEC-INTAKE-001)", () => {
+  let app: FastifyInstance;
+  let calls: CallService;
+  let brain: CountingIntakeBrain;
+
+  beforeEach(async () => {
+    const bus = new EventBus();
+    brain = new CountingIntakeBrain();
+    calls = new CallService(new InMemoryTaskStore(), bus, brain, new SimulatedCallProvider(200), {
+      maxConcurrentCalls: 1,
+      maxCallsPerDay: 10,
+      approvalTimeoutMs: 2000,
+      maxCallDurationMs: 60_000,
+    });
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+      calls,
+      bus,
+      logger: false,
+    });
+  });
+
+  afterEach(() => app.close());
+
+  const intake = (payload: object, headers: Record<string, string> = auth) =>
+    app.inject({ method: "POST", url: "/v1/intake", headers, payload });
+
+  // AC-001 / REQ-001, REQ-012
+  it.each([
+    {
+      name: "(1) a request with a name and a number",
+      payload: { text: "라 파스타에 전화해서 02-123-4567로 금요일 7시 2명 예약" },
+      status: 200,
+      expect: {
+        targetName: "라 파스타",
+        phoneNumber: "+8221234567",
+        phoneSource: "text",
+        numberIssue: null,
+        source: "heuristic",
+        language: "ko",
+        missing: [],
+      },
+    },
+    {
+      name: "(2) English, nothing to find",
+      payload: { text: "금요일 7시 예약", language: "en" },
+      status: 200,
+      expect: { language: "en", missing: ["targetName", "phoneNumber"] },
+    },
+    { name: "(3) blank text", payload: { text: "   " }, status: 400, error: "invalid_request" },
+    { name: "(4) 1001 characters", payload: { text: "가".repeat(1001) }, status: 400, error: "invalid_request" },
+    { name: "(5) unsupported language", payload: { text: "예약", language: "fr" }, status: 400, error: "invalid_request" },
+    {
+      name: "(6) no token",
+      payload: { text: "라 파스타에 전화해서 02-123-4567로 금요일 7시 2명 예약" },
+      headers: {},
+      status: 401,
+      error: "unauthorized",
+    },
+  ])("drafts an intake without creating a task $name", async ({ payload, headers, status, expect: fields, error }) => {
+    const res = await intake(payload, headers);
+    expect(res.statusCode).toBe(status);
+    const body = res.json();
+
+    if (error) {
+      expect(body.error).toBe(error);
+    } else {
+      expect(Object.keys(body).sort()).toEqual(["draft", "missing", "numberIssue", "phoneSource", "source"]);
+      expect(Object.keys(body.draft).sort()).toEqual(["conditions", "context", "goal", "language", "phoneNumber", "targetName"]);
+      const { language, targetName, phoneNumber, missing, ...top } = fields!;
+      expect(body.draft.language).toBe(language);
+      expect(body.missing).toEqual(missing);
+      if (targetName !== undefined) expect(body.draft.targetName).toBe(targetName);
+      if (phoneNumber !== undefined) expect(body.draft.phoneNumber).toBe(phoneNumber);
+      expect(body).toMatchObject(top);
+    }
+    expect(calls.list()).toEqual([]);
+  });
+
+  // AC-002 / REQ-002
+  it("refuses intake while shutting down", async () => {
+    calls.beginShutdown();
+
+    const refused = await intake({ text: "라 파스타에 전화해서 7시 예약" });
+    expect(refused.statusCode).toBe(503);
+    expect(refused.json()).toEqual({ error: "shutting_down", message: "서버가 종료 중입니다. 잠시 후 다시 시도해 주세요." });
+    expect(brain.intakeCalls).toBe(0);
+
+    const invalid = await intake({ text: "" });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error).toBe("invalid_request");
+  });
+});

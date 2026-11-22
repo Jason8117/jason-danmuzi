@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAgentInstructions } from "../brain/prompts.js";
 import { openingLine } from "../brain/prompts.js";
+import { HeuristicBrain } from "../brain/heuristicBrain.js";
+import { OpenAiBrain } from "../brain/openaiBrain.js";
 import type { CallBrain } from "../brain/types.js";
 import type { CallTask, ProviderId, TaskStatus } from "../domain/types.js";
 import { EventBus, type ServerEvent } from "../events/eventBus.js";
@@ -904,5 +906,230 @@ describe("CallService auto start scope (SPEC-INTAKE-001 AC-016)", () => {
     expect(restarted.calls.get("loaded").status).toBe("awaiting_approval");
     expect(restarted.starts).toEqual([]);
     expect(provider.terminated).toEqual([]);
+  });
+});
+
+/** A finished call to `targetName` (design.md §3.4 history vectors). */
+function historyTask(id: string, targetName: string, phoneNumber: string, day: string, connected = true): CallTask {
+  const at = `2026-11-${day}T10:00:00.000Z`;
+  return makeTask({
+    id,
+    targetName,
+    phoneNumber,
+    status: "completed",
+    createdAt: at,
+    updatedAt: at,
+    startedAt: at,
+    ...(connected && { connectedAt: at }),
+  });
+}
+
+const HISTORY_1 = () => historyTask("h1", "라 파스타", "+8221234567", "01");
+const HISTORY_2 = () => historyTask("h2", "라파스타", "+8221110000", "10");
+const HISTORY_3 = () => historyTask("h3", "미용실 A", "+82311234567", "15", false);
+
+/** An OpenAiBrain whose fake fetch records each request body and answers with `content`. */
+function llmBrain(content: object, log = recordingLogger()) {
+  const bodies: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(String(init?.body));
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }), { status: 200 });
+    }),
+  );
+  return { brain: new OpenAiBrain("sk-test", "gpt-test", log.logger), bodies };
+}
+
+describe("CallService intake (SPEC-INTAKE-001)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // AC-003 / REQ-003
+  it("intake has no side effects and logs no request text", async () => {
+    const log = recordingLogger();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("upstream", { status: 500 })),
+    );
+    const brain = new OpenAiBrain("sk-test", "gpt-test", log.logger);
+    const store = new InMemoryTaskStore();
+    store.save(makeTask({ id: "kept", version: 3 }));
+    const bus = new EventBus();
+    const events: ServerEvent[] = [];
+    bus.subscribe((event) => events.push(event));
+    const provider = new FakeProvider();
+    const calls = new CallService(store, bus, brain, provider, {
+      maxConcurrentCalls: 5,
+      maxCallsPerDay: 50,
+      approvalTimeoutMs: 60_000,
+      maxCallDurationMs: 600_000,
+      logger: log.logger,
+    });
+
+    await calls.draftIntake("라 파스타에 전화해서 010-1234-5678 예약 비밀문구-Q", "ko");
+
+    expect(store.list().map((t) => [t.id, t.version])).toEqual([["kept", 3]]);
+    expect(events).toEqual([]);
+    expect(provider.sessions.size).toBe(0);
+    expect(provider.hangups).toEqual([]);
+    expect(log.warns()).toHaveLength(1);
+    const logged = JSON.stringify(log.entries);
+    for (const secret of ["010-1234-5678", "+821012345678", "비밀문구-Q", "라 파스타"]) expect(logged).not.toContain(secret);
+  });
+
+  // AC-005 / REQ-005
+  it.each(["라 파스타에 전화해 119로", "119에 전화해 줘"])("never proposes a blocked number, even from history: %s", async (text) => {
+    const { calls } = intakeSetup({ brain: new HeuristicBrain(), tasks: [HISTORY_1(), HISTORY_2()] });
+
+    const result = await calls.draftIntake(text, "ko");
+
+    expect(result.draft.phoneNumber).toBeNull();
+    expect(result.numberIssue).toBe("blocked");
+    expect(result.phoneSource).toBeNull();
+  });
+
+  // AC-006 / REQ-006 — design.md §3.4 history table
+  it.each([
+    { text: "라 파스타에 전화해서 7시 예약", targetName: "라 파스타", phoneNumber: "+8221110000", phoneSource: "history", numberIssue: null },
+    { text: "라파스타 금요일 7시 2명 예약해줘", targetName: "라파스타", phoneNumber: "+8221110000", phoneSource: "history", numberIssue: null },
+    { text: "미용실 A에 예약", targetName: null, phoneNumber: null, phoneSource: null, numberIssue: null },
+    // design.md §3.4 lists "+82299999999" here, but that is the E.164 form of 02-9999-9999. REQ-004 judges the text's
+    // number with checkTargetNumber, which gives "+8229999999" for 02-999-9999; producing the table value would mean
+    // inventing a digit (REQ-007). The row's point, the text number winning over history, is unchanged.
+    { text: "라 파스타에 전화해서 02-999-9999로", targetName: "라 파스타", phoneNumber: "+8229999999", phoneSource: "text", numberIssue: null },
+    { text: "라 파스타에 전화해 119로", targetName: "라 파스타", phoneNumber: null, phoneSource: null, numberIssue: "blocked" },
+  ])("finds the number of a counterparty who answered before: $text", async ({ text, ...expected }) => {
+    const { calls } = intakeSetup({ brain: new HeuristicBrain(), tasks: [HISTORY_1(), HISTORY_2(), HISTORY_3()] });
+
+    const result = await calls.draftIntake(text, "ko");
+
+    expect({
+      targetName: result.draft.targetName,
+      phoneNumber: result.draft.phoneNumber,
+      phoneSource: result.phoneSource,
+      numberIssue: result.numberIssue,
+    }).toEqual(expected);
+  });
+
+  it("finds the number of a counterparty who answered before: a stored number now blocked is not replaced", async () => {
+    const blocked = { ...HISTORY_2(), phoneNumber: "119" };
+    const { calls } = intakeSetup({ brain: new HeuristicBrain(), tasks: [HISTORY_1(), blocked] });
+
+    const result = await calls.draftIntake("라 파스타에 전화해서 7시 예약", "ko");
+
+    expect(result.draft.phoneNumber).toBeNull();
+    expect(result.phoneSource).toBeNull();
+  });
+
+  // AC-007 (a) / REQ-007
+  it("masks numbers before calling the LLM", async () => {
+    const { brain, bodies } = llmBrain({ targetName: "라 파스타", goal: "010-9999-8888로 예약", conditions: [], context: "번호 02-555-5555" });
+    const { calls } = intakeSetup({ brain });
+
+    await calls.draftIntake("라 파스타에 010-1234-5678로 전화해서 예약", "ko");
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).not.toContain("010-1234-5678");
+    expect(bodies[0]).not.toContain("01012345678");
+    expect(bodies[0]).toContain("[전화번호]");
+  });
+
+  // AC-007 (b)-(e) / REQ-007
+  it("uses only numbers from the text or history", async () => {
+    const invented = ["010-9999-8888", "01099998888", "+821099998888", "02-555-5555", "+82255555555"];
+    const first = llmBrain({ targetName: "라 파스타", goal: "010-9999-8888로 예약", conditions: [], context: "번호 02-555-5555" });
+    const withNumber = await intakeSetup({ brain: first.brain }).calls.draftIntake("라 파스타에 010-1234-5678로 전화해서 예약", "ko");
+
+    // (b) the number from the text, (c) invented numbers removed and spaces tidied
+    expect(withNumber.draft.phoneNumber).toBe("+821012345678");
+    expect(withNumber.phoneSource).toBe("text");
+    for (const number of invented) expect(JSON.stringify(withNumber)).not.toContain(number);
+    expect(withNumber.draft.goal).toBe("로 예약");
+    expect(withNumber.draft.context).toBe("번호");
+
+    // (d) same LLM answer, no number in the text
+    const noNumber = await intakeSetup({ brain: first.brain }).calls.draftIntake("라 파스타에 전화해서 예약", "ko");
+    expect(noNumber.draft.phoneNumber).toBeNull();
+    expect(noNumber.missing).toContain("phoneNumber");
+    for (const number of invented) expect(JSON.stringify(noNumber)).not.toContain(number);
+
+    // (e) other number shapes in every string field; the name check runs after the removal
+    vi.unstubAllGlobals();
+    const second = llmBrain({
+      targetName: "1588-9999 고객센터",
+      goal: "+1 202 555 0199로 문의",
+      conditions: ["02 777 7777도 가능"],
+      context: null,
+    });
+    const shapes = await intakeSetup({ brain: second.brain }).calls.draftIntake("고객센터에 전화해서 문의", "ko");
+    for (const number of ["1588-9999", "+1 202 555 0199", "02 777 7777"]) expect(JSON.stringify(shapes)).not.toContain(number);
+    expect(shapes.draft.targetName).toBe("고객센터");
+    expect(shapes.draft.goal).toBe("로 문의");
+    expect(shapes.draft.conditions).toEqual(["도 가능"]);
+  });
+
+  // AC-008 / REQ-008 (service post-processing)
+  it.each([
+    {
+      name: "(1) full draft",
+      content: { targetName: "라 파스타", goal: "금요일 7시 2명 예약", conditions: ["8시도 괜찮음"], context: null },
+      text: "라 파스타에 전화해서 금요일 7시 2명 예약해줘. 안 되면 8시도 괜찮아",
+      expected: { targetName: "라 파스타", goal: "금요일 7시 2명 예약", conditions: ["8시도 괜찮음"] },
+    },
+    {
+      name: "(2) a name the request never mentioned",
+      content: { targetName: "강남 맛집", goal: "예약", conditions: [], context: null },
+      text: "라 파스타에 전화해서 금요일 7시 2명 예약해줘. 안 되면 8시도 괜찮아",
+      expected: { targetName: null },
+    },
+    {
+      name: "(3) placeholder removed",
+      content: { targetName: null, goal: "[전화번호]로 예약 문의", conditions: null },
+      text: "02-123-4567로 예약 문의",
+      expected: { goal: "로 예약 문의", conditions: [], phoneNumber: "+8221234567" },
+    },
+  ])("post-processes LLM intake content in the service $name", async ({ content, text, expected }) => {
+    const { brain } = llmBrain(content);
+    const { calls } = intakeSetup({ brain });
+
+    const result = await calls.draftIntake(text, "ko");
+
+    expect(result.source).toBe("llm");
+    expect(result.draft).toMatchObject(expected);
+    if (expected.targetName === null) expect(result.missing).toContain("targetName");
+  });
+
+  // AC-011 / REQ-011
+  it("matches the longest known counterparty name", async () => {
+    const tasks = [HISTORY_1(), HISTORY_2(), historyTask("h4", "파스타", "+82311119999", "12"), historyTask("h5", "A", "+82311118888", "13")];
+    const { calls } = intakeSetup({ brain: new HeuristicBrain(), tasks });
+
+    expect((await calls.draftIntake("라파스타 금요일 예약", "ko")).draft.targetName).toBe("라파스타");
+    expect((await calls.draftIntake("파스타 집 영업시간", "ko")).draft.targetName).toBe("파스타");
+    expect((await calls.draftIntake("A 매장 예약", "ko")).draft.targetName).toBeNull();
+  });
+
+  // AC-012 / REQ-012
+  it("lists missing fields in a fixed order", async () => {
+    const { calls } = intakeSetup({ brain: new HeuristicBrain() });
+
+    const numberOnly = await calls.draftIntake("010-1234-5678", "ko");
+    expect(numberOnly.draft.goal).toBe("");
+    expect(numberOnly.missing).toEqual(["targetName", "goal"]);
+    expect(numberOnly.draft.phoneNumber).toBe("+821012345678");
+
+    const plain = await calls.draftIntake("금요일 7시 예약", "ko");
+    expect(plain.missing).toEqual(["targetName", "phoneNumber"]);
+
+    const mom = await calls.draftIntake("엄마한테 전화해 줘", "ko");
+    expect(mom.missing).toEqual(["phoneNumber"]);
+
+    for (const result of [numberOnly, plain, mom]) expect(result.draft.language).toBe("ko");
+
+    const english = await calls.draftIntake("금요일 7시 예약", "en");
+    expect(english.draft.language).toBe("en");
+    expect({ ...english, draft: { ...english.draft, language: "ko" } }).toEqual(plain);
   });
 });

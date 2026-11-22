@@ -51,7 +51,16 @@
 - RED: `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/brain/openaiBrain.test.ts -t "intake"` → exit 1, `Tests  17 failed | 34 skipped (51)`; failures `TypeError: brain.draftIntake is not a function` / `(intermediate value).draftIntake is not a function` (6 heuristic rows, 1 "sends the text it receives unchanged", 3 "returns schema-validated intake content unchanged", 6 "falls back visibly when the intake LLM fails", 1 "bounds the intake LLM call below the app timeout"). Evidence: `m3-red.txt`.
 - GREEN: `npm --prefix server test` → exit 0, `Test Files  14 passed (14)` / `Tests  347 passed (347)`; typecheck exit 0; test-file compile exit 0. Evidence: `m3-green.txt`.
 - Plan §F check: `grep -n "phoneNumber" server/src/brain/openaiBrain.ts` → no output (the intake schema has no number field).
+- Commit: `ec0cd36`.
 - Design note: `CallBrain.draftIntake` is declared optional so the existing test brain fake in `callService.test.ts` (`recordingBrain`, unmodifiable per AC-024) still compiles; the service falls back to the deterministic rules when a brain lacks it. Both shipped brains implement it. The timeout is injected through a new 4th constructor argument `{ intakeTimeoutMs }`; exported `INTAKE_LLM_TIMEOUT_MS = 15000`, `LLM_TIMEOUT_MS = 30000` (plan/summary unchanged).
+
+### M4 — service intake and endpoint (AC-001, AC-002, AC-003, AC-005, AC-006, AC-007 (a) body + (b)-(e), AC-008 service, AC-011, AC-012)
+
+- RED: `npm --prefix server test -- src/services/callService.test.ts src/http/app.test.ts -t "intake|Intake"` → exit 1, `Tests  22 failed | 1 passed | 85 skipped (108)`; `TypeError: calls.draftIntake is not a function` (16 service cases) and `expected 404 to be 200/400/503` (HTTP cases). The one pass is AC-001 (6) (no token → 401), which the existing `/v1/*` auth hook answers before routing. Evidence: `m4-red.txt`.
+- GREEN: `npm --prefix server test` → exit 0, `Test Files  14 passed (14)` / `Tests  370 passed (370)`; typecheck exit 0 (`m4-typecheck.txt`); test-file compile exit 0. Evidence: `m4-green.txt`.
+- Plan §F check: `grep -n "/v1/intake" server/src/http/app.ts` → `167:  app.post("/v1/intake", async (request) => {` (one route; the handler parses `IntakeBody` and calls `calls.draftIntake` only).
+- **SPEC vector defect (for manager-spec, not edited here):** design.md §3.4 history table row 4 (`라 파스타에 전화해서 02-999-9999로`) lists `+82299999999`. Measured: `checkTargetNumber("02-999-9999")` → `{"kind":"ok","e164":"+8229999999"}`, `checkTargetNumber("02-9999-9999")` → `+82299999999` (tsx one-liner, this run). REQ-004 fixes the value through `checkTargetNumber`, and REQ-007 forbids emitting a number not in the text, so the test keeps the row's text and asserts `+8229999999` (comment in the test). The row's intent — the text number wins over history (`phoneSource "text"`) — is asserted unchanged. Suggested fix: change the table value to `+8229999999` (or the text to `02-9999-9999`).
+- Interpretation note: when the brain's name is dropped by the containment check (an invented name), the service treats it like a null name and runs the REQ-011 history-name match.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

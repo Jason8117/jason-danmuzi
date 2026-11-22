@@ -1,4 +1,5 @@
 import { checkTargetNumber } from "./phone.js";
+import type { CallTask } from "./types.js";
 
 /** Stands in for a number-shaped span before text leaves the server (SPEC-INTAKE-001 REQ-007 (a)). */
 export const PHONE_PLACEHOLDER = "[전화번호]";
@@ -54,4 +55,46 @@ export function findPhoneNumberInText(text: string): TextNumber {
 /** Lower-cased with every whitespace removed; the app uses the same rule (design.md §3.1). No NFC. */
 export function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\s/g, "");
+}
+
+/**
+ * Removes the placeholder and every number-shaped span, then tidies spaces. Applied to all LLM strings: the LLM never
+ * received a number, so any number in its answer was invented (REQ-007 (c)).
+ */
+export function stripPhoneNumbers(text: string): string {
+  return replaceNumberShapes(text.split(PHONE_PLACEHOLDER).join(""), "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The history the intake may use: tasks whose callee answered (OD-2), newest first (OD-3). */
+export function answeredHistory(tasks: readonly CallTask[]): CallTask[] {
+  return tasks.filter((task) => task.connectedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * The longest known counterparty name (2+ normalized characters) contained in the request, ties going to the more
+ * recent call; returned with the spelling of its most recent call (REQ-011). `history` must be answeredHistory().
+ */
+export function findKnownName(history: readonly CallTask[], text: string): string | null {
+  const haystack = normalizeName(text);
+  let best: { key: string; name: string } | undefined;
+  for (const task of history) {
+    const key = normalizeName(task.targetName);
+    if (key.length < 2 || !haystack.includes(key)) continue;
+    if (!best || key.length > best.key.length) best = { key, name: task.targetName };
+  }
+  return best?.name ?? null;
+}
+
+/**
+ * The number of the most recent answered call to the same (normalized) name, re-judged by the number policy. A stored
+ * number that is no longer dialable yields null; an older call's number never stands in for it (REQ-006).
+ */
+export function findHistoryNumber(history: readonly CallTask[], targetName: string): string | null {
+  const key = normalizeName(targetName);
+  const latest = history.find((task) => normalizeName(task.targetName) === key);
+  if (!latest) return null;
+  const check = checkTargetNumber(latest.phoneNumber);
+  return check.kind === "ok" ? check.e164 : null;
 }
