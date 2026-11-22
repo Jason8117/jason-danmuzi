@@ -37,6 +37,13 @@
 - RED: `npm --prefix server test -- src/services/callService.test.ts src/http/app.test.ts -t "INTAKE"` → exit 1, `Tests  8 failed | 1 passed | 76 skipped (85)`. Failures: `accepts an optional autoStart flag` (`expected undefined to be true`), `auto-starts a simulated call without approve-plan` (timeout), `starts the call once planning finishes…` (`expected [] to include '<id>'`), `auto-started calls open with the template AI disclosure` (same), the four `records …` cases (`expected undefined to be defined` / `expected undefined to be 'daily_limit'` / `… 'shutting_down'`). The one pass is AC-016 `never auto-starts outside the planning completion`, a negative guard that holds before the feature exists (it pins that the new trigger stays scoped). Evidence: `m1-red.txt`.
 - GREEN: `npm --prefix server test` → exit 0, `Test Files  13 passed (13)` / `Tests  302 passed (302)`; typecheck exit 0; test-file compile exit 0. Evidence: `m1-green.txt`.
 - One test-only adjustment during GREEN: the integration case first used the goal "영업시간 문의", whose simulated script has no approval step, so it timed out for a reason unrelated to the feature; it now uses the reservation goal (the existing flow test's goal).
+- Commit: `1d778c2`.
+
+### M2 — number and name rules (AC-004, AC-007 (a) masking vectors, §3.1 normalization)
+
+- RED: `npm --prefix server test -- src/domain/intake.test.ts` → exit 1, `FAIL src/domain/intake.test.ts` / `Error: Cannot find module './intake.js'` / `Tests  no tests`. Evidence: `m2-red.txt`.
+- GREEN: same command → `Tests  28 passed (28)` (18 AC-004 rows + 6 masking rows + placeholder + 3 normalization rows). Full suite `Test Files  14 passed (14)` / `Tests  330 passed (330)`, typecheck exit 0, test-file compile exit 0. Evidence: `m2-green.txt`.
+- Implementation: `server/src/domain/intake.ts` (pure; only imports `checkTargetNumber`). History lookups are added in M4, where the service tests drive them.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
