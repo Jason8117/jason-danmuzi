@@ -78,9 +78,83 @@
 - 첫 실행에서 (4)(6)이 `expected { error: 'invalid_request', …(1) } to deeply equal { error: 'invalid_request' }`로 실패했다. 현재 400 본문은 `{ error: "invalid_request", message: <스키마 메시지> }`(`server/src/http/app.ts:124`)라 AC-001의 `{"error":"invalid_request"}`는 오류 코드 표기로 읽고 `toMatchObject({ error: "invalid_request" })`로 단언했다. 서버 동작은 바꾸지 않았다(현행 고정).
 - 파일: `server/src/providers/realtimeBridge.test.ts`, `server/src/http/app.test.ts`(새 테스트만 추가)
 
+### M6 — 회귀 확인 (AC-015), HEAD 594e810 기준
+
+| 항목 | 명령 | 관찰 결과 |
+|------|------|-----------|
+| 서버 전체 테스트 | `npm --prefix server test` | `Test Files  13 passed (13)` / `Tests  293 passed (293)`, exit 0 (기준선 12/246 → 신규 파일 1·테스트 47) (`m6-server-test.txt`) |
+| 타입 검사 | `npm --prefix server run typecheck` | exit 0 (`m6-typecheck.txt`) |
+| 테스트 파일 컴파일 | 기준선과 같은 임시 tsconfig로 `npx tsc -p`, 실행 후 삭제 | exit 0, 출력 없음 (`m6-testcompile.txt`) |
+| 구조 규칙 | `npm --prefix server test -- src/architecture.test.ts` | `Tests  4 passed (4)`, exit 0. `git diff cd1f77e -- server/src/architecture.test.ts` 출력 없음 (`m6-architecture.txt`) |
+| 앱 전체 테스트 | `cd app && flutter --suppress-analytics test` | `00:01 +25: All tests passed!`, exit 0 (기준선 +17 → +25) (`m6-flutter-test.txt`) |
+| 앱 분석 | `cd app && flutter --suppress-analytics analyze` | `1 issue found` — 기준선과 같은 `test/support/fakes.dart:53:5 • use_null_aware_elements` (`m6-flutter-analyze.txt`) |
+| 변경 범위 | `git diff --stat cd1f77e..HEAD` | 17 files, 800 insertions(+), 20 deletions(-): plan.md §B의 15개 파일 + `spec.md`(frontmatter) + `progress.md`. 그 밖의 파일 없음 |
+
+### AC 판정표
+
+| AC | 판정 | 근거(테스트 / 관찰) | RED |
+|----|------|------|-----|
+| AC-001 | PASS | `app.test.ts` "counts approval comment length in code points" 6건 통과 (M5) | 보호 테스트(처음부터 통과) |
+| AC-002 | PASS | `approvalComment.test.ts` "sanitizes control characters and line breaks" 7건 (M1) | 모듈 없음 `Cannot find module './approvalComment.js'` |
+| AC-003 | PASS | 같은 파일 "masks card- and ID-shaped digit runs" 16행 (M1); 앱 `unit_test.dart` "detects sensitive digit runs like the server"가 같은 16행을 씀 (M4) | 위와 같음 / 앱: `Method not found: 'withQuickReply'` |
+| AC-004 | PASS | (A) `app.test.ts` "stores the masked approval comment", (B) `callService.test.ts` "resolves the approval with the sanitized comment" 승인·거절 (M2) | 원문 그대로 저장·전달(`expected '카드 1234 5678 9012 3456 말고 계좌이체' to be …`) |
+| AC-005 | PASS | `callService.test.ts` "never logs approval comments"; `git diff cd1f77e -- server/src/http/app.ts` 출력 없음 | 보호 테스트 |
+| AC-006 | PASS | (1)~(5) `callService.test.ts` "CallService guidance line", (6) `app.test.ts` "records the guidance line once in a simulated call" | (1)(2)(4) `expected [] to deeply equal [ '사용자 안내: …' ]`; (6) 중복 회귀 `to have a length of 1 but got 2`; (3)(5) 보호 |
+| AC-007 | PASS | `realtimeBridge.test.ts` "returns every approval decision shape as tool output" 5건 (M5) | 보호 테스트 |
+| AC-008 | PASS | `prompts.test.ts` "tells the agent how to follow a user_comment"; 기존 5개 무수정 통과 (M3) | `expected false to be true`(규칙 7 없음) |
+| AC-009 | PASS | `approval_card_test.dart` "quick replies fill the comment without sending" (M4) | `Found 0 widgets with text "금액이 더 나오면 거절해 주세요"` |
+| AC-010 | PASS | 같은 파일 "comment field starts as one line and counts code points" | `Found 0 widgets with text "조건 덧붙이기 (선택)"` |
+| AC-011 | PASS | 같은 파일 "warns about card-shaped numbers without blocking" | `Found 0 widgets with text "카드번호처럼 보이는 숫자는 지우고 보낼게요."` |
+| AC-012 | PASS | 같은 파일 "keeps the comment when sending fails" | 보호 테스트 |
+| AC-013 | PASS | 같은 파일 "shows the guidance in history and transcript" | 보호 테스트 |
+| AC-014 | PASS | `approval_flow_test.dart` 통과; 해당 파일 diff는 라벨 한 줄 교체뿐 | 교체 직후 `Found 0 widgets with text "조건 덧붙이기 (선택)"` |
+| AC-015 | PASS | 위 M6 표 | — |
+
+### 커밋
+
+| 마일스톤 | SHA |
+|----------|-----|
+| M1 | d961e1b82f94f13886a82bb4a4d1170dc84419e9 |
+| M2 | 1d8eac47c892f15c64b1d9c74783608a31f21b10 |
+| M3 | 8fe99041b1d69166dfc9a6cbca072e0fe7395cc9 |
+| M4 | 166d7c3bdd784f1123805157086324c5b4ad2af2 |
+| M5 | 594e810d105e8dff5b6a3bd9c079b5213fe78eb1 (마지막 구현 커밋) |
+| M6 | 이 기록만 담은 증거 커밋(구현 변경 없음) |
+
+### 검증하지 않은 것
+
+- 실제 OpenAI Realtime·KAT에는 연결하지 않았다. 서버 테스트는 가짜 소켓, `InMemoryTaskStore`, 시뮬레이션 제공자, Fastify `inject`만 썼다.
+- AI가 실제 통화에서 `user_comment`와 규칙 7을 따르는지는 자동으로 검증되지 않는다(acceptance.md 잔여 위험). 검증한 것은 지시문 문구와 도구 결과 형태, 대화 기록 안내 줄까지다.
+- 실기기(작은 화면, 키보드가 올라온 상태)에서 하단 고정 카드의 높이와 가로 스크롤 칩 동작은 보지 않았다. 위젯 테스트는 800×600(기존 흐름 테스트)과 800×2400(새 테스트) 화면에서만 돌렸다.
+- 한국어 IME 조합 중 500 코드 포인트 경계 동작은 위젯 테스트로 재현하지 않았다(조합 중에는 자르지 않고, 다음 편집과 전송 시 자름).
+
+### 계획 감사 권고 메모 (manager-spec 후속용, 이 SPEC 본문은 바꾸지 않음)
+
+- A1-1: plan.md §A.1의 민감 숫자열 판정 항목 머리말이 "두 단계"라고 쓰지만 실제로 (1)(2)(3) 세 단계를 나열한다. 구현은 spec.md REQ-003의 세 단계를 따랐다.
+- A1-2 (잔여 위험, 관찰됨): 공백 하나로 이어 쓴 날짜 두 개는 숫자 16개 조각이 되어 가려진다. `sanitizeApprovalComment("2026-11-21 2026-11-22")` → `"[민감정보 삭제]"` (`m1-advisories.txt`).
+- A1-3 (잔여 위험, 관찰됨): 카드번호 두 토막 사이에 하이픈 전화번호 토큰이 끼면 양쪽 조각이 각각 8자리라 가려지지 않는다. `sanitizeApprovalComment("4111 1111 010-1234-5678 1111 1111")` → 입력 그대로 (`m1-advisories.txt`). 앱 경고도 같은 규칙이라 뜨지 않는다.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+```yaml
+run_complete_at: 2026-11-22
+run_start_sha: cd1f77e2f00cb78c355d40b6ff5b1d36b9a4fc51
+run_commit_sha: 594e810d105e8dff5b6a3bd9c079b5213fe78eb1  # last implementation commit (M5); the M6 evidence-only commit follows it
+run_status: complete
+ac_pass_count: 15
+ac_fail_count: 0
+preserve_list_post_run_count: 0  # plan.md §B "바꾸지 않는 파일" 7개 모두 git diff 출력 없음
+l44_pre_commit_fetch: not-run  # isolated worktree, no push by instruction
+l44_post_push_fetch: not-applicable  # no push
+new_warnings_or_lints_introduced: 0  # flutter analyze 1 info = baseline; tsc exit 0
+cross_platform_build:
+  server_typecheck: pass
+  server_test_files_compile: pass
+  flutter_test: pass
+  flutter_analyze: baseline-equal
+total_run_phase_files: 17  # 15 planned files + spec.md + progress.md
+m1_to_mN_commit_strategy: one commit per milestone M1..M5 (code + progress), M6 evidence-only
+```
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
