@@ -11,6 +11,7 @@ import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../domain/call_models.dart';
 import '../domain/intake_models.dart';
+import 'trust_notice.dart';
 import 'widgets/approval_card.dart';
 import 'widgets/outcome_card.dart';
 import 'widgets/status_chip.dart';
@@ -63,6 +64,12 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
     setState(() => _busy = true);
     await runWithFeedback(context, action);
     if (mounted) setState(() => _busy = false);
+  }
+
+  /// SPEC-FOLLOWUP-001 REQ-014: the first call on a device waits for the trust notice.
+  Future<void> _approvePlan(CallTask task) async {
+    if (!await ensureTrustAcknowledged(context, ref) || !mounted) return;
+    await _run(() => _calls.approvePlan(task.id, openingLine: _editedOpeningLine));
   }
 
   Future<void> _editOpeningLine(String current) async {
@@ -204,6 +211,17 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
                   task.status == TaskStatus.inProgress ? '대화가 시작되면 여기에 실시간으로 보여드려요.' : '상대방이 전화를 받으면 대화가 여기에 나타나요.',
                 ),
               ),
+          // SPEC-FOLLOWUP-001 REQ-015. Below the transcript so it never pushes live lines or the header down.
+          if (task.status.isLiveCall) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 16, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(liveCallTrustLine, style: Theme.of(context).textTheme.bodySmall)),
+              ],
+            ),
+          ],
         ];
       case TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled:
         return [
@@ -231,7 +249,7 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
           Expanded(
             flex: 2,
             child: FilledButton.icon(
-              onPressed: _busy ? null : () => _run(() => _calls.approvePlan(task.id, openingLine: _editedOpeningLine)),
+              onPressed: _busy ? null : () => _approvePlan(task),
               icon: const Icon(Icons.call),
               label: const Text('이대로 전화 걸기'),
             ),

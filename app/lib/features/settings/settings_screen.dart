@@ -6,6 +6,7 @@ import '../../core/config/app_settings.dart';
 import '../../core/network/api_client.dart';
 import '../../core/widgets/common.dart';
 import '../calls/domain/call_models.dart';
+import '../calls/presentation/trust_notice.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -149,6 +150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ],
                 ),
+              ),
+              const SizedBox(height: 16),
+              // SPEC-FOLLOWUP-001 REQ-015: always visible, not only before the first call.
+              const SectionCard(
+                title: 'AI 비서와 기록',
+                icon: Icons.shield_outlined,
+                child: TrustStatementList(),
               ),
               const SizedBox(height: 24),
               FilledButton(onPressed: _save, child: const Text('저장')),

@@ -9,6 +9,7 @@ import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../domain/call_models.dart';
 import 'call_templates.dart';
+import 'trust_notice.dart';
 
 class NewCallScreen extends ConsumerStatefulWidget {
   const NewCallScreen({super.key, this.template, this.redial});
@@ -171,9 +172,9 @@ class _NewCallScreenState extends ConsumerState<NewCallScreen> {
                     Icon(Icons.shield_outlined, size: 18, color: theme.colorScheme.primary),
                     const SizedBox(width: 10),
                     Expanded(
+                      // SPEC-FOLLOWUP-001 REQ-015: instructions given to the AI, not guarantees (same constants as the notice).
                       child: Text(
-                        'AI 비서는 통화 시작 때 AI임을 밝혀요. 결제·약정·수수료처럼 중요한 결정은 통화 중에 꼭 먼저 물어봐요. '
-                        '카드번호나 비밀번호는 절대 말하지 않아요.',
+                        agentRulesNotice,
                         style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
                       ),
                     ),

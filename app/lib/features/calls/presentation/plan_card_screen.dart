@@ -10,6 +10,7 @@ import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../domain/call_models.dart';
 import '../domain/intake_models.dart';
+import 'trust_notice.dart';
 
 /// Server limit on `goal`, in UTF-16 units like `CreateTaskBody` (SPEC-INTAKE-001 REQ-021).
 const _maxGoalLength = 1000;
@@ -80,6 +81,8 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
   }
 
   Future<void> _start() async {
+    // SPEC-FOLLOWUP-001 REQ-014: the first call on a device waits for the trust notice.
+    if (!await ensureTrustAcknowledged(context, ref) || !mounted) return;
     final settings = ref.read(settingsProvider);
     final messenger = ScaffoldMessenger.of(context);
     setState(() {

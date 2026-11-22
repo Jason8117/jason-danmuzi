@@ -56,7 +56,7 @@ void main() {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    SharedPreferences.setMockInitialValues({'requesterName': '김민수'});
+    SharedPreferences.setMockInitialValues({'requesterName': '김민수', 'trustNoticeAcknowledged': true});
     final prefs = await SharedPreferences.getInstance();
     final repo = FakeCallsRepository(tasks);
     await tester.pumpWidget(
