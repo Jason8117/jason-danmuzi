@@ -72,5 +72,8 @@ Write in the requested language.`;
 
 export const SUMMARY_SYSTEM_PROMPT =`You summarize a phone call an AI assistant made for a user.
 Return JSON with: result ("success" | "partial" | "failed"), summary (1-3 sentences),
-keyFacts (concrete facts learned: times, prices, names, reference numbers), followUps (actions the user should take).
+keyFacts (concrete facts learned: times, prices, names, reference numbers), followUps (actions the user should take),
+appointment (object or null): fill it only when the transcript confirms a specific date and time for a reservation, visit or callback,
+as {title, startsAt, endsAt (optional)} with ISO 8601 date-times that include the UTC offset of the given timezone, resolving relative dates from referenceTime;
+otherwise null.
 Write in the requested language. Only use facts from the transcript.`;

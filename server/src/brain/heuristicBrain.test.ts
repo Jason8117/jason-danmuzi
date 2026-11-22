@@ -120,3 +120,14 @@ describe("HeuristicBrain intake (SPEC-INTAKE-001)", () => {
     expect(draft).toEqual({ targetName, goal, conditions: [], context: null, source: "heuristic" });
   });
 });
+
+describe("HeuristicBrain appointments (SPEC-FOLLOWUP-001)", () => {
+  // AC-004 (1) / REQ-004 — guard: heuristic outcomes never carry an appointment
+  it("never attaches an appointment", async () => {
+    const brain = new HeuristicBrain();
+    for (const task of [makeTask(), makeTask({ transcript: [] }), makeTask({ approvals: [approval("rejected")] })]) {
+      const outcome = await brain.summarize(task);
+      expect("appointment" in outcome).toBe(false);
+    }
+  });
+});

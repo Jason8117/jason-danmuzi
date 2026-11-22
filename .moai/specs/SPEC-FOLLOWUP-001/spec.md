@@ -2,9 +2,9 @@
 id: SPEC-FOLLOWUP-001
 title: "통화가 끝난 뒤 한 번에 — 다시 걸기·복사·공유·캘린더 초안과 신뢰 안내"
 version: "0.3.0"
-status: draft
+status: in-progress
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-22
 author: jason
 priority: Medium
 phase: "v0.3.0 target"

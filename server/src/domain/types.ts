@@ -64,6 +64,15 @@ export interface CallOutcome {
   summary: string;
   keyFacts: string[];
   followUps: string[];
+  /** A date and time the call confirmed. Only on LLM `success`/`partial` outcomes; absent everywhere else (SPEC-FOLLOWUP-001). */
+  appointment?: Appointment;
+}
+
+/** `startsAt`/`endsAt` are ISO 8601 date-times with an explicit offset (`Z` or `±hh:mm`). */
+export interface Appointment {
+  title: string;
+  startsAt: string;
+  endsAt?: string;
 }
 
 /**

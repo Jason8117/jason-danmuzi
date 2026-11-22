@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CallOutcome, CallPlan, CallTask, CallTaskInput, IntakeContent, Language } from "../domain/types.js";
+import type { Appointment, CallOutcome, CallPlan, CallTask, CallTaskInput, IntakeContent, Language } from "../domain/types.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
 import { INTAKE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "./prompts.js";
 import type { CallBrain } from "./types.js";
@@ -25,7 +25,50 @@ const OutcomeSchema = z.object({
   summary: z.string(),
   keyFacts: OptionalList,
   followUps: OptionalList,
+  // Unknown on purpose: a malformed appointment must not fail the whole outcome (SPEC-FOLLOWUP-001 REQ-002).
+  appointment: z.unknown().optional(),
 });
+
+/** Time zone the summary prompt resolves relative dates in (SPEC-FOLLOWUP-001 REQ-003). */
+export const SUMMARY_TIMEZONE = "Asia/Seoul";
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const TITLE_MAX_CODE_POINTS = 80;
+/** ISO 8601 date-time that names its offset; a local time without `Z`/`±hh:mm` is ambiguous and rejected. */
+const ZONED_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+function zonedTime(value: unknown): number | undefined {
+  if (typeof value !== "string" || !ZONED_DATE_TIME.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : time;
+}
+
+// @MX:NOTE: [AUTO] REQ-002 (b)-(e): keep the appointment only when every check holds; otherwise return undefined so
+// the caller drops just this field. No log line: a bad appointment is not an LLM failure.
+function confirmedAppointment(raw: unknown, referenceTime: number, targetName: string): Appointment | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const candidate = raw as Record<string, unknown>;
+  const startsAt = zonedTime(candidate.startsAt);
+  if (startsAt === undefined) return undefined;
+  if (startsAt < referenceTime - DAY_MS || startsAt > referenceTime + 366 * DAY_MS) return undefined;
+
+  const hasEnd = candidate.endsAt !== undefined && candidate.endsAt !== null;
+  if (hasEnd) {
+    const endsAt = zonedTime(candidate.endsAt);
+    if (endsAt === undefined || endsAt <= startsAt || endsAt - startsAt > DAY_MS) return undefined;
+  }
+
+  if (candidate.title !== undefined && candidate.title !== null && typeof candidate.title !== "string") return undefined;
+  const trimmed = Array.from(((candidate.title as string | null | undefined) ?? "").trim())
+    .slice(0, TITLE_MAX_CODE_POINTS)
+    .join("");
+  return {
+    title: trimmed || `${targetName} 일정`,
+    startsAt: candidate.startsAt as string,
+    ...(hasEnd && { endsAt: candidate.endsAt as string }),
+  };
+}
 
 // The intake draft has no phone number field: the LLM never receives one and is never asked for one (REQ-007 (b)).
 const IntakeSchema = z.object({
@@ -121,8 +164,11 @@ export class OpenAiBrain implements CallBrain {
   }
 
   async summarize(task: CallTask): Promise<CallOutcome> {
+    const referenceTime = Date.parse(task.endedAt ?? "") || Date.now();
     const user = JSON.stringify({
       language: task.language,
+      referenceTime: new Date(referenceTime).toISOString(),
+      timezone: SUMMARY_TIMEZONE,
       goal: task.goal,
       approvals: task.approvals.map((a) => ({
         question: a.question,
@@ -135,7 +181,10 @@ export class OpenAiBrain implements CallBrain {
       op: "summarize",
       taskId: task.id,
     });
-    return outcome ? { ...outcome, source: "llm" } : this.fallback.summarize(task);
+    if (!outcome) return this.fallback.summarize(task);
+    const { appointment: raw, ...rest } = outcome;
+    const appointment = rest.result === "failed" ? undefined : confirmedAppointment(raw, referenceTime, task.targetName);
+    return { ...rest, source: "llm", ...(appointment && { appointment }) };
   }
 
   /** Returns the validated LLM answer, or undefined after logging why the caller must fall back. */

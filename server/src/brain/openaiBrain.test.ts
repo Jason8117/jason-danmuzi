@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CallTask, CallTaskInput, TranscriptEntry } from "../domain/types.js";
+import type { CallOutcome } from "../domain/types.js";
+import { InMemoryTaskStore } from "../store/taskStore.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
 import { OpenAiBrain } from "./openaiBrain.js";
 import { INTAKE_LLM_TIMEOUT_MS, LLM_TIMEOUT_MS } from "./openaiBrain.js";
@@ -371,5 +373,137 @@ describe("OpenAiBrain intake (SPEC-INTAKE-001)", () => {
     expect(timeout).toHaveBeenLastCalledWith(15_000);
     await plain.createPlan(input);
     expect(timeout).toHaveBeenLastCalledWith(30_000);
+  });
+});
+
+describe("OpenAiBrain appointments (SPEC-FOLLOWUP-001)", () => {
+  const ENDED_AT = "2026-11-21T10:05:00Z";
+  const ended: CallTask = { ...task, status: "summarizing", endedAt: ENDED_AT };
+  const DINNER = { title: "라 파스타 저녁 예약", startsAt: "2026-11-27T19:00:00+09:00" };
+
+  function llmOutcome(result: string, appointment?: unknown): string {
+    const body: Record<string, unknown> = { result, summary: "예약 완료", keyFacts: [], followUps: [] };
+    if (appointment !== undefined) body.appointment = appointment;
+    return JSON.stringify(body);
+  }
+
+  /** The parsed messages of the single chat-completions request the fake fetch received. */
+  function sentMessages(fetchMock: { mock: { calls: unknown[][] } }): { role: string; content: string }[] {
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    return (JSON.parse(String(init.body)) as { messages: { role: string; content: string }[] }).messages;
+  }
+
+  // AC-001 / REQ-001
+  it("keeps outcomes without an appointment valid", async () => {
+    const llm = { result: "success", summary: "7시 예약 완료", keyFacts: ["7시"], followUps: [] };
+    stubFetch(async () => completion(JSON.stringify(llm)));
+    const { brain } = setup();
+
+    const outcome = await brain.summarize(ended);
+
+    expect(outcome).toEqual({ ...llm, source: "llm" });
+    expect("appointment" in outcome).toBe(false);
+
+    const withAppointment: CallOutcome = { ...llm, result: "success", source: "llm", appointment: DINNER };
+    const without: CallOutcome = { ...llm, result: "success", source: "llm" };
+    const store = new InMemoryTaskStore();
+    store.save({ ...ended, id: "with", status: "completed", outcome: withAppointment });
+    store.save({ ...ended, id: "without", status: "completed", outcome: without });
+    expect(store.get("with")!.outcome).toEqual(withAppointment);
+    expect(store.get("without")!.outcome).toEqual(without);
+    expect("appointment" in store.get("without")!.outcome!).toBe(false);
+  });
+
+  // AC-002 / REQ-002
+  it.each([
+    { name: "success keeps it", result: "success", appointment: DINNER as unknown, expected: DINNER as unknown },
+    {
+      name: "partial with an empty title gets the default title",
+      result: "partial",
+      appointment: { title: "", startsAt: "2026-11-27T19:00:00+09:00", endsAt: "2026-11-27T21:00:00+09:00" },
+      expected: { title: "라 파스타 일정", startsAt: "2026-11-27T19:00:00+09:00", endsAt: "2026-11-27T21:00:00+09:00" },
+    },
+    {
+      name: "a long title is cut to 80 code points",
+      result: "success",
+      appointment: { title: "가".repeat(100), startsAt: "2026-11-27T19:00:00+09:00" },
+      expected: { title: "가".repeat(80), startsAt: "2026-11-27T19:00:00+09:00" },
+    },
+    { name: "failed drops it", result: "failed", appointment: DINNER, expected: undefined },
+    { name: "no time zone", result: "success", appointment: { title: "x", startsAt: "2026-11-27T19:00:00" }, expected: undefined },
+    { name: "not a date", result: "success", appointment: { title: "x", startsAt: "내일 7시" }, expected: undefined },
+    {
+      name: "more than 24 hours before the reference time",
+      result: "success",
+      appointment: { title: "x", startsAt: "2026-11-19T19:00:00+09:00" },
+      expected: undefined,
+    },
+    {
+      name: "more than 366 days after the reference time",
+      result: "success",
+      appointment: { title: "x", startsAt: "2027-12-01T19:00:00+09:00" },
+      expected: undefined,
+    },
+    {
+      name: "ends before it starts",
+      result: "success",
+      appointment: { title: "x", startsAt: "2026-11-27T19:00:00+09:00", endsAt: "2026-11-27T18:00:00+09:00" },
+      expected: undefined,
+    },
+    {
+      name: "longer than 24 hours",
+      result: "success",
+      appointment: { title: "x", startsAt: "2026-11-27T19:00:00+09:00", endsAt: "2026-11-29T19:00:00+09:00" },
+      expected: undefined,
+    },
+    { name: "not an object", result: "success", appointment: "내일", expected: undefined },
+    { name: "null", result: "success", appointment: null, expected: undefined },
+    { name: "missing key", result: "success", appointment: undefined, expected: undefined },
+  ])("keeps only a confirmed, well-formed appointment ($name)", async ({ result, appointment, expected }) => {
+    stubFetch(async () => completion(llmOutcome(result, appointment)));
+    const { brain, log } = setup();
+
+    const outcome = await brain.summarize(ended);
+
+    expect(outcome.source).toBe("llm");
+    expect(outcome.result).toBe(result);
+    expect(outcome.summary).toBe("예약 완료");
+    if (expected === undefined) expect("appointment" in outcome).toBe(false);
+    else expect(outcome.appointment).toEqual(expected);
+    expect(log.warns).toHaveLength(0);
+  });
+
+  // AC-003 / REQ-003
+  it("sends the reference time and asks for confirmed appointments only", async () => {
+    const fetchMock = stubFetch(async () => completion(llmOutcome("success")));
+    const { brain } = setup();
+
+    await brain.summarize(ended);
+
+    const [system, user] = sentMessages(fetchMock);
+    const payload = JSON.parse(user!.content) as { referenceTime: string; timezone: string };
+    expect(new Date(payload.referenceTime).toISOString()).toBe("2026-11-21T10:05:00.000Z");
+    expect(payload.timezone).toBe("Asia/Seoul");
+    expect(system!.content).toContain("appointment");
+    expect(system!.content).toContain("null");
+
+    // SPEC-OUTCOME-001 AC-008 still holds: the LLM may not answer "unverified".
+    vi.unstubAllGlobals();
+    stubFetch(async () => completion(llmOutcome("unverified", DINNER)));
+    const second = setup();
+    const outcome = await second.brain.summarize(ended);
+    expect(outcome.source).toBe("heuristic");
+    expect(second.log.warns[0]!.obj).toMatchObject({ op: "summarize", reason: "schema_mismatch" });
+  });
+
+  // AC-004 (2) / REQ-004
+  it("the fallback outcome has no appointment", async () => {
+    stubFetch(async () => new Response("nope", { status: 500 }));
+    const { brain } = setup();
+
+    const outcome = await brain.summarize(ended);
+
+    expect(outcome.source).toBe("heuristic");
+    expect("appointment" in outcome).toBe(false);
   });
 });
