@@ -3,6 +3,7 @@ import 'package:callmate/features/calls/data/calls_repository.dart';
 import 'package:callmate/features/calls/domain/approval_comment.dart';
 import 'package:callmate/features/calls/domain/call_models.dart';
 import 'package:callmate/features/calls/domain/intake_models.dart';
+import 'package:callmate/features/calls/domain/counterparties.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
@@ -217,6 +218,42 @@ void main() {
       expect(odd.draft.numberBlocked, isTrue);
       expect(odd.draft.source, IntakeSource.heuristic);
       expect(odd.missing, isEmpty);
+    });
+
+    // AC-018 unit / REQ-018 (a): only finished calls whose callee answered, grouped by name and number.
+    test('derives recent counterparties', () {
+      CallTask call(String id, String name, String phone, int day, {String status = 'completed', bool connected = true}) {
+        final at = DateTime.utc(2026, 11, day, 10).toIso8601String();
+        return CallTask.fromJson({
+          ...taskJson(id: id, status: status),
+          'targetName': name,
+          'phoneNumber': phone,
+          'createdAt': at,
+          'connectedAt': connected ? at : null,
+        });
+      }
+
+      final recent = recentCounterparties([
+        call('a', '라 파스타', '+8221234567', 1),
+        call('b', '라파스타', '+8221234567', 10),
+        call('c', '미용실', '+82311112222', 5),
+        call('d', '세탁소', '+82311113333', 12, connected: false),
+        call('e', '치과', '+82311114444', 3),
+        call('f', '빵집', '+82311115555', 2),
+        call('g', '피자집', '+82311116666', 20, status: 'in_progress'),
+      ]);
+      expect([for (final c in recent) (c.name, c.phoneNumber, c.callCount)], [
+        ('라파스타', '+8221234567', 2),
+        ('미용실', '+82311112222', 1),
+        ('치과', '+82311114444', 1),
+      ]);
+    });
+
+    // design.md §3.1: the same vectors as server/src/domain/intake.test.ts
+    test('normalizes names like the server', () {
+      expect(normalizeName('라 파스타'), '라파스타');
+      expect(normalizeName(' La Pasta '), 'lapasta');
+      expect(normalizeName('미용실\tA'), '미용실a');
     });
 
     test('joins conditions into the goal', () {

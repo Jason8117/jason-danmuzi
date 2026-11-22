@@ -69,6 +69,14 @@
 - GREEN: same command → `+32: All tests passed!`; full `flutter --suppress-analytics test` → `+43: All tests passed!` (`m5-app-full.txt`); `flutter --suppress-analytics analyze` → `1 issue found` (the baseline info at `test/support/fakes.dart:53:5` only).
 - Two test-only adjustments during GREEN (assertions unchanged): AC-021 (1) needed one more 400 ms frame before asserting the replaced page had left (exit transition), and uses `tap(find.byType(BackButton))` because `pageBack()` looks for the English "Back" tooltip while the app runs in Korean. The new test file's unused `flutter/services.dart` import was removed to keep analyze at baseline.
 - Notes: the plan card's [이대로 시작] sends the draft's E.164 number unless the user edited the number; a 400 `invalid_phone`/`blocked_number` opens the number for editing with the server message as its error text. `calls_controller.dart` needed no change (`create` already takes `NewCallRequest`).
+- Commit: `27c0fb0`.
+
+### M6 — home screen (AC-017, AC-018, AC-022, AC-024 manual form)
+
+- RED: `cd app && flutter --suppress-analytics test test/intake_flow_test.dart test/unit_test.dart` → exit 1; all 8 `intake_flow_test.dart` cases failed (e.g. `Found 0 widgets with text "무엇을 도와드릴까요?"`, `Found 0 widgets with text "최근 통화한 곳"`), and `unit_test.dart` did not compile (`Error when reading 'lib/features/calls/domain/counterparties.dart'`, `Method not found: 'recentCounterparties'`, `Method not found: 'normalizeName'`). Evidence: `m6-red.txt`.
+- First GREEN attempt broke 4 existing tests (`approval_flow_test.dart` "user approves a mid-call request…", `approval_card_test.dart` ×3) with `Bad state: Too many elements` from `find.byType(TextField)`: after their single 400 ms frame the push transition is still running, so the home route — now holding the intake `TextField` — is still onstage. The tests stay unmodified (AC-024); the fix is in the home: while its route is not current, the input is drawn as an `InputDecorator` + `Text` look-alike instead of a `TextField`.
+- GREEN: `cd app && flutter --suppress-analytics test` → `+53: All tests passed!` (`m6-green.txt`); `flutter --suppress-analytics analyze` → `1 issue found` (the baseline `use_null_aware_elements` info, now reported at `test/support/fakes.dart:54:5` because an import line was added above it).
+- Notes: suggestions are `ActionChip`s whose label is one `Text` `<이름> · <번호> · N번 통화`, one per line; recency uses `createdAt` like the server's history order; "직접 입력하기" keeps the former FAB's profile guard (no name → settings). The home sends `language: "ko"` (no picker on home; the plan card toggles the call language).
 
 ## §E.3 Run-phase Audit-Ready Signal
 

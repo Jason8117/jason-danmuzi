@@ -4,6 +4,7 @@ import 'package:callmate/core/network/api_client.dart';
 import 'package:callmate/core/network/live_channel.dart';
 import 'package:callmate/features/calls/data/calls_repository.dart';
 import 'package:callmate/features/calls/domain/call_models.dart';
+import 'package:callmate/features/calls/domain/intake_models.dart';
 
 Map<String, dynamic> taskJson({
   String id = 'task-1',
@@ -95,6 +96,22 @@ class FakeCallsRepository extends CallsRepository {
     createRequests.add(request);
     if (createError case final error?) throw error;
     return nextCreated!;
+  }
+
+  /// Every text `intake` received, in order (SPEC-INTAKE-001).
+  final intakeCalls = <String>[];
+
+  /// What `intake` answers; a blank draft of the text when unset.
+  IntakeResult? intakeResult;
+
+  /// When set, `intake` throws this after recording the text.
+  Object? intakeError;
+
+  @override
+  Future<IntakeResult> intake(String text, CallLanguage language) async {
+    intakeCalls.add(text);
+    if (intakeError case final error?) throw error;
+    return intakeResult ?? IntakeResult(draft: PlanDraft.blank(text));
   }
 
   @override

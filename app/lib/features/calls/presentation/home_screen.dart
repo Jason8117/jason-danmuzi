@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/network/live_channel.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -10,14 +11,67 @@ import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
 import '../domain/call_models.dart';
+import '../domain/counterparties.dart';
+import '../domain/intake_models.dart';
 import 'call_templates.dart';
 import 'widgets/status_chip.dart';
 
-class HomeScreen extends ConsumerWidget {
+/// SPEC-INTAKE-001 REQ-017: one input at the top sends a one-line request to `POST /v1/intake` and opens the plan card.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _input = TextEditingController();
+  bool _sending = false;
+
+  bool get _canSend => !_sending && _input.text.trim().length >= 2;
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  /// Replaces the input and puts the cursor at the end, so the user can keep typing.
+  void _fill(String text) => setState(() {
+        _input.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+      });
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (!_canSend) return;
+    // The plan card needs the requester's name; the typed text stays where it is meanwhile.
+    if (!ref.read(settingsProvider).hasProfile) {
+      context.push('/settings');
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sending = true);
+    PlanDraft? draft;
+    try {
+      // The home has no language picker; the plan card can switch the call language.
+      draft = (await ref.read(callsRepositoryProvider).intake(text, CallLanguage.ko)).draft;
+    } on ApiException catch (error) {
+      // REQ-022: a server without /v1/intake still gets a plan card, with the text as the goal.
+      if (error.statusCode == 404) {
+        draft = PlanDraft.blank(text);
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
+      }
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
+    }
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (draft != null) context.push('/plan', extra: draft);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tasks = ref.watch(sortedTasksProvider);
     final settings = ref.watch(settingsProvider);
 
@@ -33,16 +87,21 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: tasks.hasValue
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push(settings.hasProfile ? '/calls/new' : '/settings'),
-              icon: const Icon(Icons.add_call),
-              label: const Text('전화 맡기기'),
-            )
-          : null,
       body: ResponsiveBody(
         child: switch (tasks) {
-          AsyncData(:final value) => _TaskList(tasks: value, hasProfile: settings.hasProfile),
+          AsyncData(:final value) => _TaskList(
+              tasks: value,
+              hasProfile: settings.hasProfile,
+              intake: _IntakeBox(
+                input: _input,
+                sending: _sending,
+                onChanged: () => setState(() {}),
+                onSend: _canSend ? _send : null,
+                onManual: () => context.push(settings.hasProfile ? '/calls/new' : '/settings'),
+                suggestions: recentCounterparties(value),
+                onFill: _fill,
+              ),
+            ),
           AsyncError(:final error) => MessageView(
               icon: Icons.cloud_off_rounded,
               title: '서버와 연결되지 않았어요',
@@ -81,11 +140,108 @@ class _LiveIndicator extends ConsumerWidget {
   }
 }
 
+class _IntakeBox extends StatelessWidget {
+  const _IntakeBox({
+    required this.input,
+    required this.sending,
+    required this.onChanged,
+    required this.onSend,
+    required this.onManual,
+    required this.suggestions,
+    required this.onFill,
+  });
+
+  final TextEditingController input;
+  final bool sending;
+  final VoidCallback onChanged;
+  final VoidCallback? onSend;
+  final VoidCallback onManual;
+  final List<Counterparty> suggestions;
+  final ValueChanged<String> onFill;
+
+  static const _decoration = InputDecoration(hintText: '무엇을 도와드릴까요?', counterText: '');
+
+  @override
+  Widget build(BuildContext context) {
+    // While another screen covers home (including its push transition), the input is drawn as a look-alike without
+    // an editor: a covered screen needs no live text field, and screens on top keep being the only TextField owner.
+    final current = ModalRoute.of(context)?.isCurrent ?? true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: current
+                  ? TextField(
+                      key: const Key('home-intake-field'),
+                      controller: input,
+                      minLines: 1,
+                      maxLines: 4,
+                      maxLength: 1000,
+                      textInputAction: TextInputAction.send,
+                      decoration: _decoration,
+                      onChanged: (_) => onChanged(),
+                      onSubmitted: (_) => onSend?.call(),
+                    )
+                  : InputDecorator(
+                      decoration: _decoration,
+                      isEmpty: input.text.isEmpty,
+                      child: Text(input.text, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              key: const Key('home-intake-send'),
+              tooltip: '보내기',
+              onPressed: onSend,
+              icon: sending
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.send_rounded),
+            ),
+          ],
+        ),
+        TextButton(onPressed: onManual, child: const Text('직접 입력하기')),
+        if (suggestions.isNotEmpty) ...[
+          const _SectionHeader('최근 통화한 곳'),
+          for (final counterparty in suggestions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              // One Text per suggestion, so each reads as a single item and its name never repeats a list tile.
+              child: ActionChip(
+                avatar: const Icon(Icons.history_rounded, size: 18),
+                label: Text(
+                  '${counterparty.name} · ${formatPhone(counterparty.phoneNumber)} · ${counterparty.callCount}번 통화',
+                ),
+                onPressed: () => onFill('${counterparty.name}에 '),
+              ),
+            ),
+        ],
+        const _SectionHeader('이런 부탁도 할 수 있어요'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final template in callTemplates)
+              ActionChip(
+                avatar: Icon(template.icon, size: 18, color: Theme.of(context).colorScheme.primary),
+                label: Text(template.label),
+                onPressed: () => onFill(template.goal),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _TaskList extends ConsumerWidget {
-  const _TaskList({required this.tasks, required this.hasProfile});
+  const _TaskList({required this.tasks, required this.hasProfile, required this.intake});
 
   final List<CallTask> tasks;
   final bool hasProfile;
+  final Widget intake;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -96,8 +252,9 @@ class _TaskList extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () => ref.read(callsControllerProvider.notifier).refresh(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
+          intake,
           if (isSimulated) const _SimulationBanner(),
           if (!hasProfile) const _ProfilePrompt(),
           if (tasks.isEmpty) const _EmptyState(),
@@ -181,32 +338,15 @@ class _ProfilePrompt extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
+  // REQ-018 (b): the template chips live only in the suggestion row above, so the empty state keeps just its message.
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 40),
-      child: Column(
-        children: [
-          const MessageView(
-            icon: Icons.support_agent_rounded,
-            title: '귀찮은 전화, 대신 걸어드릴게요',
-            message: '예약, 문의, 요금 할인, 환불 요청까지.\n목적만 알려주시면 AI 비서가 통화하고 결과를 정리해 드려요.',
-          ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              for (final template in callTemplates)
-                ActionChip(
-                  avatar: Icon(template.icon, size: 18, color: theme.colorScheme.primary),
-                  label: Text(template.label),
-                  onPressed: () => context.push('/calls/new', extra: template),
-                ),
-            ],
-          ),
-        ],
+    return const Padding(
+      padding: EdgeInsets.only(top: 24),
+      child: MessageView(
+        icon: Icons.support_agent_rounded,
+        title: '귀찮은 전화, 대신 걸어드릴게요',
+        message: '예약, 문의, 요금 할인, 환불 요청까지.\n목적만 알려주시면 AI 비서가 통화하고 결과를 정리해 드려요.',
       ),
     );
   }

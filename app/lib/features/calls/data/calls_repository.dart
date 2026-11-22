@@ -4,6 +4,7 @@ import '../../../core/config/app_settings.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/live_channel.dart';
 import '../domain/call_models.dart';
+import '../domain/intake_models.dart';
 
 sealed class CallsEvent {
   const CallsEvent();
@@ -41,6 +42,12 @@ class CallsRepository {
   }
 
   Future<CallTask> create(NewCallRequest request) async => _task(await _api.post('/v1/tasks', request.toJson()));
+
+  /// SPEC-INTAKE-001: a plan-card draft for a one-line request. Creates no task. An older server answers 404;
+  /// callers tell that apart by `ApiException.statusCode`, because its body carries no error code of ours.
+  Future<IntakeResult> intake(String text, CallLanguage language) async => IntakeResult.fromJson(
+        await _api.post('/v1/intake', {'text': text, 'language': language.name}) as Map<String, dynamic>,
+      );
 
   Future<CallTask> approvePlan(String id, {String? openingLine}) async => _task(
         await _api.post('/v1/tasks/$id/approve-plan', {
