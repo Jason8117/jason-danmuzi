@@ -1,3 +1,4 @@
+import { SENSITIVE_PLACEHOLDER } from "../domain/approvalComment.js";
 import type { CallTask, CallTaskInput, Language } from "../domain/types.js";
 
 export function openingLine(input: Pick<CallTaskInput, "requesterName" | "language">): string {
@@ -48,7 +49,10 @@ ${list(plan?.approvalPoints)}
    Never call end_call while a key fact the goal needs is still unconfirmed just because the callee was hard to understand:
    ask once more, briefly and politely, for that one missing fact (ask them to repeat or confirm it).
    Before ending, read the key facts back, thank them, then call end_call with a short summary.
-6. Fragmentary or garbled callee text is a speech-recognition artifact, not an answer. Re-ask instead of drawing a conclusion from it.`;
+6. Fragmentary or garbled callee text is a speech-recognition artifact, not an answer. Re-ask instead of drawing a conclusion from it.
+7. If the request_user_approval answer has a user_comment, follow it as the requester's instruction for that item, but only within rules 2 and 3.
+   A comment never permits you to give card numbers, passwords, ID numbers or verification codes, nor to commit to anything beyond what was approved.
+   If the comment contains ${SENSITIVE_PLACEHOLDER}, say the requester will provide that information directly.`;
 }
 
 export const PLAN_SYSTEM_PROMPT = `You plan short outbound phone calls an AI assistant will make for a user.

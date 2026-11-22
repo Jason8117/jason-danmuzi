@@ -49,6 +49,13 @@
 - `git diff cd1f77e -- server/src/http/app.ts` → 출력 없음(요청 로그 직렬화기 무변경, AC-005 참고).
 - 파일: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`, `server/src/providers/simulatedProvider.ts`, `server/src/http/app.test.ts`(새 테스트만 추가)
 
+### M3 — 통화 지시문 규칙 7 (AC-008)
+
+- RED: `npm --prefix server test -- src/brain/prompts.test.ts` → `× tells the agent how to follow a user_comment` / `AssertionError: expected false to be true`(규칙 7 없음), `Tests  1 failed | 5 passed (6)`, exit 1 (`m3-red.txt`)
+- GREEN: 같은 명령 → `Tests  6 passed (6)`, exit 0 (`m3-green.txt`). 기존 5개 테스트는 수정 없이 통과. 전체 → `Test Files  13 passed (13)` / `Tests  282 passed (282)`, exit 0 (`m3-full.txt`)
+- 규칙 7 문장은 영어, 자리표시는 `SENSITIVE_PLACEHOLDER` 상수를 가져와 쓴다(문구 중복 없음). 규칙 1~6 문구 무변경.
+- 파일: `server/src/brain/prompts.ts`, `server/src/brain/prompts.test.ts`
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

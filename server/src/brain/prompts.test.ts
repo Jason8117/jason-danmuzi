@@ -51,3 +51,21 @@ describe("buildAgentInstructions end_call rules (SPEC-ARCH-001 live-call fix)", 
     expect(prompt).toMatch(/read the key facts back, thank them, then call end_call/i);
   });
 });
+
+// SPEC-APPROVAL-001 AC-008 / REQ-008
+describe("buildAgentInstructions approval comment rule (SPEC-APPROVAL-001)", () => {
+  const prompt = buildAgentInstructions({
+    ...task,
+    plan: { openingLine: "안녕하세요", steps: ["용건 전달"], questionsToAsk: [], approvalPoints: ["예약금"], fallback: "마무리" },
+  });
+
+  it("tells the agent how to follow a user_comment", () => {
+    const rule = prompt.slice(prompt.indexOf("\n7. ") + 1);
+    expect(rule.startsWith("7. ")).toBe(true);
+    expect(rule).toContain("user_comment");
+    expect(rule).toContain("[민감정보 삭제]");
+    expect(rule).toMatch(/card numbers/i);
+    expect(rule).toMatch(/passwords/i);
+    expect(rule).toMatch(/rules 2 and 3/i);
+  });
+});
