@@ -193,9 +193,11 @@ class CallTask {
     this.error,
     this.connectedAt,
     this.endedAt,
+    this.autoStartBlocked,
   });
 
   factory CallTask.fromJson(Map<String, dynamic> json) => CallTask(
+        autoStartBlocked: AutoStartBlocked.tryParse(json['autoStartBlocked']),
         id: json['id'] as String,
         version: json['version'] as int? ?? 0,
         targetName: json['targetName'] as String,
@@ -245,12 +247,32 @@ class CallTask {
   final DateTime? connectedAt;
   final DateTime? endedAt;
 
+  /// Why the server could not start the call the user confirmed on the plan card.
+  final AutoStartBlocked? autoStartBlocked;
+
   ApprovalRequest? get pendingApproval {
     for (final approval in approvals) {
       if (approval.isPending) return approval;
     }
     return null;
   }
+}
+
+/// The server's `autoStartBlocked`: the failed check's error code and message (SPEC-INTAKE-001 REQ-015).
+@immutable
+class AutoStartBlocked {
+  const AutoStartBlocked({required this.code, required this.message});
+
+  /// Null for anything but `{code: String, message: String}`, so an odd value never breaks task parsing.
+  static AutoStartBlocked? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final code = json['code'];
+    final message = json['message'];
+    return code is String && message is String ? AutoStartBlocked(code: code, message: message) : null;
+  }
+
+  final String code;
+  final String message;
 }
 
 @immutable
@@ -263,6 +285,7 @@ class NewCallRequest {
     required this.requesterName,
     this.context,
     this.callbackNumber,
+    this.autoStart = false,
   });
 
   final String targetName;
@@ -273,6 +296,9 @@ class NewCallRequest {
   final String requesterName;
   final String? callbackNumber;
 
+  /// The plan card's single confirmation: the server starts the call once the plan is ready (SPEC-INTAKE-001).
+  final bool autoStart;
+
   Map<String, dynamic> toJson() => {
         'targetName': targetName,
         'phoneNumber': phoneNumber,
@@ -281,6 +307,7 @@ class NewCallRequest {
         'language': language.name,
         'requesterName': requesterName,
         if (callbackNumber != null && callbackNumber!.trim().isNotEmpty) 'callbackNumber': callbackNumber,
+        if (autoStart) 'autoStart': true,
       };
 }
 

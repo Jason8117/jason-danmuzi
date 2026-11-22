@@ -84,8 +84,18 @@ class FakeCallsRepository extends CallsRepository {
   /// When set, `decide` throws this instead of recording the decision.
   Object? decideError;
 
+  /// Every request `create` received, in order (SPEC-INTAKE-001).
+  final createRequests = <NewCallRequest>[];
+
+  /// When set, `create` throws this after recording the request.
+  Object? createError;
+
   @override
-  Future<CallTask> create(NewCallRequest request) async => nextCreated!;
+  Future<CallTask> create(NewCallRequest request) async {
+    createRequests.add(request);
+    if (createError case final error?) throw error;
+    return nextCreated!;
+  }
 
   @override
   Future<List<CallTask>> list() async => tasks;

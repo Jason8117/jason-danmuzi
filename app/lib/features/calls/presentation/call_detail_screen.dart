@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
@@ -169,6 +170,10 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
         ];
       case TaskStatus.awaitingApproval:
         return [
+          if (task.autoStartBlocked case final blocked?) ...[
+            _AutoStartBlockedCard(blocked: blocked),
+            const SizedBox(height: 12),
+          ],
           _GoalCard(task: task),
           const SizedBox(height: 12),
           if (task.plan case final plan?)
@@ -360,6 +365,23 @@ class _CallTimerState extends State<_CallTimer> {
     return Text(
       formatDuration(elapsed.isNegative ? Duration.zero : elapsed),
       style: Theme.of(context).textTheme.labelLarge?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+    );
+  }
+}
+
+/// SPEC-INTAKE-001 REQ-023: the server could not start the call the user confirmed. The reason uses the app's
+/// existing error wording for known codes and the server's message otherwise; manual start stays available below.
+class _AutoStartBlockedCard extends StatelessWidget {
+  const _AutoStartBlockedCard({required this.blocked});
+  final AutoStartBlocked blocked;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = ApiException(blocked.code, blocked.message).userMessage;
+    return SectionCard(
+      icon: Icons.info_outline_rounded,
+      color: Theme.of(context).colorScheme.warning.withValues(alpha: 0.1),
+      child: Text('바로 걸지 못했어요: $reason'),
     );
   }
 }

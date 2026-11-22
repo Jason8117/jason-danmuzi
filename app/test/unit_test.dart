@@ -2,6 +2,7 @@ import 'package:callmate/core/utils/formatters.dart';
 import 'package:callmate/features/calls/data/calls_repository.dart';
 import 'package:callmate/features/calls/domain/approval_comment.dart';
 import 'package:callmate/features/calls/domain/call_models.dart';
+import 'package:callmate/features/calls/domain/intake_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
@@ -139,6 +140,88 @@ void main() {
       expect(withQuickReply('1만 원까지만 ', '다음 주로'), '1만 원까지만 다음 주로');
       expect(withQuickReply('1만 원까지만 다음 주로', '다음 주로'), '1만 원까지만 다음 주로');
       expect(withQuickReply('가' * 499, '다음 주로'), '가' * 499);
+    });
+  });
+
+  group('intake (SPEC-INTAKE-001)', () {
+    // AC-023 unit
+    test('parses autoStartBlocked defensively', () {
+      final blocked = CallTask.fromJson({
+        ...taskJson(status: 'awaiting_approval'),
+        'autoStartBlocked': {'code': 'daily_limit', 'message': 'Daily call limit reached'},
+      });
+      expect(blocked.autoStartBlocked?.code, 'daily_limit');
+      expect(blocked.autoStartBlocked?.message, 'Daily call limit reached');
+
+      expect(CallTask.fromJson(taskJson()).autoStartBlocked, isNull);
+      for (final odd in <Object>[5, 'x', <String, dynamic>{'code': 1}, <String, dynamic>{'message': 'm'}, <dynamic>[]]) {
+        expect(CallTask.fromJson({...taskJson(), 'autoStartBlocked': odd}).autoStartBlocked, isNull, reason: '$odd');
+      }
+    });
+
+    test('sends autoStart only when it is set', () {
+      const request = NewCallRequest(
+        targetName: '라 파스타',
+        phoneNumber: '02-123-4567',
+        goal: '금요일 7시 예약',
+        language: CallLanguage.ko,
+        requesterName: '김민수',
+      );
+      expect(request.toJson().containsKey('autoStart'), isFalse);
+      const auto = NewCallRequest(
+        targetName: '라 파스타',
+        phoneNumber: '02-123-4567',
+        goal: '금요일 7시 예약',
+        language: CallLanguage.ko,
+        requesterName: '김민수',
+        autoStart: true,
+      );
+      expect(auto.toJson()['autoStart'], isTrue);
+    });
+
+    test('parses intake responses defensively', () {
+      final result = IntakeResult.fromJson({
+        'draft': {
+          'targetName': '라 파스타',
+          'phoneNumber': '+8221234567',
+          'goal': '예약',
+          'conditions': ['8시도 괜찮음'],
+          'context': null,
+          'language': 'en',
+        },
+        'missing': ['goal'],
+        'phoneSource': 'history',
+        'numberIssue': null,
+        'source': 'llm',
+      });
+      expect(result.draft.targetName, '라 파스타');
+      expect(result.draft.phoneNumber, '+8221234567');
+      expect(result.draft.conditions, ['8시도 괜찮음']);
+      expect(result.draft.context, isNull);
+      expect(result.draft.language, CallLanguage.en);
+      expect(result.draft.phoneSource, PhoneSource.history);
+      expect(result.draft.numberBlocked, isFalse);
+      expect(result.draft.source, IntakeSource.llm);
+      expect(result.missing, ['goal']);
+
+      final odd = IntakeResult.fromJson({
+        'draft': {'goal': 5, 'conditions': 'x', 'language': 'fr'},
+        'phoneSource': 'somewhere',
+        'numberIssue': 'blocked',
+        'source': 'magic',
+      });
+      expect(odd.draft.goal, '');
+      expect(odd.draft.conditions, isEmpty);
+      expect(odd.draft.language, CallLanguage.ko);
+      expect(odd.draft.phoneSource, isNull);
+      expect(odd.draft.numberBlocked, isTrue);
+      expect(odd.draft.source, IntakeSource.heuristic);
+      expect(odd.missing, isEmpty);
+    });
+
+    test('joins conditions into the goal', () {
+      expect(goalWithConditions('예약', const []), '예약');
+      expect(goalWithConditions('예약', const ['8시도 괜찮음', '창가']), '예약\n조건: 8시도 괜찮음 / 창가');
     });
   });
 }

@@ -61,6 +61,14 @@
 - Plan §F check: `grep -n "/v1/intake" server/src/http/app.ts` → `167:  app.post("/v1/intake", async (request) => {` (one route; the handler parses `IntakeBody` and calls `calls.draftIntake` only).
 - **SPEC vector defect (for manager-spec, not edited here):** design.md §3.4 history table row 4 (`라 파스타에 전화해서 02-999-9999로`) lists `+82299999999`. Measured: `checkTargetNumber("02-999-9999")` → `{"kind":"ok","e164":"+8229999999"}`, `checkTargetNumber("02-9999-9999")` → `+82299999999` (tsx one-liner, this run). REQ-004 fixes the value through `checkTargetNumber`, and REQ-007 forbids emitting a number not in the text, so the test keeps the row's text and asserts `+8229999999` (comment in the test). The row's intent — the text number wins over history (`phoneSource "text"`) — is asserted unchanged. Suggested fix: change the table value to `+8229999999` (or the text to `02-9999-9999`).
 - Interpretation note: when the brain's name is dropped by the containment check (an invented name), the service treats it like a null name and runs the REQ-011 history-name match.
+- Commit: `9c6a1e8`.
+
+### M5 — app models and plan card (AC-019, AC-020, AC-021, AC-023, unit parsing)
+
+- RED: `cd app && flutter --suppress-analytics test test/plan_card_test.dart test/unit_test.dart` → exit 1; `Error: Error when reading 'lib/features/calls/domain/intake_models.dart': No such file or directory`, `'PlanDraft' isn't a type`, `Undefined name 'IntakeResult'`, `test/unit_test.dart:177:9: Error: No named parameter with the name 'autoStart'`. Evidence: `m5-red.txt`.
+- GREEN: same command → `+32: All tests passed!`; full `flutter --suppress-analytics test` → `+43: All tests passed!` (`m5-app-full.txt`); `flutter --suppress-analytics analyze` → `1 issue found` (the baseline info at `test/support/fakes.dart:53:5` only).
+- Two test-only adjustments during GREEN (assertions unchanged): AC-021 (1) needed one more 400 ms frame before asserting the replaced page had left (exit transition), and uses `tap(find.byType(BackButton))` because `pageBack()` looks for the English "Back" tooltip while the app runs in Korean. The new test file's unused `flutter/services.dart` import was removed to keep analyze at baseline.
+- Notes: the plan card's [이대로 시작] sends the draft's E.164 number unless the user edited the number; a 400 `invalid_phone`/`blocked_number` opens the number for editing with the server message as its error text. `calls_controller.dart` needed no change (`create` already takes `NewCallRequest`).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
