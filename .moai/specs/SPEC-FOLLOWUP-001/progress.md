@@ -108,10 +108,107 @@
   - extra: `TZ=America/Los_Angeles` → exit 0, `00:02 +7: All tests passed!` (`m5-tz-la.txt`)
 - Implementation: `follow_up.dart` (pure) — `buildShareText(task, {displayOffset = +09:00})` (shifts the UTC instant and formats `y년 M월 d일 a h:mm` in `ko`; `endedAt`, else `updatedAt`), `offersCalendarDraft(outcome)`, `buildCalendarDraft(task, {required now})` (CRLF, TEXT escaping backslash-first, rune-wise 75-octet folding with the leading space counted, `DTEND = startsAt + 60 min` when no `endsAt`, untitled → `<상대 이름> 일정`). `follow_up_actions.dart` — `FollowUpService` (copy / share text / share file), `DeviceFollowUpService` (`Clipboard.setData`; `SharePlus.instance.share(ShareParams(text:))`; `ShareParams(files: [XFile.fromData(bytes, mimeType:, name:)], fileNameOverrides: [name])`), `followUpServiceProvider`, `followUpClockProvider`, `FollowUpActions` widget (replaces the detail screen's terminal-state action; "다시 걸기" moved into it). Share returning `unavailable`/`dismissed` is not treated as failure (several platforms report `unavailable` after showing the sheet); only a thrown error falls back to copy.
 - AC-005 (5) `.ics` default title is asserted in "builds an RFC 5545 calendar draft" (`SUMMARY:라 파스타 일정`).
+- Commit: `36a926e`.
+
+### M6 — regression, compatibility, AC-013 command table (AC-016, AC-013)
+
+Final verification batch at HEAD `36a926e` (this run, this tree):
+
+| Check | Command | Observed |
+|---|---|---|
+| server tests | `npm --prefix server test` | exit 0, `Test Files  14 passed (14)` / `Tests  387 passed (387)` (`m6-server-test.txt`; baseline 14 / 370) |
+| server typecheck | `npm --prefix server run typecheck` | exit 0 |
+| test-file compile | `tsc -p server/tsconfig.testcheck.json` (temporary, deleted after; `ls` afterwards → `No such file or directory`) | exit 0 |
+| layering rules | `npm --prefix server test -- src/architecture.test.ts` | exit 0, `Tests  4 passed (4)`; file not modified |
+| app tests | `cd app && flutter --suppress-analytics test` | exit 0, `+65: All tests passed!` (`m6-app-test.txt`; baseline +53) |
+| app targeted | `cd app && flutter --suppress-analytics test test/follow_up_test.dart test/trust_notice_test.dart test/unit_test.dart` | exit 0, `+32: All tests passed!` |
+| app analyze | `cd app && flutter --suppress-analytics analyze` | `1 issue found` — the baseline info only (`test/support/fakes.dart:54:5`) |
+| existing test bodies | `git diff d161cab HEAD -- app/test server/src \| grep -nE '^-[^-]\|^\+\+\+ '` | removed lines in test files: only `app/test/plan_card_test.dart` line `-    SharedPreferences.setMockInitialValues({'requesterName': '김민수'});` (the AC-016 change). `unit_test.dart`, `heuristicBrain.test.ts`, `openaiBrain.test.ts` have additions only (new tests, two import lines). The other three removed lines are product code (`openaiBrain.ts` ×2, `prompts.ts` ×1) |
+| untouched files | `git diff --stat d161cab HEAD -- server/package.json server/package-lock.json app/test/intake_flow_test.dart app/test/support/fakes.dart` | no output (none changed) |
+| dependency | `git diff d161cab -- app/pubspec.yaml` | one added line under `dependencies:`: `+  share_plus: ^13.3.1` |
+| boundary | `git diff --stat d161cababb99a65976dbe2289e32ce1f9a4d59df..HEAD` | `23 files changed, 1420 insertions(+), 18 deletions(-)` = 21 of the 22 plan §B files (all except `app/test/intake_flow_test.dart`, not needed — see M4) + `spec.md` + `progress.md`; nothing outside the plan |
+
+AC-013 command table (this run, repository root of the worktree):
+
+| Item | Command | Observed |
+|---|---|---|
+| (1) | `grep -c "Always say you are an AI assistant in your first sentence" server/src/brain/prompts.ts` | `1` |
+| (2) | `grep -c "call the request_user_approval tool" server/src/brain/prompts.ts` | `1` |
+| (3) | `grep -c 'app.delete("/v1/tasks/:id"' server/src/http/app.ts` | `1` |
+| (4) | `grep -ci "audio" server/src/domain/types.ts` | `0` (exit 1) |
+| (4) | `grep -rln "writeFile\|createWriteStream\|appendFile" server/src \| grep -v "\.test\.ts"` | `server/src/store/taskStore.ts` |
+| (5) | `grep -c "Never give card numbers, passwords" server/src/brain/prompts.ts` | `1` |
+| (6) | `grep -c 'api.openai.com/v1/chat/completions' server/src/brain/openaiBrain.ts` | `1` |
+| (6) | `grep -c 'goal: input.goal' server/src/brain/openaiBrain.ts` | `1` |
+| (6) | `grep -c 'userComment: a.userComment' server/src/brain/openaiBrain.ts` | `1` |
+| (6) | `grep -c 'transcript: task.transcript' server/src/brain/openaiBrain.ts` | `1` |
+| (6) name/info/callback | `grep -c 'requesterName: input.requesterName' server/src/brain/openaiBrain.ts` | `1` |
+| (6) | `grep -c 'shareableInfo: input.context' server/src/brain/openaiBrain.ts` | `1` |
+| (6) | `grep -c 'Callback number: ' server/src/brain/prompts.ts` | `1` |
+| (6) | `grep -c 'agentInstructions: () => buildAgentInstructions' server/src/services/callService.ts` | `1` |
+| (6) | `grep -c 'session.agentInstructions()' server/src/providers/realtimeBridge.ts` | `1` |
+| plan §F | `grep -n "appointment" server/src/brain/heuristicBrain.ts \| wc -l` | `0` |
+
+The (1)(2)(5) rows show only that the instruction strings exist; whether the model follows them is not verified (OD-3 accepted risk). Note: M1 added a sentence to `SUMMARY_SYSTEM_PROMPT` (the summary request now also sends `referenceTime`/`timezone`); statement (6) still holds — no new user data is sent.
+
+### AC matrix
+
+| AC | Status | Test (file — name) | RED observed |
+|---|---|---|---|
+| AC-001 | PASS | `openaiBrain.test.ts` — "keeps outcomes without an appointment valid"; typecheck exit 0 | M1: test-file compile `TS2353 'appointment' does not exist in type 'CallOutcome'` |
+| AC-002 | PASS | `openaiBrain.test.ts` — "keeps only a confirmed, well-formed appointment" (13 rows) | M1: 3 keep-rows `expected undefined to deeply equal {…}`; drop-rows passed before (absence) |
+| AC-003 | PASS | `openaiBrain.test.ts` — "sends the reference time and asks for confirmed appointments only"; existing SPEC-OUTCOME-001 AC-008 test unmodified | M1: `RangeError: Invalid time value` |
+| AC-004 | PASS | `heuristicBrain.test.ts` — "never attaches an appointment"; `openaiBrain.test.ts` — "the fallback outcome has no appointment" | guard tests: passed before GREEN (absence holds by construction), as the AC notes for (1) |
+| AC-005 | PASS | `unit_test.dart` — "parses appointments defensively"; (5) `.ics` title in "builds an RFC 5545 calendar draft" | M2: `'Appointment' isn't a type` |
+| AC-006 | PASS | `follow_up_test.dart` — "shows follow-up actions that match the outcome" (8 rows) | M5: `Found 0 widgets with text "요약 복사"` |
+| AC-007 | PASS | `follow_up_test.dart` — "call again opens a filled plan card" | M3: `Found 0 widgets with text "이렇게 걸어 볼게요"` (old form opened) |
+| AC-008 | PASS (fake service) | `follow_up_test.dart` — "copies and shares the summary" | M5: no buttons |
+| AC-009 | PASS | `follow_up_test.dart` — "builds the share text (1)-(4)"; (5) TZ=UTC and TZ=Asia/Seoul re-runs both `+7: All tests passed!` | M5: `actual value is missing the following trailing characters: [목표 달성] …` |
+| AC-010 | PASS | `follow_up_test.dart` — "offers a calendar draft only for confirmed LLM outcomes" | M5: `at location [0] is <false> instead of <true>` |
+| AC-011 | PASS | `follow_up_test.dart` — "builds an RFC 5545 calendar draft (1)-(6)" | M5: `at location [0] is [] which shorter than expected` |
+| AC-012 | PASS (fake service) | `follow_up_test.dart` — "shares the calendar draft as a file" | M5: no buttons |
+| AC-013 | PASS | `trust_notice_test.dart` — "trust statements are exactly the agreed six"; command table above | M4: `Undefined name 'trustStatements'` |
+| AC-014 | PASS | `trust_notice_test.dart` — "asks for the trust notice once before the first call (1)-(4)", "… (5) on the plan review" | M4: `Found 0 widgets with text "AI 비서는 통화를 시작할 때 …"` |
+| AC-015 | PASS | `trust_notice_test.dart` — "shows trust statements in settings and during calls" (1)-(4) | M4: `Found 0 widgets with text "AI 비서와 기록"` |
+| AC-016 | PASS | full suites, `architecture.test.ts`, existing-test diff, dependency diff above | n/a (regression) |
+| DoD device check (not an AC) | **deferred to device check** | Android + iOS: does the default calendar appear in the share sheet for `appointment.ics`, and does it open an event draft? Also the real share sheet for text, and clipboard on device | not run — no device in this run; label stays "캘린더 파일 보내기" (OD-6) |
+
+### Addendum — notes for sync / manager-spec
+
+- AC-016 named two INTAKE test files; only `plan_card_test.dart` needed the setup line. `intake_flow_test.dart` is unmodified (its tests never press a REQ-014 trigger).
+- Audit advisory A3-2 (statement (6) "회신 번호" wording has no "if set" qualifier): SPEC text used verbatim; for manager-spec to decide.
+- The first call on a device passes two confirmations (plan card [이대로 시작] + trust notice [확인했어요]) — acceptance.md residual risk, to surface in sync docs.
+- Share result `unavailable`/`dismissed` is not treated as failure (only thrown errors fall back to copy) — on platforms that report `unavailable` after a real failure, the user sees no toast.
+- `IntakeResult.fromJson` parses `phoneSource` by enum name, so a server sending `"previousCall"` would map to the new app-only value; the server never sends it.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+```yaml
+run_complete_at: 2026-11-22
+run_start_sha: d161cababb99a65976dbe2289e32ce1f9a4d59df
+run_commit_sha: 36a926e   # last implementation commit (M5); the M6 commit that carries this section is evidence-only
+run_status: complete
+ac_pass_count: 16
+ac_fail_count: 0
+ac_notes: "AC-008/AC-012 pass against the injected fake service; the real share sheet and calendar-app acceptance of .ics are deferred to the device check (DoD)"
+device_check: deferred   # Android/iOS default calendar via share sheet — human-judged, not run
+milestone_commits: [3e08fcb, 941f700, db249ac, ed5ea07, 36a926e]
+share_plus_resolved: "13.3.1 (direct); 13 transitive lock entries"
+server_tests: "14 files / 387 tests passed (baseline 14 / 370)"
+server_typecheck_exit: 0
+test_file_compile_exit: 0
+architecture_test: "4 passed, unmodified"
+app_tests: "+65 passed (baseline +53)"
+app_analyze: "1 info (baseline info, fakes.dart:54)"
+existing_tests_modified: "plan_card_test.dart setup line only (AC-016)"
+new_warnings_or_lints_introduced: 0
+total_run_phase_files: 23   # 21 of 22 planned (intake_flow_test.dart not needed) + spec.md + progress.md
+m1_to_mN_commit_strategy: "one commit per milestone on the worktree branch; no push, no amend"
+l44_pre_commit_fetch: not-run   # isolated worktree; no fetch/push requested
+l44_post_push_fetch: not-applicable   # no push
+cross_platform_build: not-applicable   # TypeScript + Flutter tests only; no device or platform build run
+external_services_contacted: none   # OpenAI and KAT were never called; fetch and the share service were faked
+```
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
