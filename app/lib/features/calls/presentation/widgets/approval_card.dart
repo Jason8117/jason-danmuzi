@@ -7,9 +7,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/common.dart';
 import '../../application/calls_controller.dart';
+import '../../domain/approval_comment.dart';
 import '../../domain/call_models.dart';
-
-const int kMaxApprovalCommentChars = 500;
 
 /// Shown while the AI has put the other party on hold and is waiting for the user's decision.
 class ApprovalCard extends ConsumerStatefulWidget {
@@ -48,7 +47,7 @@ class _ApprovalCardState extends ConsumerState<ApprovalCard> {
   Future<void> _decide(bool approve) async {
     if (_busy) return;
     setState(() => _submittingApprove = approve);
-    final comment = _commentController.text.trim();
+    final comment = truncateToCodePoints(_commentController.text.trim(), kMaxApprovalCommentCodePoints);
     await runWithFeedback(
       context,
       () => ref.read(callsControllerProvider.notifier).decide(
@@ -62,13 +61,21 @@ class _ApprovalCardState extends ConsumerState<ApprovalCard> {
     if (mounted) setState(() => _submittingApprove = null);
   }
 
+  /// Only fills the field; the decision is still sent with 승인 / 거절 (SPEC-APPROVAL-001 REQ-011).
+  void _addQuickReply(String reply) {
+    final next = withQuickReply(_commentController.text, reply);
+    if (next == _commentController.text) return;
+    _commentController.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: next.length));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final remaining = widget.approval.expiresAt.difference(DateTime.now());
     final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
-    final charCount = _commentController.text.characters.length;
+    final comment = _commentController.text;
+    final codePoints = codePointLength(comment);
 
     return Card(
       color: scheme.warning.withValues(alpha: 0.12),
@@ -99,21 +106,49 @@ class _ApprovalCardState extends ConsumerState<ApprovalCard> {
               style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
+            // One scrollable row keeps the pinned card short, so the live transcript above stays visible.
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final (index, reply) in kApprovalQuickReplies.indexed) ...[
+                    if (index > 0) const SizedBox(width: 8),
+                    ActionChip(label: Text(reply), onPressed: _busy ? null : () => _addQuickReply(reply)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _commentController,
               enabled: !_busy,
-              maxLines: 3,
-              minLines: 2,
-              maxLength: kMaxApprovalCommentChars,
+              minLines: 1,
+              maxLines: 4,
+              inputFormatters: const [CodePointLengthLimitingFormatter(kMaxApprovalCommentCodePoints)],
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
-                labelText: '조건·안내 (선택)',
+                labelText: '조건 덧붙이기 (선택)',
                 hintText: '예: 예약금은 1만 원까지만, 그 이상은 거절해 주세요',
-                alignLabelWithHint: true,
+                helperText: '카드번호·비밀번호·주민번호는 적지 마세요.',
                 border: const OutlineInputBorder(),
-                counterText: '$charCount / $kMaxApprovalCommentChars',
+                counterText: codePoints >= kApprovalCommentCounterFrom ? '$codePoints / $kMaxApprovalCommentCodePoints' : null,
               ),
             ),
+            if (hasSensitiveDigits(comment)) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: scheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '카드번호처럼 보이는 숫자는 지우고 보낼게요.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [

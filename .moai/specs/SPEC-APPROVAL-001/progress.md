@@ -56,6 +56,19 @@
 - 규칙 7 문장은 영어, 자리표시는 `SENSITIVE_PLACEHOLDER` 상수를 가져와 쓴다(문구 중복 없음). 규칙 1~6 문구 무변경.
 - 파일: `server/src/brain/prompts.ts`, `server/src/brain/prompts.test.ts`
 
+### M4 — 승인 카드 (AC-009 ~ AC-014)
+
+- RED (`cd app && flutter --suppress-analytics test test/approval_card_test.dart test/approval_flow_test.dart test/unit_test.dart`, exit 1, `m4-red.txt`):
+  - `unit_test.dart` 컴파일 실패 `Error: Method not found: 'withQuickReply'.`(앱 규칙 파일 없음)
+  - AC-009 `Found 0 widgets with text "금액이 더 나오면 거절해 주세요"`, AC-010 `Found 0 widgets with text "조건 덧붙이기 (선택)"`, AC-011 `Found 0 widgets with text "카드번호처럼 보이는 숫자는 지우고 보낼게요."`
+  - AC-014 라벨 한 줄 교체 직후 `approval_flow_test.dart`: `Found 0 widgets with text "조건 덧붙이기 (선택)"`
+- 처음부터 통과(보호, 옛 카드 코드에서 `approval_card_test.dart`만 다시 실행, `m4-red-card.txt`: `+2 -3`): AC-012(실패 시 코멘트·버튼 유지, 현행 `approval_card.dart` 동작), AC-013(승인 이력 "안내: …"와 `system` 줄이 말풍선 라벨 없이 표시됨).
+- AC-012 테스트 주의: 목록 화면이 승인 요청을 12초 스낵바로 알리므로(`approval_listener.dart`), 오류 스낵바가 그 뒤에 줄을 선다. 테스트는 카드 동작만 보도록 알림 스낵바를 먼저 지운다(`scaffoldMessengerKey.currentState!.removeCurrentSnackBar()`).
+- 중간 실패와 대응: 칩을 `Wrap`(2줄)으로 두었을 때 하단 고정 카드가 370px로 커져 800×600 기본 테스트 화면에서 기존 `approval_flow_test.dart`가 대화 줄을 찾지 못했다(`Actual: _TextWidgetFinder:<Found 0 widgets with text "네, 라 파스타입니다.": []>`, `+20 -1`; 이 첫 실행 파일은 재실행으로 덮어써져 원문은 여기 인용만 남음). 임시 측정 테스트(`card=Size(688.0, 370.0)`, 상세 목록 높이 92px; 측정 후 파일 삭제)로 원인을 확인하고, 칩을 가로 스크롤 한 줄로 바꿔 카드 318px·목록 144px로 줄였다. 기존 테스트 본문은 바꾸지 않았다.
+- GREEN: 같은 명령 → `00:01 +21: All tests passed!`, exit 0 (`m4-green.txt`). 전체 `flutter --suppress-analytics test` → `00:01 +25: All tests passed!`, exit 0 (`m4-flutter-full.txt`). `flutter --suppress-analytics analyze` → `1 issue found`(기준선과 같은 `test/support/fakes.dart:53:5 • use_null_aware_elements` 1건) (`m4-analyze.txt`)
+- AC-014: `git diff cd1f77e -- app/test/approval_flow_test.dart` → `-    expect(find.text('조건·안내 (선택)'), findsOneWidget);` / `+    expect(find.text('조건 덧붙이기 (선택)'), findsOneWidget);` 한 줄 교체만. `fakes.dart`·`unit_test.dart`는 추가만.
+- 파일: `app/lib/features/calls/domain/approval_comment.dart`(신규), `app/lib/features/calls/presentation/widgets/approval_card.dart`, `app/test/approval_card_test.dart`(신규), `app/test/support/fakes.dart`, `app/test/approval_flow_test.dart`, `app/test/unit_test.dart`
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

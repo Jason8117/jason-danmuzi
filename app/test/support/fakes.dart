@@ -81,6 +81,9 @@ class FakeCallsRepository extends CallsRepository {
   final live = FakeLiveConnection();
   CallTask? nextCreated;
 
+  /// When set, `decide` throws this instead of recording the decision.
+  Object? decideError;
+
   @override
   Future<CallTask> create(NewCallRequest request) async => nextCreated!;
 
@@ -92,6 +95,7 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   Future<CallTask> decide(String taskId, String approvalId, {required bool approve, String? comment}) async {
+    if (decideError case final error?) throw error;
     decisions.add((approvalId: approvalId, approve: approve, comment: comment));
     return CallTask.fromJson(
       taskJson(

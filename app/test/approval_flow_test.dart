@@ -52,7 +52,7 @@ void main() {
     expect(find.text('예약금 1만 원 결제가 필요합니다. 진행할까요?'), findsOneWidget);
     expect(find.text('네, 라 파스타입니다.'), findsOneWidget);
 
-    expect(find.text('조건·안내 (선택)'), findsOneWidget);
+    expect(find.text('조건 덧붙이기 (선택)'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '1만 원까지만 승인');
     await tester.pump();
 
