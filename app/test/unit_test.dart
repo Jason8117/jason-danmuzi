@@ -261,4 +261,34 @@ void main() {
       expect(goalWithConditions('예약', const ['8시도 괜찮음', '창가']), '예약\n조건: 8시도 괜찮음 / 창가');
     });
   });
+
+  group('follow-up (SPEC-FOLLOWUP-001)', () {
+    // AC-005 / REQ-005
+    test('parses appointments defensively', () {
+      Appointment? parse(Object? appointment) {
+        final outcome = <String, dynamic>{
+          'result': 'success',
+          'source': 'llm',
+          'summary': '요약',
+          'keyFacts': <String>[],
+          'followUps': <String>[],
+          'appointment': ?appointment,
+        };
+        return CallTask.fromJson(taskJson(status: 'completed', outcome: outcome)).outcome!.appointment;
+      }
+
+      final full = parse({'title': '라 파스타 저녁 예약', 'startsAt': '2026-11-27T19:00:00+09:00'});
+      expect(full?.title, '라 파스타 저녁 예약');
+      expect(full?.startsAt.isAtSameMomentAs(DateTime.parse('2026-11-27T10:00:00Z')), isTrue);
+      expect(full?.endsAt, isNull);
+
+      expect(parse(null), isNull);
+      expect(parse({'title': 'x', 'startsAt': '내일'}), isNull);
+      expect(parse('문자열'), isNull);
+
+      final untitled = parse({'startsAt': '2026-11-27T19:00:00+09:00'});
+      expect(untitled, isNotNull);
+      expect(untitled?.title, '');
+    });
+  });
 }

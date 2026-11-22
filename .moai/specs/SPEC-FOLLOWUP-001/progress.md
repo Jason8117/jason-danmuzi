@@ -38,6 +38,43 @@
 - GREEN: `npm --prefix server test` → exit 0, `Test Files  14 passed (14)` / `Tests  387 passed (387)`; typecheck exit 0; test-file compile exit 0. Evidence: `m1-green.txt`, `m1-typecheck.txt`, `m1-testcompile.txt`.
 - Plan §F check: `grep -n "appointment" server/src/brain/heuristicBrain.ts | wc -l` → `0`.
 - Implementation: `OutcomeSchema.appointment` is `z.unknown().optional()`; a pure `confirmedAppointment(raw, referenceTime, targetName)` applies REQ-002 (b)-(e) after the schema; `failed` drops it; no log line. Reference time = `task.endedAt`, else `Date.now()`. A non-string, non-null `title` is treated as malformed (drop); a missing or null title becomes `<targetName> 일정`; `endsAt: null` is treated as absent. `startsAt`/`endsAt` are kept as the LLM wrote them (not re-normalized).
+- Commit: `3e08fcb`.
+
+### M2 — dependency and app model (OD-1, AC-005, AC-016 dependency part)
+
+- First step: `cd app && flutter --suppress-analytics pub add share_plus` → exit 0. Verbatim output (`m2-pub-add.txt`):
+
+  ```
+  Resolving dependencies...
+  Downloading packages...
+  + cross_file 0.3.5+5 (0.4.0 available)
+  + ffi_leak_tracker 0.1.2
+  + jni_flutter 1.1.0
+    material_color_utilities 0.13.0 (0.13.1 available)
+  + mime 2.1.0
+  + path_provider 2.1.6
+  + path_provider_android 2.3.1
+  + path_provider_foundation 2.6.0
+  + share_plus 13.3.1
+  + share_plus_platform_interface 7.2.0
+    test_api 0.7.14 (0.7.15 available)
+  + url_launcher_linux 3.2.3
+  + url_launcher_platform_interface 2.3.2
+  + url_launcher_web 2.4.3
+  + url_launcher_windows 3.1.6
+    vector_math 2.4.3 (2.4.4 available)
+  + win32 6.4.0
+  Changed 14 dependencies!
+  4 packages have newer versions incompatible with dependency constraints.
+  Try `flutter pub outdated` for more information.
+  ```
+
+- Resolved: `share_plus 13.3.1` (`app/pubspec.yaml` gains one line `share_plus: ^13.3.1` under `dependencies:`). `pubspec.lock` gains 14 entries: `share_plus` (`dependency: "direct main"`) and 13 transitive — `cross_file 0.3.5+5`, `ffi_leak_tracker 0.1.2`, `jni_flutter 1.1.0`, `mime 2.1.0`, `path_provider 2.1.6`, `path_provider_android 2.3.1`, `path_provider_foundation 2.6.0`, `share_plus_platform_interface 7.2.0`, `url_launcher_linux 3.2.3`, `url_launcher_platform_interface 2.3.2`, `url_launcher_web 2.4.3`, `url_launcher_windows 3.1.6`, `win32 6.4.0` (`git diff --stat -- app/pubspec.lock` → `112 insertions(+)`, no deletions). Note: `path_provider` now appears as a transitive package (share_plus writes the in-memory file to a temp dir itself); the app does not depend on it directly.
+- Compatibility: Dart `3.14.0 (stable)`, Flutter 3.50.1. After the add (before any code change): `flutter test` → `+53: All tests passed!` (`m2-postadd-test.txt`), `flutter analyze` → `1 issue found` (baseline info only, `m2-postadd-analyze.txt`).
+- API checked in the package source (`~/.pub-cache/hosted/pub.dev/share_plus-13.3.1`, `share_plus_platform_interface-7.2.0`, `cross_file-0.3.5+5`): `SharePlus.instance.share(ShareParams(text: …))`, `ShareParams(files: [XFile.fromData(bytes, mimeType: …)], fileNameOverrides: […])` (on io `XFile.fromData` ignores `name`, so the file name goes through `fileNameOverrides`). No `path_provider` import is needed in the app.
+- RED: `cd app && flutter --suppress-analytics test test/unit_test.dart` → exit 1, `test/unit_test.dart:268:7: Error: 'Appointment' isn't a type.` / `test/unit_test.dart:277:92: Error: The getter 'appointment' isn't defined for the type 'CallOutcome'.` (`m2-red.txt`).
+- GREEN: `cd app && flutter --suppress-analytics test` → `+54: All tests passed!` (`m2-green.txt`); `flutter analyze` → `1 issue found` (baseline info only, `m2-analyze.txt`).
+- Implementation: `Appointment.tryParse` (`call_models.dart`) — null unless a map with a parseable `startsAt`; instants kept in UTC; a missing/non-string title becomes `''`; an unparseable `endsAt` becomes null.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

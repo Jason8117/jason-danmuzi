@@ -151,6 +151,7 @@ class CallOutcome {
     required this.keyFacts,
     required this.followUps,
     this.source = OutcomeSource.unknown,
+    this.appointment,
   });
 
   // @MX:NOTE: [AUTO] Unknown result values stay `failed` (pessimistic) so a future server value never reads as success.
@@ -161,6 +162,7 @@ class CallOutcome {
         summary: json['summary'] as String? ?? '',
         keyFacts: _strings(json['keyFacts']),
         followUps: _strings(json['followUps']),
+        appointment: Appointment.tryParse(json['appointment']),
       );
 
   final OutcomeResult result;
@@ -168,6 +170,35 @@ class CallOutcome {
   final String summary;
   final List<String> keyFacts;
   final List<String> followUps;
+
+  /// A date the call confirmed; only LLM outcomes carry one (SPEC-FOLLOWUP-001).
+  final Appointment? appointment;
+}
+
+/// A confirmed date and time from the call. Instants are kept in UTC; display code picks the time zone.
+@immutable
+class Appointment {
+  const Appointment({required this.title, required this.startsAt, this.endsAt});
+
+  /// Null for anything without a parseable `startsAt`, so an odd value never breaks task parsing (REQ-005).
+  static Appointment? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final startsAt = json['startsAt'];
+    final start = startsAt is String ? DateTime.tryParse(startsAt)?.toUtc() : null;
+    if (start == null) return null;
+    final endsAt = json['endsAt'];
+    final title = json['title'];
+    return Appointment(
+      title: title is String ? title : '',
+      startsAt: start,
+      endsAt: endsAt is String ? DateTime.tryParse(endsAt)?.toUtc() : null,
+    );
+  }
+
+  /// Empty when the server sent none; the calendar draft then uses `<상대 이름> 일정`.
+  final String title;
+  final DateTime startsAt;
+  final DateTime? endsAt;
 }
 
 @immutable
