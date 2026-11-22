@@ -236,6 +236,44 @@ describe("CallMate API", () => {
     expect(status.statusCode).toBe(404);
     expect(media.statusCode).toBe(404);
   });
+
+  /** Creates a task, places the call and waits until the simulated callee's approval is pending. */
+  const pendingApproval = async () => {
+    const { id } = (await createTask()).json<CallTask>();
+    await waitFor(app, id, (t) => t.status === "awaiting_approval");
+    await app.inject({ method: "POST", url: `/v1/tasks/${id}/approve-plan`, headers: auth, payload: {} });
+    const waiting = await waitFor(app, id, (t) => t.approvals.some((a) => a.status === "pending"));
+    return { id, approvalId: waiting.approvals[0]!.id };
+  };
+
+  const decide = (id: string, approvalId: string, payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: `/v1/tasks/${id}/approvals/${approvalId}`, headers: auth, payload });
+
+  // SPEC-APPROVAL-001 AC-004 (A) / REQ-003, REQ-005
+  it("stores the masked approval comment", async () => {
+    const { id, approvalId } = await pendingApproval();
+
+    const res = await decide(id, approvalId, { decision: "approve", comment: "카드 1234 5678 9012 3456 말고 계좌이체" });
+
+    expect(res.statusCode).toBe(200);
+    const approval = res.json<CallTask>().approvals[0]!;
+    expect(approval.status).toBe("approved");
+    expect(approval.resolvedAt).toBeDefined();
+    expect(approval.userComment).toBe("카드 [민감정보 삭제] 말고 계좌이체");
+    expect(res.body).not.toContain("1234 5678 9012 3456");
+    const stored = await app.inject({ method: "GET", url: `/v1/tasks/${id}`, headers: auth });
+    expect(stored.body).not.toContain("1234 5678 9012 3456");
+  });
+
+  // SPEC-APPROVAL-001 AC-006 (6) / REQ-006
+  it("records the guidance line once in a simulated call", async () => {
+    const { id, approvalId } = await pendingApproval();
+
+    await decide(id, approvalId, { decision: "approve", comment: "1만 원까지만" });
+
+    const done = await waitFor(app, id, (t) => t.status === "completed");
+    expect(done.transcript.filter((t) => t.text === "사용자 안내: 1만 원까지만")).toHaveLength(1);
+  });
 });
 
 describe("/v1/stream (SPEC-ARCH-001 AC-019)", () => {

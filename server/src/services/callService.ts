@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildAgentInstructions } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
+import { sanitizeApprovalComment } from "../domain/approvalComment.js";
 import { checkTargetNumber } from "../domain/phone.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
@@ -11,6 +12,7 @@ import {
   type CallPlan,
   type CallTask,
   type CallTaskInput,
+  type Language,
   type Speaker,
   type TaskStatus,
   isActiveCall,
@@ -63,6 +65,8 @@ const INVALID_PHONE_MESSAGE = "전화번호 형식이 올바르지 않습니다.
 const BLOCKED_NUMBER_MESSAGE = "긴급·특수번호에는 전화할 수 없습니다.";
 /** Upper bound on how long startup waits for restart-recovery hang-ups. */
 const RECOVERY_DEADLINE_MS = 10_000;
+/** Prefix of the transcript line that records a user's approval comment (SPEC-APPROVAL-001 OD-3). */
+const GUIDANCE_PREFIX: Record<Language, string> = { ko: "사용자 안내:", en: "User guidance:" };
 
 export interface TerminateActiveCallsOptions {
   /** The termination step's share of the shutdown budget; unfinished hang-ups are abandoned after it. */
@@ -289,10 +293,11 @@ export class CallService {
     if (!approval || !pending || approval.status !== "pending") {
       throw new ServiceError(409, "approval_closed", "This approval is no longer pending");
     }
+    // Sanitized after the 409 check, so a closed approval is left untouched (SPEC-APPROVAL-001 REQ-002, REQ-010).
     this.resolveApproval(approvalId, {
       status: input.approve ? "approved" : "rejected",
       reason: input.approve ? "user_approved" : "user_rejected",
-      comment: input.comment,
+      comment: input.comment === undefined ? undefined : sanitizeApprovalComment(input.comment),
     });
     return this.get(taskId);
   }
@@ -447,7 +452,15 @@ export class CallService {
     if (task && approval && approval.status === "pending") {
       approval.status = input.status;
       approval.resolvedAt = now();
-      if (input.comment) approval.userComment = input.comment;
+      if (input.comment) {
+        approval.userComment = input.comment;
+        // Written by the service for every provider, and before resolve() wakes the provider,
+        // so the guidance precedes the agent's next line (SPEC-APPROVAL-001 REQ-006).
+        if (isActiveCall(task.status)) {
+          const text = `${GUIDANCE_PREFIX[task.language]} ${input.comment}`;
+          task.transcript.push({ id: randomUUID(), speaker: "system", text, at: now() });
+        }
+      }
       this.persist(task);
     }
     pending.resolve({

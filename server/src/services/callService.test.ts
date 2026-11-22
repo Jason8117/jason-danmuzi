@@ -575,3 +575,115 @@ describe("CallService number policy on the dialed form (SPEC-POLICY-001 audit F1
     },
   );
 });
+
+/**
+ * Starts a live call for `task` and plays the provider side of a mid-call approval: it asks,
+ * records the decision it gets back, then speaks once (SPEC-APPROVAL-001 AC-004..AC-006).
+ */
+async function askApproval(task: CallTask = makeTask()) {
+  const provider = new FakeProvider();
+  const ctx = setup({ provider, tasks: [task] });
+  const session = await startCall(ctx.calls, provider, task.id);
+  const settled = session.requestApproval("예약금 1만 원을 결제할까요?").then((decision) => {
+    session.appendTranscript("agent", "확인했습니다");
+    return decision;
+  });
+  const approvalId = ctx.calls.get(task.id).approvals[0]!.id;
+  return { ...ctx, session, settled, approvalId };
+}
+
+const systemLines = (task: CallTask) => task.transcript.filter((t) => t.speaker === "system").map((t) => t.text);
+
+describe("CallService approval comments (SPEC-APPROVAL-001 AC-004, AC-005)", () => {
+  const CARD_COMMENT = "카드 1234 5678 9012 3456 말고 계좌이체";
+
+  it.each([
+    [true, "user_approved"],
+    [false, "user_rejected"],
+  ] as const)("resolves the approval with the sanitized comment (approve: %s)", async (approve, reason) => {
+    const { calls, settled, approvalId } = await askApproval();
+
+    calls.respondToApproval("t-1", approvalId, { approve, comment: CARD_COMMENT });
+
+    expect(await settled).toEqual({ approved: approve, comment: "카드 [민감정보 삭제] 말고 계좌이체", reason });
+    const approval = calls.get("t-1").approvals[0]!;
+    expect(approval.status).toBe(approve ? "approved" : "rejected");
+    expect(approval.userComment).toBe("카드 [민감정보 삭제] 말고 계좌이체");
+    expect(JSON.stringify(calls.get("t-1"))).not.toContain("1234 5678 9012 3456");
+  });
+
+  it("never logs approval comments", async () => {
+    const { calls, session, settled, approvalId, log } = await askApproval();
+
+    calls.respondToApproval("t-1", approvalId, { approve: true, comment: "비밀안내문구-XYZ 1234 5678 9012 3456" });
+    await settled;
+    session.end();
+    await vi.waitFor(() => expect(calls.get("t-1").status).toBe("completed"));
+
+    const logged = JSON.stringify(log.entries);
+    expect(logged).not.toContain("비밀안내문구-XYZ");
+    expect(logged).not.toContain("1234 5678 9012 3456");
+    expect(logged).not.toContain("[민감정보 삭제]");
+  });
+});
+
+describe("CallService guidance line (SPEC-APPROVAL-001 AC-006)", () => {
+  it("appends one guidance line per commented decision, before the provider's next line", async () => {
+    const { calls, settled, approvalId } = await askApproval();
+
+    calls.respondToApproval("t-1", approvalId, { approve: true, comment: "1만 원까지만" });
+    await settled;
+
+    const texts = calls.get("t-1").transcript.map((t) => t.text);
+    expect(systemLines(calls.get("t-1"))).toEqual(["사용자 안내: 1만 원까지만"]);
+    expect(texts.indexOf("사용자 안내: 1만 원까지만")).toBeLessThan(texts.indexOf("확인했습니다"));
+  });
+
+  it("uses the English prefix for an English task", async () => {
+    const { calls, settled, approvalId } = await askApproval(makeTask({ language: "en" }));
+
+    calls.respondToApproval("t-1", approvalId, { approve: true, comment: "up to 10,000 won" });
+    await settled;
+
+    expect(systemLines(calls.get("t-1"))).toEqual(["User guidance: up to 10,000 won"]);
+  });
+
+  it("writes no guidance line when the approval expires", async () => {
+    vi.useFakeTimers();
+    const { calls, settled } = await askApproval();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    const decision = await settled;
+
+    expect(decision.approved).toBe(false);
+    expect(decision.reason).toBe("expired");
+    expect(decision.comment).toBeUndefined();
+    const approval = calls.get("t-1").approvals[0]!;
+    expect(approval.status).toBe("expired");
+    expect(approval.userComment).toBeUndefined();
+    expect(systemLines(calls.get("t-1"))).toEqual([]);
+  });
+
+  it("keeps the stored comment and transcript when a closed approval is answered again", async () => {
+    const { calls, settled, approvalId } = await askApproval();
+    calls.respondToApproval("t-1", approvalId, { approve: true, comment: "1만 원까지만" });
+    await settled;
+
+    expect(thrownBy(() => calls.respondToApproval("t-1", approvalId, { approve: false, comment: "취소" }))).toMatchObject({
+      statusCode: 409,
+      code: "approval_closed",
+    });
+    expect(calls.get("t-1").approvals[0]!.userComment).toBe("1만 원까지만");
+    expect(systemLines(calls.get("t-1"))).toEqual(["사용자 안내: 1만 원까지만"]);
+  });
+
+  it.each([undefined, "\u0007  "])("writes no guidance line when no comment is left (comment: %j)", async (comment) => {
+    const { calls, settled, approvalId } = await askApproval();
+
+    calls.respondToApproval("t-1", approvalId, { approve: true, comment });
+
+    expect(await settled).toEqual({ approved: true, comment: undefined, reason: "user_approved" });
+    expect(calls.get("t-1").approvals[0]!.userComment).toBeUndefined();
+    expect(systemLines(calls.get("t-1"))).toEqual([]);
+  });
+});

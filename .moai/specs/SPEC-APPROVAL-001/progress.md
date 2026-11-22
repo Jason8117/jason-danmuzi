@@ -39,6 +39,16 @@
 - 파일: `server/src/domain/approvalComment.ts`(신규), `server/src/domain/approvalComment.test.ts`(신규)
 - spec.md frontmatter `status: draft → in-progress`, `updated: 2026-11-22`
 
+### M2 — 서비스 적용과 안내 줄 (AC-004, AC-005, AC-006)
+
+- RED: `npm --prefix server test -- src/services/callService.test.ts src/http/app.test.ts` → `Tests  7 failed | 63 passed (70)`, exit 1 (`m2-red.txt`). 실패 7건: AC-004 (B) 승인·거절 2건(`expected { approved: true, …(2) } to deeply equal …` — 원문 그대로 전달), AC-004 (A) `expected '카드 1234 5678 9012 3456 말고 계좌이체' to be '카드 [민감정보 삭제] 말고 계좌이체'`, AC-006 (1) `expected [] to deeply equal [ '사용자 안내: 1만 원까지만' ]`, (2) `expected [] to deeply equal [ 'User guidance: up to 10,000 won' ]`, (4) 안내 줄 없음, (5) 제어 문자만 있는 코멘트가 그대로 전달됨.
+- 처음부터 통과(보호): AC-005 "never logs approval comments"(서비스가 코멘트를 로그에 쓰지 않음을 고정), AC-006 (3) 만료(`comment` 값 `undefined`, `status: expired`, 안내 줄 없음), (5) 코멘트 없는 승인, (6) 시뮬레이션 1줄(당시에는 제공자만 줄을 씀).
+- 중복 회귀 확인: 서비스 줄 추가 후 제공자 줄을 지우기 전 같은 명령 → `× records the guidance line once in a simulated call` / `AssertionError: expected [ { …(4) }, { …(4) } ] to have a length of 1 but got 2`, exit 1 (`m2-dup-red.txt`)
+- GREEN: `simulatedProvider.ts`의 자체 안내 줄 삭제 후 같은 명령 → `Test Files  2 passed (2)` / `Tests  70 passed (70)`, exit 0 (`m2-green.txt`). 전체 `npm --prefix server test` → `Test Files  13 passed (13)` / `Tests  281 passed (281)`, exit 0 (`m2-full.txt`). typecheck exit 0.
+- `grep -rn "사용자 안내" server/src` → 구현은 `server/src/services/callService.ts:69`(접두어 상수) 한 곳, 나머지는 테스트(`app.test.ts:275`, `callService.test.ts:638,639,677`). 시뮬레이션 제공자에서 사라짐.
+- `git diff cd1f77e -- server/src/http/app.ts` → 출력 없음(요청 로그 직렬화기 무변경, AC-005 참고).
+- 파일: `server/src/services/callService.ts`, `server/src/services/callService.test.ts`, `server/src/providers/simulatedProvider.ts`, `server/src/http/app.test.ts`(새 테스트만 추가)
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

@@ -80,9 +80,6 @@ export class SimulatedCallProvider implements CallProvider {
         const decision = await session.requestApproval(template.approvalAsk);
         if (signal.aborted) return;
         session.appendTranscript("agent", decision.approved ? lines.approved : lines.rejected);
-        if (decision.comment) {
-          session.appendTranscript("system", `사용자 안내: ${decision.comment}`);
-        }
         await pause(1200);
         session.appendTranscript("callee", lines.acknowledge);
         if (!decision.approved) break;
