@@ -77,10 +77,88 @@
 - First GREEN attempt broke 4 existing tests (`approval_flow_test.dart` "user approves a mid-call request…", `approval_card_test.dart` ×3) with `Bad state: Too many elements` from `find.byType(TextField)`: after their single 400 ms frame the push transition is still running, so the home route — now holding the intake `TextField` — is still onstage. The tests stay unmodified (AC-024); the fix is in the home: while its route is not current, the input is drawn as an `InputDecorator` + `Text` look-alike instead of a `TextField`.
 - GREEN: `cd app && flutter --suppress-analytics test` → `+53: All tests passed!` (`m6-green.txt`); `flutter --suppress-analytics analyze` → `1 issue found` (the baseline `use_null_aware_elements` info, now reported at `test/support/fakes.dart:54:5` because an import line was added above it).
 - Notes: suggestions are `ActionChip`s whose label is one `Text` `<이름> · <번호> · N번 통화`, one per line; recency uses `createdAt` like the server's history order; "직접 입력하기" keeps the former FAB's profile guard (no name → settings). The home sends `language: "ko"` (no picker on home; the plan card toggles the call language).
+- Commit: `ab029ec`.
+
+### M7 — regression and compatibility (AC-024)
+
+Final verification batch at HEAD `ab029ec` (this run, this tree):
+
+| Check | Command | Observed |
+|---|---|---|
+| server tests | `npm --prefix server test` | exit 0, `Test Files  14 passed (14)` / `Tests  370 passed (370)` (`m7-server-test.txt`; baseline 13 / 293) |
+| server typecheck | `npm --prefix server run typecheck` | exit 0 |
+| test-file compile | `tsc -p server/tsconfig.testcheck.json` | exit 0 |
+| layering rules | `npm --prefix server test -- src/architecture.test.ts` | `Tests  4 passed (4)`; file not modified |
+| app tests | `cd app && flutter --suppress-analytics test` | exit 0, `+53: All tests passed!` (`m7-app-test.txt`; baseline +25) |
+| app analyze | `cd app && flutter --suppress-analytics analyze` | `1 issue found` — the baseline info only (`test/support/fakes.dart:54:5`, was :53) |
+| existing test bodies | `git diff 42e2f16 HEAD -- app/test/approval_flow_test.dart server/src/http/app.test.ts server/src/services/callService.test.ts server/src/brain/heuristicBrain.test.ts server/src/brain/openaiBrain.test.ts app/test/unit_test.dart app/test/outcome_card_test.dart app/test/calls_controller_test.dart app/test/approval_card_test.dart server/src/architecture.test.ts server/src/brain/prompts.test.ts \| grep -E '^-[^-]'` | no output (grep exit 1): no line removed or changed; only additions (new tests, new import lines) |
+| fake (test support) | `git diff 42e2f16 HEAD -- app/test/support/fakes.dart` | one replaced line: `create` now records the request and can throw `createError`; with neither set it returns `nextCreated!` as before |
+| boundary | `git diff --stat 42e2f169..HEAD` | `28 files changed, 2532 insertions(+), 54 deletions(-)` = the 26 plan §B files + `spec.md` + `progress.md`; nothing else |
+| added log lines | `git diff 42e2f16 HEAD -- server/src/services/callService.ts server/src/brain/openaiBrain.ts server/src/domain/intake.ts server/src/http/app.ts \| grep -nE '^\+.*(log\.\|console\.)'` | one line: `this.log.warn({ taskId: task.id, reason: "auto_start_not_recorded" }, …)` (auto-start record failure; no request text or number). The intake path adds no log line; LLM fallback reuses the existing `{op, reason, status?}` warn |
+
+Manual form never auto-starts: `intake_flow_test.dart` "the manual form never auto-starts" (in the +53).
+
+### AC matrix
+
+| AC | Status | Test (file — name) | RED observed |
+|---|---|---|---|
+| AC-001 | PASS | `app.test.ts` — "drafts an intake without creating a task" (6 rows) | M4: (1)-(5) `expected 404 to be 200/400`; (6) 401 passed before (auth hook) |
+| AC-002 | PASS | `app.test.ts` — "refuses intake while shutting down" | M4: `expected 404 to be 503` |
+| AC-003 | PASS | `callService.test.ts` — "intake has no side effects and logs no request text" | M4: `calls.draftIntake is not a function` |
+| AC-004 | PASS | `intake.test.ts` — "finds Korean phone numbers in free text" (18 rows) | M2: `Cannot find module './intake.js'` |
+| AC-005 | PASS | `callService.test.ts` — "never proposes a blocked number, even from history" (2) | M4 |
+| AC-006 | PASS (vector note) | `callService.test.ts` — "finds the number of a counterparty who answered before" (5 rows + stored-number-blocked case) | M4. Row 4 asserts `+8229999999` (policy value for `02-999-9999`); design.md lists `+82299999999` — SPEC vector typo, see M4 |
+| AC-007 | PASS | `intake.test.ts` — "masks number-shaped text before it reaches the LLM" (6); `callService.test.ts` — "masks numbers before calling the LLM", "uses only numbers from the text or history"; `openaiBrain.test.ts` — "sends the text it receives unchanged" | M2 (masking) / M3 (brain) / M4 (service) |
+| AC-008 | PASS | `callService.test.ts` — "post-processes LLM intake content in the service" (3); `openaiBrain.test.ts` — "returns schema-validated intake content unchanged" (3) | M3 / M4 |
+| AC-009 | PASS | `openaiBrain.test.ts` — "falls back visibly when the intake LLM fails" (6), "bounds the intake LLM call below the app timeout" | M3: `draftIntake is not a function` |
+| AC-010 | PASS | `heuristicBrain.test.ts` — "drafts intake content without an LLM" (6) | M3 |
+| AC-011 | PASS | `callService.test.ts` — "matches the longest known counterparty name" | M4 |
+| AC-012 | PASS | `callService.test.ts` — "lists missing fields in a fixed order"; `app.test.ts` AC-001 (1)(2) | M4 |
+| AC-013 | PASS | `app.test.ts` — "accepts an optional autoStart flag" | M1: `expected undefined to be true` |
+| AC-014 | PASS | `callService.test.ts` — "starts the call once planning finishes when autoStart is set", "auto-started calls open with the template AI disclosure"; `app.test.ts` — "auto-starts a simulated call without approve-plan" | M1 |
+| AC-015 | PASS | `callService.test.ts` — "records why an auto start was blocked…", "records daily_limit…", "records shutting_down…", "records auto_start_failed…" | M1 |
+| AC-016 | PASS | `callService.test.ts` — "never auto-starts outside the planning completion" | M1: passed before GREEN (negative guard; no trigger existed yet) |
+| AC-017 | PASS | `intake_flow_test.dart` — "home sends one line to intake" (+ settings-first, manual-form cases) | M6 |
+| AC-018 | PASS | `intake_flow_test.dart` — "suggests recent counterparties and templates" (+ no-tasks case); `unit_test.dart` — "derives recent counterparties", "normalizes names like the server" | M6 |
+| AC-019 | PASS | `plan_card_test.dart` — "shows the draft and edits rows in place" (2 cases) | M5: compile error (`intake_models.dart` missing) |
+| AC-020 | PASS | `plan_card_test.dart` — "asks for the number once" (3 cases) | M5 |
+| AC-021 | PASS | `plan_card_test.dart` — "starts the call with one tap (1)…(6)" | M5 |
+| AC-022 | PASS | `intake_flow_test.dart` — "falls back to a blank plan card on older servers" (2 cases) | M6 |
+| AC-023 | PASS | `plan_card_test.dart` — "explains a blocked auto start on the detail screen (1)-(3)"; `unit_test.dart` — "parses autoStartBlocked defensively" | M5 |
+| AC-024 | PASS | full server and app suites, `architecture.test.ts`, existing-test diff above, "the manual form never auto-starts" | n/a (regression) |
+
+### Addendum — residual risks (audit request; still true at HEAD `ab029ec`)
+
+- Over-masking: the 15xx/16xx/18xx shape also matches amounts such as `15000000원` (`1500` + `0000`), so the LLM receives `[전화번호]원` and the goal loses the amount; a 0-leading order number such as `0123-4567-8901` matches the domestic candidate shape, is masked, and is proposed as a number whenever `checkTargetNumber` returns `ok`. Both are visible on the plan card and editable. Not exercised by a test in this run.
+- The first call on a device passes both the plan-card confirmation ([이대로 시작]) and the first-run trust acknowledgement (SPEC-FOLLOWUP-001 REQ-014, not yet implemented) — one extra tap on the first call relative to owner decision 3. To be surfaced in sync-phase docs.
+- SPEC vector defect: design.md §3.4 history row 4 value (see M4).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+```yaml
+run_complete_at: 2026-11-22
+run_start_sha: 42e2f169ab9dea50f6ff7533979afd070417b260
+run_commit_sha: ab029ec   # last implementation commit (M6); the M7 commit that carries this section is evidence-only
+run_status: complete
+ac_pass_count: 24
+ac_fail_count: 0
+ac_notes: "AC-006 row 4 asserts the checkTargetNumber value (+8229999999); design.md vector typo reported"
+milestone_commits: [1d778c2, f1e0e3f, ec0cd36, 9c6a1e8, 27c0fb0, ab029ec]
+server_tests: "14 files / 370 tests passed (baseline 13 / 293)"
+server_typecheck_exit: 0
+test_file_compile_exit: 0
+architecture_test: "4 passed, unmodified"
+app_tests: "+53 passed (baseline +25)"
+app_analyze: "1 info (baseline info, fakes.dart:54)"
+existing_tests_modified: false
+new_warnings_or_lints_introduced: 0
+total_run_phase_files: 28   # 26 planned + spec.md + progress.md
+m1_to_mN_commit_strategy: "one commit per milestone on the worktree branch; no push, no amend"
+l44_pre_commit_fetch: not-run   # isolated worktree; no fetch/push requested
+l44_post_push_fetch: not-applicable   # no push
+cross_platform_build: not-applicable   # TypeScript + Flutter tests only; no device or platform build run
+external_services_contacted: none   # OpenAI and KAT were never called; fetch was stubbed
+```
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
