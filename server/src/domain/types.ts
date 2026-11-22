@@ -111,6 +111,39 @@ export interface AutoStartBlocked {
   message: string;
 }
 
+/** How a one-line request was interpreted: by the LLM or by the deterministic rules. */
+export type IntakeSource = "llm" | "heuristic";
+
+/** What the brain extracts from a (number-masked) one-line request. It never carries a phone number (REQ-007 (b)). */
+export interface IntakeContent {
+  targetName: string | null;
+  goal: string;
+  conditions: string[];
+  context: string | null;
+  source: IntakeSource;
+}
+
+/** The plan-card draft returned by POST /v1/intake. No task is created (SPEC-INTAKE-001 REQ-001, REQ-003). */
+export interface IntakeDraft {
+  targetName: string | null;
+  /** E.164, taken only from the request text or from a counterparty who answered before. */
+  phoneNumber: string | null;
+  goal: string;
+  conditions: string[];
+  context: string | null;
+  language: Language;
+}
+
+export type IntakeMissingField = "targetName" | "phoneNumber" | "goal";
+
+export interface IntakeResult {
+  draft: IntakeDraft;
+  missing: IntakeMissingField[];
+  phoneSource: "text" | "history" | null;
+  numberIssue: "blocked" | null;
+  source: IntakeSource;
+}
+
 /** Execution options for task creation, kept apart from the task input itself. */
 export interface CreateTaskOptions {
   autoStart?: boolean;

@@ -1,7 +1,11 @@
-import type { CallOutcome, CallPlan, CallTask, CallTaskInput } from "../domain/types.js";
+import type { CallOutcome, CallPlan, CallTask, CallTaskInput, IntakeContent, Language } from "../domain/types.js";
 import { openingLine } from "./prompts.js";
+import { PHONE_PLACEHOLDER } from "../domain/intake.js";
 import { detectScenario, SCENARIO_TEMPLATES } from "../domain/scenario.js";
 import type { CallBrain } from "./types.js";
+
+/** design.md §3.4: the leading name before a particle and "전화"/"연락", at most 40 characters. */
+const INTAKE_NAME = /^\s*(.{1,40}?)\s*(?:에|에게|한테|께)\s*(?:전화|연락)/;
 
 const FILLER =
   /^(네|예|아|yes|yeah|ok|okay|sure|hello|hi)?[\s,.!]*(말씀하세요|말씀해\s?주세요|알겠습니다|감사합니다|go ahead|understood|thank you|thanks|bye)?[\s,.!]*(bye)?[\s,.!]*$/i;
@@ -30,6 +34,13 @@ export class HeuristicBrain implements CallBrain {
           ? "목표를 달성할 수 없으면 이유와 가능한 대안을 확인하고 정중히 마무리합니다."
           : "If the goal can't be met, note the reason and any alternative, then close politely.",
     };
+  }
+
+  /** SPEC-INTAKE-001 REQ-010: the goal is the request itself; a name only from "<이름>에/에게/한테/께 전화/연락". */
+  async draftIntake(maskedText: string, _language: Language): Promise<IntakeContent> {
+    const goal = maskedText.split(PHONE_PLACEHOLDER).join(" ").replace(/\s+/g, " ").trim();
+    const name = INTAKE_NAME.exec(goal)?.[1]?.trim();
+    return { targetName: name ? name : null, goal, conditions: [], context: null, source: "heuristic" };
   }
 
   async summarize(task: CallTask): Promise<CallOutcome> {

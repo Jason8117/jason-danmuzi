@@ -44,6 +44,14 @@
 - RED: `npm --prefix server test -- src/domain/intake.test.ts` → exit 1, `FAIL src/domain/intake.test.ts` / `Error: Cannot find module './intake.js'` / `Tests  no tests`. Evidence: `m2-red.txt`.
 - GREEN: same command → `Tests  28 passed (28)` (18 AC-004 rows + 6 masking rows + placeholder + 3 normalization rows). Full suite `Test Files  14 passed (14)` / `Tests  330 passed (330)`, typecheck exit 0, test-file compile exit 0. Evidence: `m2-green.txt`.
 - Implementation: `server/src/domain/intake.ts` (pure; only imports `checkTargetNumber`). History lookups are added in M4, where the service tests drive them.
+- Commit: `f1e0e3f`.
+
+### M3 — brain intake (AC-010, AC-008 brain side, AC-009, AC-007 (a) brain side)
+
+- RED: `npm --prefix server test -- src/brain/heuristicBrain.test.ts src/brain/openaiBrain.test.ts -t "intake"` → exit 1, `Tests  17 failed | 34 skipped (51)`; failures `TypeError: brain.draftIntake is not a function` / `(intermediate value).draftIntake is not a function` (6 heuristic rows, 1 "sends the text it receives unchanged", 3 "returns schema-validated intake content unchanged", 6 "falls back visibly when the intake LLM fails", 1 "bounds the intake LLM call below the app timeout"). Evidence: `m3-red.txt`.
+- GREEN: `npm --prefix server test` → exit 0, `Test Files  14 passed (14)` / `Tests  347 passed (347)`; typecheck exit 0; test-file compile exit 0. Evidence: `m3-green.txt`.
+- Plan §F check: `grep -n "phoneNumber" server/src/brain/openaiBrain.ts` → no output (the intake schema has no number field).
+- Design note: `CallBrain.draftIntake` is declared optional so the existing test brain fake in `callService.test.ts` (`recordingBrain`, unmodifiable per AC-024) still compiles; the service falls back to the deterministic rules when a brain lacks it. Both shipped brains implement it. The timeout is injected through a new 4th constructor argument `{ intakeTimeoutMs }`; exported `INTAKE_LLM_TIMEOUT_MS = 15000`, `LLM_TIMEOUT_MS = 30000` (plan/summary unchanged).
 
 ## §E.3 Run-phase Audit-Ready Signal
 

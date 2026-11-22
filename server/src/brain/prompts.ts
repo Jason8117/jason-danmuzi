@@ -60,7 +60,17 @@ Return JSON with: openingLine (string, must disclose the caller is an AI assista
 steps (3-5 strings), questionsToAsk (2-5 strings), approvalPoints (0-3 strings: decisions that need the user's consent such as payments, fees, contracts),
 fallback (string). Write all strings in the requested language. Do not invent personal data.`;
 
-export const SUMMARY_SYSTEM_PROMPT = `You summarize a phone call an AI assistant made for a user.
+/** SPEC-INTAKE-001 design.md §4. The response schema deliberately has no phone number field (REQ-007 (b)). */
+export const INTAKE_SYSTEM_PROMPT = `You turn a user's one-line request into a draft for a phone call an AI assistant will make for them.
+The input is JSON with "language" and "request". Return JSON with exactly these keys:
+targetName (string or null: who to call, written exactly as in the request; null when the request does not name them),
+goal (string: what the call must achieve, including times, counts and limits, but without the items you put in conditions),
+conditions (0-5 strings: constraints or alternatives the user stated, e.g. "8시도 괜찮음"),
+context (string or null: only information the user said may be shared with the callee).
+Never invent names, numbers, dates or details. "[전화번호]" marks a removed phone number: never copy it and never write any phone number.
+Write in the requested language.`;
+
+export const SUMMARY_SYSTEM_PROMPT =`You summarize a phone call an AI assistant made for a user.
 Return JSON with: result ("success" | "partial" | "failed"), summary (1-3 sentences),
 keyFacts (concrete facts learned: times, prices, names, reference numbers), followUps (actions the user should take).
 Write in the requested language. Only use facts from the transcript.`;

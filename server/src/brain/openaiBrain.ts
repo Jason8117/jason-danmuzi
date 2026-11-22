@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { CallOutcome, CallPlan, CallTask, CallTaskInput } from "../domain/types.js";
+import type { CallOutcome, CallPlan, CallTask, CallTaskInput, IntakeContent, Language } from "../domain/types.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
-import { PLAN_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "./prompts.js";
+import { INTAKE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "./prompts.js";
 import type { CallBrain } from "./types.js";
 
 const PlanSchema = z.object({
@@ -27,8 +27,38 @@ const OutcomeSchema = z.object({
   followUps: OptionalList,
 });
 
+// The intake draft has no phone number field: the LLM never receives one and is never asked for one (REQ-007 (b)).
+const IntakeSchema = z.object({
+  targetName: z
+    .string()
+    .max(80)
+    .nullish()
+    .transform((value) => value ?? null),
+  goal: z.string().min(1).max(1000),
+  conditions: z
+    .array(z.string().min(1).max(200))
+    .max(5)
+    .nullish()
+    .transform((items) => items ?? []),
+  context: z
+    .string()
+    .max(1000)
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+/** Planning and summarizing budget per LLM call. */
+export const LLM_TIMEOUT_MS = 30_000;
+/** Intake budget: below the app's 20 s request timeout so the heuristic fallback still reaches the app (REQ-009). */
+export const INTAKE_LLM_TIMEOUT_MS = 15_000;
+
 interface Logger {
   warn(obj: object, msg: string): void;
+}
+
+export interface OpenAiBrainOptions {
+  /** Injectable for tests; defaults to INTAKE_LLM_TIMEOUT_MS. */
+  intakeTimeoutMs?: number;
 }
 
 /** Why an LLM call fell back. Only these categories are logged, never error messages or response text (REQ-009). */
@@ -37,8 +67,9 @@ type FailureReason = "timeout" | "http_status" | "invalid_json" | "schema_mismat
 type Completion<T> = { ok: true; value: T } | { ok: false; reason: FailureReason; status?: number };
 
 interface CallContext {
-  op: "plan" | "summarize";
+  op: "plan" | "summarize" | "intake";
   taskId?: string;
+  timeoutMs?: number;
 }
 
 function isTimeout(error: unknown): boolean {
@@ -53,11 +84,29 @@ export class OpenAiBrain implements CallBrain {
   readonly name = "openai" as const;
   private readonly fallback = new HeuristicBrain();
 
+  private readonly intakeTimeoutMs: number;
+
   constructor(
     private readonly apiKey: string,
     private readonly model: string,
     private readonly log: Logger,
-  ) {}
+    options: OpenAiBrainOptions = {},
+  ) {
+    this.intakeTimeoutMs = options.intakeTimeoutMs ?? INTAKE_LLM_TIMEOUT_MS;
+  }
+
+  /**
+   * Sends the text exactly as given; the caller (CallService) masks numbers first and post-processes the answer,
+   * so the validated LLM values are returned unchanged (SPEC-INTAKE-001 REQ-008). No task id: none exists yet.
+   */
+  async draftIntake(maskedText: string, language: Language): Promise<IntakeContent> {
+    const user = JSON.stringify({ language, request: maskedText });
+    const draft = await this.completeJson(INTAKE_SYSTEM_PROMPT, user, IntakeSchema, {
+      op: "intake",
+      timeoutMs: this.intakeTimeoutMs,
+    });
+    return draft ? { ...draft, source: "llm" } : this.fallback.draftIntake(maskedText, language);
+  }
 
   async createPlan(input: CallTaskInput): Promise<CallPlan> {
     const user = JSON.stringify({
@@ -91,7 +140,7 @@ export class OpenAiBrain implements CallBrain {
 
   /** Returns the validated LLM answer, or undefined after logging why the caller must fall back. */
   private async completeJson<T>(system: string, user: string, schema: z.ZodType<T>, ctx: CallContext): Promise<T | undefined> {
-    const completion = await this.request(system, user, schema);
+    const completion = await this.request(system, user, schema, ctx.timeoutMs ?? LLM_TIMEOUT_MS);
     if (completion.ok) return completion.value;
     this.log.warn(
       {
@@ -107,7 +156,7 @@ export class OpenAiBrain implements CallBrain {
 
   // @MX:WARN: [AUTO] Every failure path must map to a FailureReason without carrying the thrown error's message.
   // @MX:REASON: JSON.parse and zod messages can echo response or transcript text, which REQ-009 keeps out of logs.
-  private async request<T>(system: string, user: string, schema: z.ZodType<T>): Promise<Completion<T>> {
+  private async request<T>(system: string, user: string, schema: z.ZodType<T>, timeoutMs: number): Promise<Completion<T>> {
     let res: Response;
     try {
       res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -121,7 +170,7 @@ export class OpenAiBrain implements CallBrain {
             { role: "user", content: user },
           ],
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       return { ok: false, reason: isTimeout(error) ? "timeout" : "network" };

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CallTask, CallTaskInput, TranscriptEntry } from "../domain/types.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
 import { OpenAiBrain } from "./openaiBrain.js";
+import { INTAKE_LLM_TIMEOUT_MS, LLM_TIMEOUT_MS } from "./openaiBrain.js";
 
 const API_KEY = "sk-test-DO-NOT-LOG-1234";
 const AT = "2026-11-21T10:00:00.000Z";
@@ -252,5 +253,123 @@ describe("OpenAiBrain with a non-object JSON body (SPEC-OUTCOME-001 audit F4)", 
     expect(plan).toEqual(await new HeuristicBrain().createPlan(input));
     expect(log.warns).toHaveLength(1);
     expect(log.warns[0]!.obj).toEqual({ op: "plan", reason: "empty_content" });
+  });
+});
+
+describe("OpenAiBrain intake (SPEC-INTAKE-001)", () => {
+  const INTAKE_TEXT = "라 파스타에 전화해서 7시 예약";
+
+  /** The user message of the single chat-completions request the fake fetch received. */
+  function userMessage(fetchMock: { mock: { calls: unknown[][] } }): string {
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    const body = JSON.parse(String(init.body)) as { messages: { role: string; content: string }[] };
+    return body.messages.find((m) => m.role === "user")!.content;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // AC-007 (a), brain side / REQ-007, REQ-008: the brain sends what it is given; masking is the service's job.
+  it("sends the text it receives unchanged", async () => {
+    const fetchMock = stubFetch(async () =>
+      completion(JSON.stringify({ targetName: null, goal: "예약", conditions: [], context: null })),
+    );
+    const { brain } = setup();
+    const text = "라 파스타에 010-1234-5678로 \"전화\"해서\n예약";
+
+    await brain.draftIntake(text, "ko");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(userMessage(fetchMock))).toEqual({ language: "ko", request: text });
+  });
+
+  // AC-008, brain side / REQ-008: schema-validated values come back untouched.
+  it.each([
+    {
+      name: "(1) full draft",
+      content: { targetName: "라 파스타", goal: "금요일 7시 2명 예약", conditions: ["8시도 괜찮음"], context: null },
+      expected: { targetName: "라 파스타", goal: "금요일 7시 2명 예약", conditions: ["8시도 괜찮음"], context: null },
+    },
+    {
+      name: "(2) a name the request never mentioned",
+      content: { targetName: "강남 맛집", goal: "예약", conditions: [], context: null },
+      expected: { targetName: "강남 맛집", goal: "예약", conditions: [], context: null },
+    },
+    {
+      name: "(3) placeholder kept, null conditions, missing context",
+      content: { targetName: null, goal: "[전화번호]로 예약 문의", conditions: null },
+      expected: { targetName: null, goal: "[전화번호]로 예약 문의", conditions: [], context: null },
+    },
+  ])("returns schema-validated intake content unchanged $name", async ({ content, expected }) => {
+    stubFetch(async () => completion(JSON.stringify(content)));
+    const { brain, log } = setup();
+
+    expect(await brain.draftIntake("아무 글", "ko")).toEqual({ ...expected, source: "llm" });
+    expect(log.warns).toHaveLength(0);
+  });
+
+  // AC-009 (1)-(6) / REQ-009
+  it.each([
+    { name: "500 response", fetch: async () => new Response("upstream body", { status: 500 }), reason: "http_status", status: 500 },
+    {
+      name: "timeout",
+      fetch: async () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      },
+      reason: "timeout",
+    },
+    { name: "missing content", fetch: async () => completion(undefined), reason: "empty_content" },
+    { name: "content is not JSON", fetch: async () => completion(RAW_CONTENT), reason: "invalid_json" },
+    { name: "schema mismatch", fetch: async () => completion(JSON.stringify({ goal: 5 })), reason: "schema_mismatch" },
+    {
+      name: "network error",
+      fetch: async () => {
+        throw new TypeError("fetch failed");
+      },
+      reason: "network",
+    },
+  ])("falls back visibly when the intake LLM fails ($name)", async ({ fetch, reason, status }) => {
+    stubFetch(fetch);
+    const { brain, log } = setup();
+
+    const draft = await brain.draftIntake(INTAKE_TEXT, "ko");
+
+    expect(draft).toEqual(await new HeuristicBrain().draftIntake(INTAKE_TEXT, "ko"));
+    expect(draft.source).toBe("heuristic");
+    expect(log.warns).toHaveLength(1);
+    expect(log.warns[0]!.obj).toEqual({ op: "intake", reason, ...(status !== undefined && { status }) });
+    expect(JSON.stringify(log.warns[0]!.obj) + log.warns[0]!.msg).not.toContain("라 파스타");
+  });
+
+  // AC-009 (7) / REQ-009
+  it("bounds the intake LLM call below the app timeout", async () => {
+    stubFetch(
+      (_url?: unknown, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason));
+        }),
+    );
+    const log = recordingLogger();
+    const brain = new OpenAiBrain(API_KEY, "gpt-test", log, { intakeTimeoutMs: 50 });
+
+    const draft = await brain.draftIntake(INTAKE_TEXT, "ko");
+
+    expect(draft.source).toBe("heuristic");
+    expect(log.warns).toHaveLength(1);
+    expect(log.warns[0]!.obj).toEqual({ op: "intake", reason: "timeout" });
+
+    expect(INTAKE_LLM_TIMEOUT_MS).toBe(15_000);
+    expect(LLM_TIMEOUT_MS).toBe(30_000);
+
+    // Without injection the intake call uses 15 s and planning keeps 30 s.
+    vi.unstubAllGlobals();
+    stubFetch(async () => completion(JSON.stringify({ targetName: null, goal: "예약", conditions: [], context: null })));
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const plain = setup().brain;
+    await plain.draftIntake(INTAKE_TEXT, "ko");
+    expect(timeout).toHaveBeenLastCalledWith(15_000);
+    await plain.createPlan(input);
+    expect(timeout).toHaveBeenLastCalledWith(30_000);
   });
 });

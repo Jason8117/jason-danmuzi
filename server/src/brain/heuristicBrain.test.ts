@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ApprovalRequest, ApprovalStatus, CallTask, TranscriptEntry } from "../domain/types.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
+import { maskPhoneNumbers } from "../domain/intake.js";
 
 const AT = "2026-11-21T10:00:00.000Z";
 
@@ -102,5 +103,20 @@ describe("HeuristicBrain.summarize (SPEC-OUTCOME-001)", () => {
     );
     expect(en.summary.startsWith("Automatic summary (unverified):")).toBe(true);
     expect(en.summary).not.toContain("The request was handled.");
+  });
+});
+
+describe("HeuristicBrain intake (SPEC-INTAKE-001)", () => {
+  // AC-010 / REQ-010 — design.md §3.4 deterministic name table, fed the masked text as the service does
+  it.each([
+    { text: "라 파스타에 전화해서 금요일 7시 2명 예약해줘", targetName: "라 파스타", goal: "라 파스타에 전화해서 금요일 7시 2명 예약해줘" },
+    { text: "동네 세탁소에게 연락해 영업시간 물어봐", targetName: "동네 세탁소", goal: "동네 세탁소에게 연락해 영업시간 물어봐" },
+    { text: "엄마한테 전화해 줘", targetName: "엄마", goal: "엄마한테 전화해 줘" },
+    { text: "금요일 7시 예약", targetName: null, goal: "금요일 7시 예약" },
+    { text: "010-1234-5678에 전화해서 예약", targetName: null, goal: "에 전화해서 예약" },
+    { text: "라 파스타에   전화해서\n7시", targetName: "라 파스타", goal: "라 파스타에 전화해서 7시" },
+  ])("drafts intake content without an LLM: $text", async ({ text, targetName, goal }) => {
+    const draft = await new HeuristicBrain().draftIntake(maskPhoneNumbers(text), "ko");
+    expect(draft).toEqual({ targetName, goal, conditions: [], context: null, source: "heuristic" });
   });
 });
