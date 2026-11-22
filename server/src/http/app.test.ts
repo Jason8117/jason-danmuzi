@@ -274,6 +274,29 @@ describe("CallMate API", () => {
     const done = await waitFor(app, id, (t) => t.status === "completed");
     expect(done.transcript.filter((t) => t.text === "사용자 안내: 1만 원까지만")).toHaveLength(1);
   });
+
+  // SPEC-APPROVAL-001 AC-001 / REQ-001: the 500 limit counts code points, before sanitization (protection test).
+  const FAMILY = "👨‍👩‍👧"; // 1 grapheme, 5 code points
+  it.each<[string, string | undefined, number, string | undefined]>([
+    ["(1) no comment", undefined, 200, undefined],
+    ["(2) blank comment", "   ", 200, undefined],
+    ["(3) 500 syllables", "가".repeat(500), 200, "가".repeat(500)],
+    ["(4) 501 syllables", "가".repeat(501), 400, undefined],
+    ["(5) 100 family emoji = 500 code points", FAMILY.repeat(100), 200, FAMILY.repeat(100)],
+    ["(6) 101 family emoji = 505 code points", FAMILY.repeat(101), 400, undefined],
+  ])("counts approval comment length in code points: %s", async (_case, comment, statusCode, stored) => {
+    const { id, approvalId } = await pendingApproval();
+
+    const res = await decide(id, approvalId, comment === undefined ? { decision: "approve" } : { decision: "approve", comment });
+
+    expect(res.statusCode).toBe(statusCode);
+    if (statusCode === 400) {
+      // The body also carries the schema message (app.ts error handler); the code is what clients branch on.
+      expect(res.json()).toMatchObject({ error: "invalid_request" });
+      return;
+    }
+    expect(res.json<CallTask>().approvals[0]!.userComment).toBe(stored);
+  });
 });
 
 describe("/v1/stream (SPEC-ARCH-001 AC-019)", () => {

@@ -69,6 +69,15 @@
 - AC-014: `git diff cd1f77e -- app/test/approval_flow_test.dart` → `-    expect(find.text('조건·안내 (선택)'), findsOneWidget);` / `+    expect(find.text('조건 덧붙이기 (선택)'), findsOneWidget);` 한 줄 교체만. `fakes.dart`·`unit_test.dart`는 추가만.
 - 파일: `app/lib/features/calls/domain/approval_comment.dart`(신규), `app/lib/features/calls/presentation/widgets/approval_card.dart`, `app/test/approval_card_test.dart`(신규), `app/test/support/fakes.dart`, `app/test/approval_flow_test.dart`, `app/test/unit_test.dart`
 
+### M5 — 도구 결과·입력 경계 보호 테스트 (AC-007, AC-001)
+
+- 보호 테스트(현행 고정)라 RED 없음. 고정 대상 코드가 run 시작 이후 그대로임을 확인: `git diff --stat cd1f77e -- server/src/http/schemas.ts server/src/http/app.ts server/src/providers/realtimeBridge.ts server/src/domain/types.ts …` → 출력 없음.
+- 실행: `npm --prefix server test -- src/providers/realtimeBridge.test.ts src/http/app.test.ts` → `Test Files  2 passed (2)` / `Tests  55 passed (55)`, exit 0 (`m5.txt`)
+  - AC-007 "returns every approval decision shape as tool output" 5건: 키가 정확히 `approved`·`instruction`·`reason`·`user_comment`, `user_comment`는 (a)(c)만 문자열, 다섯 경우 문구 + "never share card/password/SSN", 뒤이어 `response.create`. 기존 테스트 (e)는 무수정.
+  - AC-001 "counts approval comment length in code points" 6건: (1)(2)(3)(5) 200, (4)(6) 400.
+- 첫 실행에서 (4)(6)이 `expected { error: 'invalid_request', …(1) } to deeply equal { error: 'invalid_request' }`로 실패했다. 현재 400 본문은 `{ error: "invalid_request", message: <스키마 메시지> }`(`server/src/http/app.ts:124`)라 AC-001의 `{"error":"invalid_request"}`는 오류 코드 표기로 읽고 `toMatchObject({ error: "invalid_request" })`로 단언했다. 서버 동작은 바꾸지 않았다(현행 고정).
+- 파일: `server/src/providers/realtimeBridge.test.ts`, `server/src/http/app.test.ts`(새 테스트만 추가)
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

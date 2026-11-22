@@ -370,3 +370,48 @@ describe("bridgeToRealtime GA handshake (SPEC-ARCH-001 hotfix)", () => {
     }
   });
 });
+
+// SPEC-APPROVAL-001 AC-007 / REQ-007, REQ-009: pins the current tool output shape (protection test).
+describe("bridgeToRealtime approval tool output (SPEC-APPROVAL-001)", () => {
+  it.each<[string, ApprovalDecision, string | null, string[]]>([
+    [
+      "(a) approved with a comment",
+      { approved: true, comment: "1만 원까지만", reason: "user_approved" },
+      "1만 원까지만",
+      ["approved with these conditions", "1만 원까지만"],
+    ],
+    ["(b) approved", { approved: true, reason: "user_approved" }, null, ["Proceed with exactly what was asked"]],
+    [
+      "(c) declined with a comment",
+      { approved: false, comment: "다음 주로 물어봐 주세요", reason: "user_rejected" },
+      "다음 주로 물어봐 주세요",
+      ["declined", "without agreeing to the declined item", "다음 주로 물어봐 주세요"],
+    ],
+    ["(d) expired", { approved: false, reason: "expired" }, null, ["did not answer in time"]],
+    ["(e) canceled", { approved: false, reason: "canceled" }, null, ["Politely decline"]],
+  ])("returns every approval decision shape as tool output: %s", async (_case, decision, userComment, phrases) => {
+    const { ai } = setup(decision);
+    ai().open();
+    ai().sent.length = 0;
+
+    ai().receive({
+      type: "response.function_call_arguments.done",
+      name: "request_user_approval",
+      call_id: "call-1",
+      arguments: JSON.stringify({ question: "예약금 1만 원을 결제할까요?" }),
+    });
+    await flush();
+
+    const [item, create] = ai().sent as [Record<string, any>, Record<string, unknown>];
+    expect(item.item.type).toBe("function_call_output");
+    const output = JSON.parse(item.item.output as string) as Record<string, unknown>;
+    expect(Object.keys(output).sort()).toEqual(["approved", "instruction", "reason", "user_comment"]);
+    expect(output.approved).toBe(decision.approved);
+    expect(output.reason).toBe(decision.reason);
+    expect(output.user_comment).toBe(userComment);
+    for (const phrase of [...phrases, "never share card/password/SSN"]) {
+      expect(output.instruction).toContain(phrase);
+    }
+    expect(create).toEqual({ type: "response.create" });
+  });
+});
