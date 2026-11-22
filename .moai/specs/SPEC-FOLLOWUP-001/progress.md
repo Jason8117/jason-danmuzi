@@ -75,6 +75,15 @@
 - RED: `cd app && flutter --suppress-analytics test test/unit_test.dart` → exit 1, `test/unit_test.dart:268:7: Error: 'Appointment' isn't a type.` / `test/unit_test.dart:277:92: Error: The getter 'appointment' isn't defined for the type 'CallOutcome'.` (`m2-red.txt`).
 - GREEN: `cd app && flutter --suppress-analytics test` → `+54: All tests passed!` (`m2-green.txt`); `flutter analyze` → `1 issue found` (baseline info only, `m2-analyze.txt`).
 - Implementation: `Appointment.tryParse` (`call_models.dart`) — null unless a map with a parseable `startsAt`; instants kept in UTC; a missing/non-string title becomes `''`; an unparseable `endsAt` becomes null.
+- Commit: `941f700`.
+
+### M3 — call again → plan card (AC-007)
+
+- RED: `cd app && flutter --suppress-analytics test test/follow_up_test.dart` → exit 1, `Expected: exactly one matching candidate` / `Actual: _TextWidgetFinder:<Found 0 widgets with text "이렇게 걸어 볼게요": []>` at `follow_up_test.dart line 83` (the old form opened). The first attempt failed to compile for a harness reason (`'Override' isn't a type` — Riverpod 3 exports it from `flutter_riverpod/misc.dart`); fixed in the test's imports before the RED above was recorded. Evidence: `m3-red.txt`.
+- GREEN: `cd app && flutter --suppress-analytics test` → `+55: All tests passed!` (`m3-green.txt`); `flutter analyze` → `1 issue found` (baseline info only, `m3-analyze.txt`).
+- One test-only adjustment during GREEN (assertions unchanged): the first GREEN run found `02-123-4567` twice because the detail route is still onstage during the 400 ms push transition (same cause INTAKE M5 recorded); the plan-card assertions are scoped with `find.descendant(of: find.byType(PlanCardScreen), …)`.
+- Implementation: `PlanDraft.fromTask(task)` (target, E.164 number, goal, context, language, `PhoneSource.previousCall`), new `PhoneSource.previousCall('지난번과 같은 번호')`; the detail screen's "다시 걸기" pushes `/plan` with that draft. `plan_card_screen.dart` needed no change for the source label (it already renders `phoneSource.label`); its planned change lands in M4 (trust gate). The `/calls/new` route keeps accepting a `CallTask` extra (no caller now) — left untouched as out of scope.
+- Commit: see M3 row in §E.3.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

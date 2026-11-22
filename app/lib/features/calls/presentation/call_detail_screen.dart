@@ -10,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../domain/call_models.dart';
+import '../domain/intake_models.dart';
 import 'widgets/approval_card.dart';
 import 'widgets/outcome_card.dart';
 import 'widgets/status_chip.dart';
@@ -250,7 +251,7 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
       TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled => [
           Expanded(
             child: FilledButton.tonalIcon(
-              onPressed: () => context.push('/calls/new', extra: task),
+              onPressed: () => context.push('/plan', extra: PlanDraft.fromTask(task)),
               icon: const Icon(Icons.replay),
               label: const Text('다시 걸기'),
             ),

@@ -5,7 +5,10 @@ import 'call_models.dart';
 /// Where the draft's number came from. Shown on the plan card so the user can judge it (SPEC-INTAKE-001 REQ-019).
 enum PhoneSource {
   text('말씀하신 번호'),
-  history('지난번 통화한 번호');
+  history('지난번 통화한 번호'),
+
+  /// "다시 걸기": the number of the task being redialed. App-side only; the server never sends it (SPEC-FOLLOWUP-001).
+  previousCall('지난번과 같은 번호');
 
   const PhoneSource(this.label);
   final String label;
@@ -35,6 +38,16 @@ class PlanDraft {
 
   /// REQ-022: what an older server (404 on /v1/intake) gets — the request text as the goal and nothing else.
   factory PlanDraft.blank(String text) => PlanDraft(goal: text.trim());
+
+  /// SPEC-FOLLOWUP-001 REQ-007: redial with the previous task's details; no intake request, no LLM.
+  factory PlanDraft.fromTask(CallTask task) => PlanDraft(
+        targetName: task.targetName,
+        phoneNumber: task.phoneNumber,
+        goal: task.goal,
+        context: task.context,
+        language: task.language,
+        phoneSource: PhoneSource.previousCall,
+      );
 
   final String? targetName;
 
