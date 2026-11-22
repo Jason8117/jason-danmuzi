@@ -10,9 +10,9 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../domain/call_models.dart';
-import '../domain/intake_models.dart';
 import 'trust_notice.dart';
 import 'widgets/approval_card.dart';
+import 'widgets/follow_up_actions.dart';
 import 'widgets/outcome_card.dart';
 import 'widgets/status_chip.dart';
 import 'widgets/transcript_view.dart';
@@ -267,13 +267,7 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
         ],
       TaskStatus.summarizing => const [],
       TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled => [
-          Expanded(
-            child: FilledButton.tonalIcon(
-              onPressed: () => context.push('/plan', extra: PlanDraft.fromTask(task)),
-              icon: const Icon(Icons.replay),
-              label: const Text('다시 걸기'),
-            ),
-          ),
+          Expanded(child: FollowUpActions(task: task)),
         ],
     };
   }
