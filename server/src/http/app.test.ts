@@ -561,3 +561,61 @@ describe("provider routes (SPEC-ARCH-001)", () => {
     ).rejects.toThrow("/v1/");
   });
 });
+
+describe("autoStart (SPEC-INTAKE-001)", () => {
+  let app: FastifyInstance;
+  let store: InMemoryTaskStore;
+
+  beforeEach(async () => {
+    const bus = new EventBus();
+    store = new InMemoryTaskStore();
+    const calls = new CallService(store, bus, new HeuristicBrain(), new SimulatedCallProvider(200), {
+      maxConcurrentCalls: 1,
+      maxCallsPerDay: 10,
+      approvalTimeoutMs: 2000,
+      maxCallDurationMs: 60_000,
+    });
+    app = await buildApp({
+      config: { API_TOKEN: TOKEN, CORS_ORIGINS: undefined, provider: "simulated", llm: "heuristic" },
+      calls,
+      bus,
+      logger: false,
+    });
+  });
+
+  afterEach(() => app.close());
+
+  const body = { targetName: "라 파스타", phoneNumber: "010-1234-5678", goal: "영업시간 문의", requesterName: "김민수" };
+  const post = (payload: object) => app.inject({ method: "POST", url: "/v1/tasks", headers: auth, payload });
+
+  // AC-013 / REQ-013
+  it("accepts an optional autoStart flag", async () => {
+    const withFlag = await post({ ...body, autoStart: true });
+    expect(withFlag.statusCode).toBe(201);
+    expect(withFlag.json<CallTask>().autoStart).toBe(true);
+
+    const without = await post({ ...body, goal: "가격 문의" });
+    expect(without.statusCode).toBe(201);
+    expect(Object.keys(without.json<CallTask>())).not.toContain("autoStart");
+
+    const wrongType = await post({ ...body, autoStart: "yes" });
+    expect(wrongType.statusCode).toBe(400);
+    expect(wrongType.json().error).toBe("invalid_request");
+
+    const before = store.list().length;
+    const blocked = await post({ ...body, phoneNumber: "119", autoStart: true });
+    expect(blocked.statusCode).toBe(400);
+    expect(blocked.json().error).toBe("blocked_number");
+    expect(store.list().length).toBe(before);
+  });
+
+  // AC-014 / REQ-014 (integration)
+  it("auto-starts a simulated call without approve-plan", async () => {
+    // The reservation scenario is the one whose simulated script asks for an approval.
+    const { id } = (await post({ ...body, goal: "금요일 저녁 7시 2명 예약해줘", autoStart: true })).json<CallTask>();
+    const waiting = await waitFor(app, id, (t) => t.approvals.some((a) => a.status === "pending"));
+    expect(waiting.status).toBe("in_progress");
+    expect(waiting.startedAt).toBeDefined();
+    expect(waiting.plan?.openingLine).toContain("AI 비서");
+  });
+});

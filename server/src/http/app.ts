@@ -158,7 +158,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.post("/v1/tasks", async (request, reply) => {
     // Number normalization and the emergency-number block live in CallService (SPEC-POLICY-001 REQ-008).
-    const task = calls.create(CreateTaskBody.parse(request.body));
+    const { autoStart, ...input } = CreateTaskBody.parse(request.body);
+    const task = calls.create(input, { autoStart });
     return reply.status(201).send(task);
   });
 

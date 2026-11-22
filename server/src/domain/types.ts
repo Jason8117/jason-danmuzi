@@ -100,6 +100,20 @@ export interface CallTask extends CallTaskInput {
   startedAt?: string;
   connectedAt?: string;
   endedAt?: string;
+  /** The user tapped the plan card's single start button; the server places the call once planning finishes (SPEC-INTAKE-001). */
+  autoStart?: boolean;
+  /** Why the automatic start did not happen; cleared by a later successful manual plan approval. */
+  autoStartBlocked?: AutoStartBlocked;
+}
+
+export interface AutoStartBlocked {
+  code: string;
+  message: string;
+}
+
+/** Execution options for task creation, kept apart from the task input itself. */
+export interface CreateTaskOptions {
+  autoStart?: boolean;
 }
 
 export const ACTIVE_CALL_STATUSES: readonly TaskStatus[] = ["dialing", "ringing", "in_progress"];

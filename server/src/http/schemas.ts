@@ -10,6 +10,8 @@ export const CreateTaskBody = z.object({
   language: z.enum(["ko", "en"]).default("ko"),
   requesterName: text(40),
   callbackNumber: z.string().trim().max(32).optional(),
+  /** Start the call as soon as the plan is ready (SPEC-INTAKE-001 REQ-013). */
+  autoStart: z.boolean().optional(),
 });
 
 export const ApprovePlanBody = z

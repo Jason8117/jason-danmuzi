@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { buildAgentInstructions } from "../brain/prompts.js";
+import { buildAgentInstructions, openingLine } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
 import { sanitizeApprovalComment } from "../domain/approvalComment.js";
 import { checkTargetNumber } from "../domain/phone.js";
@@ -12,6 +12,7 @@ import {
   type CallPlan,
   type CallTask,
   type CallTaskInput,
+  type CreateTaskOptions,
   type Language,
   type Speaker,
   type TaskStatus,
@@ -63,6 +64,8 @@ const now = () => new Date().toISOString();
 export const SHUTDOWN_CALL_ERROR = "서버가 종료되어 통화를 끊었습니다.";
 const INVALID_PHONE_MESSAGE = "전화번호 형식이 올바르지 않습니다.";
 const BLOCKED_NUMBER_MESSAGE = "긴급·특수번호에는 전화할 수 없습니다.";
+/** Recorded when an auto start fails outside the ServiceError checks (SPEC-INTAKE-001 design.md §5). */
+const AUTO_START_FAILED_MESSAGE = "자동으로 통화를 시작하지 못했어요.";
 /** Upper bound on how long startup waits for restart-recovery hang-ups. */
 const RECOVERY_DEADLINE_MS = 10_000;
 /** Prefix of the transcript line that records a user's approval comment (SPEC-APPROVAL-001 OD-3). */
@@ -219,7 +222,7 @@ export class CallService {
     return task;
   }
 
-  create(input: CallTaskInput): CallTask {
+  create(input: CallTaskInput, options: CreateTaskOptions = {}): CallTask {
     this.assertNotShuttingDown();
     // Nothing is stored, published or planned before the number passes the policy (SPEC-POLICY-001 REQ-001..003).
     const checked: CallTaskInput = {
@@ -238,6 +241,7 @@ export class CallService {
       provider: this.provider.name,
       createdAt: timestamp,
       updatedAt: timestamp,
+      ...(options.autoStart === true && { autoStart: true }),
     };
     this.persist(task);
     void this.plan(task.id, checked);
@@ -258,6 +262,8 @@ export class CallService {
     this.assertWithinLimits();
 
     task.plan = { ...task.plan, ...planOverride };
+    // A successful start, manual or automatic, supersedes an earlier blocked auto start (SPEC-INTAKE-001 REQ-015).
+    delete task.autoStartBlocked;
     task.startedAt = now();
     this.transition(task, "dialing");
 
@@ -312,17 +318,48 @@ export class CallService {
   }
 
   private async plan(id: string, input: CallTaskInput): Promise<void> {
+    let planned: CallTask | undefined;
     try {
       const plan = await this.brain.createPlan(input);
       const task = this.store.get(id);
       if (!task || task.status !== "planning") return;
       task.plan = plan;
       this.transition(task, "awaiting_approval");
+      planned = task;
     } catch (error) {
       const task = this.store.get(id);
       if (!task || task.status !== "planning") return;
       task.error = `통화 계획을 세우지 못했습니다: ${(error as Error).message}`;
       this.transition(task, "failed");
+    }
+    // Outside the try: an auto-start error must never reach the catch above, which would swallow it silently.
+    // This is the only auto-start trigger, so loaded, canceled or failed tasks never start (SPEC-INTAKE-001 REQ-016).
+    if (planned?.autoStart) await this.autoStart(planned);
+  }
+
+  /**
+   * Places the call the user already confirmed on the plan card, through the same checks as a manual approval.
+   * Never throws: any failure is recorded on the task as autoStartBlocked and the task stays awaiting_approval.
+   */
+  // @MX:WARN: [AUTO] Runs unawaited from create() (via plan()); a throw here would be an unhandled rejection.
+  // @MX:REASON: SPEC-INTAKE-001 REQ-015 requires every auto-start failure to be recorded, never propagated (design.md §5).
+  // @MX:SPEC: SPEC-INTAKE-001
+  private async autoStart(task: CallTask): Promise<void> {
+    try {
+      // The template greeting always discloses the AI; the user never saw the plan body (OD-7, REQ-014).
+      await this.approvePlan(task.id, { openingLine: openingLine(task) });
+    } catch (error) {
+      try {
+        const current = this.store.get(task.id);
+        if (!current || current.status !== "awaiting_approval") return;
+        current.autoStartBlocked =
+          error instanceof ServiceError
+            ? { code: error.code, message: error.message }
+            : { code: "auto_start_failed", message: AUTO_START_FAILED_MESSAGE };
+        this.persist(current);
+      } catch {
+        this.log.warn({ taskId: task.id, reason: "auto_start_not_recorded" }, "Auto start failure could not be recorded");
+      }
     }
   }
 

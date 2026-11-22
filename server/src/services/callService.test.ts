@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAgentInstructions } from "../brain/prompts.js";
+import { openingLine } from "../brain/prompts.js";
 import type { CallBrain } from "../brain/types.js";
 import type { CallTask, ProviderId, TaskStatus } from "../domain/types.js";
 import { EventBus, type ServerEvent } from "../events/eventBus.js";
@@ -685,5 +686,223 @@ describe("CallService guidance line (SPEC-APPROVAL-001 AC-006)", () => {
     expect(await settled).toEqual({ approved: true, comment: undefined, reason: "user_approved" });
     expect(calls.get("t-1").approvals[0]!.userComment).toBeUndefined();
     expect(systemLines(calls.get("t-1"))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// SPEC-INTAKE-001
+// ---------------------------------------------------------------------------------------------
+
+function planBrain(createPlan: CallBrain["createPlan"]): CallBrain {
+  return {
+    name: "heuristic",
+    createPlan,
+    async summarize() {
+      return { result: "success", summary: "요약", keyFacts: [], followUps: [] };
+    },
+  };
+}
+
+/** Like setup(), but the brain, store and provider can be swapped, and every provider start is recorded. */
+function intakeSetup(
+  options: {
+    brain?: CallBrain;
+    store?: InMemoryTaskStore;
+    provider?: FakeProvider;
+    tasks?: CallTask[];
+    service?: Partial<CallServiceOptions>;
+  } = {},
+) {
+  const store = options.store ?? new InMemoryTaskStore();
+  for (const task of options.tasks ?? []) store.save(task);
+  const bus = new EventBus();
+  const events: ServerEvent[] = [];
+  bus.subscribe((event) => events.push(structuredClone(event)));
+  const provider = options.provider ?? new FakeProvider();
+  const starts: string[] = [];
+  provider.startImpl = async (session) => {
+    starts.push(session.taskId);
+  };
+  const log = recordingLogger();
+  const calls = new CallService(store, bus, options.brain ?? recordingBrain(), provider, {
+    maxConcurrentCalls: 5,
+    maxCallsPerDay: 50,
+    approvalTimeoutMs: 60_000,
+    maxCallDurationMs: 600_000,
+    logger: log.logger,
+    ...options.service,
+  });
+  return { store, events, provider, starts, calls, log };
+}
+
+/** A brain whose plan only resolves once release() is called. */
+function gatedBrain() {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const brain = planBrain(async () => {
+    await gate;
+    return PLAN;
+  });
+  return { brain, release };
+}
+
+/** Throws from list() once armed: assertWithinLimits calls list(), so the auto start hits it. */
+class FailingListStore extends InMemoryTaskStore {
+  failList = false;
+  override list(): CallTask[] {
+    if (this.failList) throw new Error("boom");
+    return super.list();
+  }
+}
+
+const LIVE = ["dialing", "ringing", "in_progress"];
+
+describe("CallService auto start (SPEC-INTAKE-001 AC-014)", () => {
+  it("starts the call once planning finishes when autoStart is set", async () => {
+    const { calls, starts } = intakeSetup();
+
+    const auto = calls.create(INPUT, { autoStart: true });
+    const manual = calls.create({ ...INPUT, goal: "가격 문의" });
+
+    await vi.waitFor(() => expect(starts).toContain(auto.id));
+    await vi.waitFor(() => expect(calls.get(manual.id).status).toBe("awaiting_approval"));
+    expect(LIVE).toContain(calls.get(auto.id).status);
+    expect(starts.filter((id) => id === auto.id)).toHaveLength(1);
+    expect(calls.get(auto.id).startedAt).toBeDefined();
+    expect(starts).not.toContain(manual.id);
+  });
+
+  it("auto-started calls open with the template AI disclosure", async () => {
+    const brain = planBrain(async () => ({ ...PLAN, openingLine: "안녕하세요, 김민수입니다." }));
+    const { calls, starts } = intakeSetup({ brain });
+    const input = { ...INPUT, requesterName: "김민수" };
+
+    const auto = calls.create(input, { autoStart: true });
+    await vi.waitFor(() => expect(starts).toContain(auto.id));
+    expect(calls.get(auto.id).plan?.openingLine).toBe(openingLine(input));
+    expect(calls.get(auto.id).plan?.openingLine).toContain("AI 비서");
+
+    const manual = calls.create(input);
+    await vi.waitFor(() => expect(calls.get(manual.id).status).toBe("awaiting_approval"));
+    await calls.approvePlan(manual.id);
+    expect(calls.get(manual.id).plan?.openingLine).toBe("안녕하세요, 김민수입니다.");
+  });
+});
+
+describe("CallService blocked auto start (SPEC-INTAKE-001 AC-015)", () => {
+  it("records why an auto start was blocked: concurrent limit, cleared by a manual approval", async () => {
+    const { calls, provider, starts, events } = intakeSetup({
+      tasks: [makeTask({ id: "t-1" })],
+      service: { maxConcurrentCalls: 1 },
+    });
+    const live = await startCall(calls, provider, "t-1");
+
+    const auto = calls.create(INPUT, { autoStart: true });
+    await vi.waitFor(() => expect(calls.get(auto.id).autoStartBlocked).toBeDefined());
+
+    expect(calls.get(auto.id).status).toBe("awaiting_approval");
+    expect(calls.get(auto.id).autoStartBlocked).toEqual({
+      code: "too_many_active_calls",
+      message: "Too many calls are in progress",
+    });
+    expect(starts).not.toContain(auto.id);
+    expect(
+      events.some(
+        (e) => e.type === "task.updated" && e.task.id === auto.id && e.task.autoStartBlocked?.code === "too_many_active_calls",
+      ),
+    ).toBe(true);
+
+    live.end();
+    await vi.waitFor(() => expect(LIVE).not.toContain(calls.get("t-1").status));
+    await calls.approvePlan(auto.id);
+    expect(calls.get(auto.id).status).toBe("dialing");
+    expect(Object.keys(calls.get(auto.id))).not.toContain("autoStartBlocked");
+  });
+
+  it("records daily_limit when the day's calls are used up", async () => {
+    const { calls, starts } = intakeSetup({
+      tasks: [makeTask({ id: "done", status: "completed", startedAt: new Date().toISOString() })],
+      service: { maxCallsPerDay: 1 },
+    });
+
+    const auto = calls.create(INPUT, { autoStart: true });
+    await vi.waitFor(() => expect(calls.get(auto.id).autoStartBlocked?.code).toBe("daily_limit"));
+    expect(calls.get(auto.id).status).toBe("awaiting_approval");
+    expect(starts).toEqual([]);
+  });
+
+  it("records shutting_down when shutdown began during planning", async () => {
+    const { brain, release } = gatedBrain();
+    const { calls, starts } = intakeSetup({ brain });
+
+    const auto = calls.create(INPUT, { autoStart: true });
+    calls.beginShutdown();
+    release();
+
+    await vi.waitFor(() => expect(calls.get(auto.id).autoStartBlocked?.code).toBe("shutting_down"));
+    expect(calls.get(auto.id).status).toBe("awaiting_approval");
+    expect(starts).toEqual([]);
+  });
+
+  it("records auto_start_failed for an unexpected error without failing the task", async () => {
+    const store = new FailingListStore();
+    const brain = planBrain(async () => {
+      store.failList = true;
+      return PLAN;
+    });
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    try {
+      const { calls, starts, log } = intakeSetup({ brain, store });
+
+      const auto = calls.create(INPUT, { autoStart: true });
+      await vi.waitFor(() => expect(calls.get(auto.id).autoStartBlocked).toBeDefined());
+
+      expect(calls.get(auto.id).autoStartBlocked).toEqual({
+        code: "auto_start_failed",
+        message: "자동으로 통화를 시작하지 못했어요.",
+      });
+      expect(calls.get(auto.id).status).toBe("awaiting_approval");
+      expect(starts).toEqual([]);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(rejections).toEqual([]);
+      expect(JSON.stringify(log.entries)).not.toContain("InvalidTransition");
+    } finally {
+      process.off("unhandledRejection", onRejection);
+    }
+  });
+});
+
+describe("CallService auto start scope (SPEC-INTAKE-001 AC-016)", () => {
+  it("never auto-starts outside the planning completion", async () => {
+    // (1) canceled while planning
+    const gated = gatedBrain();
+    const slow = intakeSetup({ brain: gated.brain });
+    const canceled = slow.calls.create(INPUT, { autoStart: true });
+    await slow.calls.cancel(canceled.id);
+    gated.release();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(slow.calls.get(canceled.id).status).toBe("canceled");
+    expect(slow.starts).toEqual([]);
+
+    // (2) planning fails
+    const failing = intakeSetup({
+      brain: planBrain(async () => {
+        throw new Error("plan failed");
+      }),
+    });
+    const failed = failing.calls.create(INPUT, { autoStart: true });
+    await vi.waitFor(() => expect(failing.calls.get(failed.id).status).toBe("failed"));
+    expect(failing.starts).toEqual([]);
+    expect(failing.calls.get(failed.id).autoStartBlocked).toBeUndefined();
+
+    // (3) a stored auto-start task found at startup
+    const provider = new FakeCallIdProvider();
+    const restarted = intakeSetup({ provider, tasks: [makeTask({ id: "loaded", autoStart: true })] });
+    await restarted.calls.recoverInterruptedTasks();
+    expect(restarted.calls.get("loaded").status).toBe("awaiting_approval");
+    expect(restarted.starts).toEqual([]);
+    expect(provider.terminated).toEqual([]);
   });
 });

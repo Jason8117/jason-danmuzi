@@ -18,7 +18,25 @@
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+- run_start_sha: 42e2f169ab9dea50f6ff7533979afd070417b260 (worktree branch `worktree-agent-a5729f8126e4d139f`, fast-forwarded from c95953f with `git merge --ff-only 42e2f16`)
+- cycle_type: tdd; single serial writer; evidence files under `.moai/state/verify/intake-run/intake/`
+- environment: Node v23.7.0 (`/opt/homebrew/Cellar/node/23.7.0/bin`), Flutter 3.50.1
+
+### Baseline (run entry, HEAD 42e2f16, before any change)
+
+| Check | Command | Observed |
+|---|---|---|
+| server tests | `npm --prefix server test` | `Test Files  13 passed (13)` / `Tests  293 passed (293)` |
+| server typecheck | `npm --prefix server run typecheck` | exit 0 |
+| test-file compile | `tsc -p server/tsconfig.testcheck.json` (temporary: extends tsconfig.json, `include: ["src"]`, `exclude: []`, noEmit; deleted after the run) | exit 0 |
+| app tests | `cd app && flutter --suppress-analytics test` | `+25: All tests passed!` |
+| app analyze | `cd app && flutter --suppress-analytics analyze` | `1 issue found` — info `use_null_aware_elements` at `test/support/fakes.dart:53:5` |
+
+### M1 — auto start (AC-013 ~ AC-016)
+
+- RED: `npm --prefix server test -- src/services/callService.test.ts src/http/app.test.ts -t "INTAKE"` → exit 1, `Tests  8 failed | 1 passed | 76 skipped (85)`. Failures: `accepts an optional autoStart flag` (`expected undefined to be true`), `auto-starts a simulated call without approve-plan` (timeout), `starts the call once planning finishes…` (`expected [] to include '<id>'`), `auto-started calls open with the template AI disclosure` (same), the four `records …` cases (`expected undefined to be defined` / `expected undefined to be 'daily_limit'` / `… 'shutting_down'`). The one pass is AC-016 `never auto-starts outside the planning completion`, a negative guard that holds before the feature exists (it pins that the new trigger stays scoped). Evidence: `m1-red.txt`.
+- GREEN: `npm --prefix server test` → exit 0, `Test Files  13 passed (13)` / `Tests  302 passed (302)`; typecheck exit 0; test-file compile exit 0. Evidence: `m1-green.txt`.
+- One test-only adjustment during GREEN: the integration case first used the goal "영업시간 문의", whose simulated script has no approval step, so it timed out for a reason unrelated to the feature; it now uses the reservation goal (the existing flow test's goal).
 
 ## §E.3 Run-phase Audit-Ready Signal
 

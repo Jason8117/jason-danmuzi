@@ -2,9 +2,9 @@
 id: SPEC-INTAKE-001
 title: "한 줄 부탁을 계획 카드로 — 번호 찾기, 한 번 확인 후 바로 통화"
 version: "0.3.0"
-status: draft
+status: in-progress
 created: 2026-11-21
-updated: 2026-11-21
+updated: 2026-11-22
 author: jason
 priority: High
 phase: "v0.3.0 target"
