@@ -17,7 +17,27 @@
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+- run_start_sha: cd1f77e2f00cb78c355d40b6ff5b1d36b9a4fc51
+- cycle_type: tdd, harness: standard
+- 작업 위치: 격리 worktree 브랜치 `worktree-agent-af5214d1d7c64f509` (push 없음)
+- 증거 파일: `.moai/state/verify/run-approval/approval/` (아래 명령의 원문 출력)
+
+### 기준선 (run 시작 시점, cd1f77e)
+
+| 항목 | 명령 | 관찰 결과 |
+|------|------|-----------|
+| 서버 테스트 | `npm --prefix server test` | `Test Files  12 passed (12)` / `Tests  246 passed (246)`, exit 0 (`baseline-server-test.txt`) |
+| 타입 검사 | `npm --prefix server run typecheck` | exit 0 (`baseline-typecheck.txt`) |
+| 테스트 파일 컴파일 | 임시 `tsconfig.tests.tmp.json`(`extends ./tsconfig.json`, `noEmit`, `exclude: []`)로 `npx tsc -p` 후 임시 파일 삭제 | exit 0, 출력 없음 (`baseline-testcompile.txt`) |
+| 앱 테스트 | `cd app && flutter --suppress-analytics test` | `00:00 +17: All tests passed!`, exit 0 (`baseline-flutter-test.txt`) |
+| 앱 분석 | `cd app && flutter --suppress-analytics analyze` | `1 issue found` — `info • ... • test/support/fakes.dart:53:5 • use_null_aware_elements` (기준선, exit 1) (`baseline-flutter-analyze.txt`) |
+
+### M1 — 정제 규칙 (AC-002, AC-003)
+
+- RED: `npm --prefix server test -- src/domain/approvalComment.test.ts` → `FAIL src/domain/approvalComment.test.ts` / `Error: Cannot find module './approvalComment.js'` / `Test Files  1 failed (1)`, exit 1 (`m1-red.txt`)
+- GREEN: 같은 명령 → `Test Files  1 passed (1)` / `Tests  24 passed (24)`, exit 0 (`m1-green.txt`) — AC-002 7행 + 자리표시 상수·행 수 1건 + AC-003 16행
+- 파일: `server/src/domain/approvalComment.ts`(신규), `server/src/domain/approvalComment.test.ts`(신규)
+- spec.md frontmatter `status: draft → in-progress`, `updated: 2026-11-22`
 
 ## §E.3 Run-phase Audit-Ready Signal
 
