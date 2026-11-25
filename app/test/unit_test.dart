@@ -291,4 +291,23 @@ void main() {
       expect(untitled?.title, '');
     });
   });
+
+  // SPEC-UX-001 AC-005
+  test('uses plain Korean status labels', () {
+    expect(
+      {for (final s in TaskStatus.values) s: s.label},
+      {
+        TaskStatus.planning: '계획 세우는 중',
+        TaskStatus.awaitingApproval: '확인 필요',
+        TaskStatus.dialing: '전화 거는 중',
+        TaskStatus.ringing: '신호 가는 중',
+        TaskStatus.inProgress: '통화 중',
+        TaskStatus.summarizing: '결과 정리 중',
+        TaskStatus.completed: '완료',
+        TaskStatus.failed: '실패',
+        TaskStatus.canceled: '취소됨',
+      },
+    );
+    expect([for (final r in OutcomeResult.values) r.label], containsAll(['목표 달성', '일부 달성', '달성 못 함', '결과 미확인']));
+  });
 }

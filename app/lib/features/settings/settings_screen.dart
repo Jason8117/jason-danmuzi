@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/config/app_settings.dart';
 import '../../core/network/api_client.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/widgets/common.dart';
 import '../calls/domain/call_models.dart';
 import '../calls/presentation/trust_notice.dart';
@@ -82,7 +83,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxxl),
             children: [
               SectionCard(
                 title: '내 정보',

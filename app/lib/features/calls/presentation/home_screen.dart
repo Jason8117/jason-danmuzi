@@ -6,6 +6,7 @@ import '../../../core/config/app_settings.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/live_channel.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
@@ -38,8 +39,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Replaces the input and puts the cursor at the end, so the user can keep typing.
   void _fill(String text) => setState(() {
-        _input.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
-      });
+    _input.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  });
 
   Future<void> _send() async {
     final text = _input.text.trim();
@@ -90,27 +94,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: ResponsiveBody(
         child: switch (tasks) {
           AsyncData(:final value) => _TaskList(
-              tasks: value,
-              hasProfile: settings.hasProfile,
-              intake: _IntakeBox(
-                input: _input,
-                sending: _sending,
-                onChanged: () => setState(() {}),
-                onSend: _canSend ? _send : null,
-                onManual: () => context.push(settings.hasProfile ? '/calls/new' : '/settings'),
-                suggestions: recentCounterparties(value),
-                onFill: _fill,
-              ),
+            tasks: value,
+            hasProfile: settings.hasProfile,
+            intake: _IntakeBox(
+              input: _input,
+              sending: _sending,
+              onChanged: () => setState(() {}),
+              onSend: _canSend ? _send : null,
+              onManual: () => context.push(settings.hasProfile ? '/calls/new' : '/settings'),
+              suggestions: recentCounterparties(value),
+              onFill: _fill,
             ),
+          ),
           AsyncError(:final error) => MessageView(
-              icon: Icons.cloud_off_rounded,
-              title: '서버와 연결되지 않았어요',
-              message: describeError(error),
-              actions: [
-                OutlinedButton(onPressed: () => context.push('/settings'), child: const Text('서버 설정')),
-                FilledButton(onPressed: () => ref.invalidate(callsControllerProvider), child: const Text('다시 시도')),
-              ],
-            ),
+            icon: Icons.cloud_off_rounded,
+            title: '서버와 연결되지 않았어요',
+            message: describeError(error),
+            actions: [
+              OutlinedButton(onPressed: () => context.push('/settings'), child: const Text('서버 설정')),
+              FilledButton(onPressed: () => ref.invalidate(callsControllerProvider), child: const Text('다시 시도')),
+            ],
+          ),
           _ => const Center(child: CircularProgressIndicator()),
         },
       ),
@@ -126,15 +130,21 @@ class _LiveIndicator extends ConsumerWidget {
     final status = ref.watch(liveStatusProvider);
     final scheme = Theme.of(context).colorScheme;
     final (color, label) = switch (status) {
-      LiveStatus.connected => (scheme.callLive, '실시간 연결됨'),
-      LiveStatus.connecting => (scheme.warning, '연결 중'),
+      LiveStatus.connected => (scheme.live.accent, '실시간 연결됨'),
+      LiveStatus.connecting => (scheme.tone(CardTone.attention).accent, '연결 중'),
       LiveStatus.disconnected => (scheme.error, '연결 끊김 · 재시도 중'),
     };
     return Tooltip(
       message: label,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+      child: SizedBox.square(
+        dimension: kMinTapTarget,
+        child: Center(
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+        ),
       ),
     );
   }
@@ -169,7 +179,7 @@ class _IntakeBox extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpace.sm),
         Row(
           children: [
             Expanded(
@@ -191,7 +201,7 @@ class _IntakeBox extends StatelessWidget {
                       child: Text(input.text, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpace.sm),
             IconButton.filled(
               key: const Key('home-intake-send'),
               tooltip: '보내기',
@@ -207,7 +217,7 @@ class _IntakeBox extends StatelessWidget {
           const _SectionHeader('최근 통화한 곳'),
           for (final counterparty in suggestions)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: AppSpace.xs),
               // One Text per suggestion, so each reads as a single item and its name never repeats a list tile.
               child: ActionChip(
                 avatar: const Icon(Icons.history_rounded, size: 18),
@@ -220,8 +230,8 @@ class _IntakeBox extends StatelessWidget {
         ],
         const _SectionHeader('이런 부탁도 할 수 있어요'),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: AppSpace.sm,
+          runSpacing: AppSpace.sm,
           children: [
             for (final template in callTemplates)
               ActionChip(
@@ -252,16 +262,13 @@ class _TaskList extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () => ref.read(callsControllerProvider.notifier).refresh(),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.xs, AppSpace.lg, AppSpace.xxl),
         children: [
           intake,
           if (isSimulated) const _SimulationBanner(),
           if (!hasProfile) const _ProfilePrompt(),
           if (tasks.isEmpty) const _EmptyState(),
-          if (ongoing.isNotEmpty) ...[
-            const _SectionHeader('진행 중'),
-            for (final task in ongoing) _TaskTile(task: task),
-          ],
+          if (ongoing.isNotEmpty) ...[const _SectionHeader('진행 중'), for (final task in ongoing) _TaskTile(task: task)],
           if (finished.isNotEmpty) ...[
             const _SectionHeader('지난 통화'),
             for (final task in finished) _TaskTile(task: task),
@@ -280,8 +287,8 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 20, 4, 10),
-      child: Text(title, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+      padding: const EdgeInsets.fromLTRB(AppSpace.xs, AppSpace.xl, AppSpace.xs, AppSpace.sm),
+      child: Text(title, style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
     );
   }
 }
@@ -293,17 +300,17 @@ class _SimulationBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.only(top: AppSpace.sm),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
+      decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(AppRadius.sm)),
       child: Row(
         children: [
           Icon(Icons.science_outlined, size: 18, color: scheme.onTertiaryContainer),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppSpace.sm),
           Expanded(
             child: Text(
               '시뮬레이션 모드예요. 실제 전화는 걸리지 않고, 가상의 상대와 통화가 진행돼요.',
-              style: TextStyle(color: scheme.onTertiaryContainer, fontSize: 13),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onTertiaryContainer),
             ),
           ),
         ],
@@ -318,7 +325,7 @@ class _ProfilePrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: AppSpace.md),
       child: SectionCard(
         title: '먼저 내 이름을 알려주세요',
         icon: Icons.badge_outlined,
@@ -326,7 +333,7 @@ class _ProfilePrompt extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('AI 비서가 "○○님을 대신해 전화드렸어요"라고 소개할 때 사용해요.'),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             FilledButton.tonal(onPressed: () => context.push('/settings'), child: const Text('내 정보 입력')),
           ],
         ),
@@ -342,7 +349,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.only(top: 24),
+      padding: EdgeInsets.only(top: AppSpace.xxl),
       child: MessageView(
         icon: Icons.support_agent_rounded,
         title: '귀찮은 전화, 대신 걸어드릴게요',
@@ -362,13 +369,13 @@ class _TaskTile extends StatelessWidget {
     final needsApproval = task.pendingApproval != null;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: AppSpace.md),
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => context.push('/calls/${task.id}'),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Row(
               children: [
                 CircleAvatar(
@@ -379,13 +386,13 @@ class _TaskTile extends StatelessWidget {
                     color: theme.colorScheme.onPrimaryContainer,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(task.targetName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
+                      Text(task.targetName, style: theme.textTheme.titleMedium),
+                      const SizedBox(height: AppSpace.xs),
                       Text(
                         task.outcome?.summary ?? task.goal,
                         maxLines: 2,
@@ -395,12 +402,12 @@ class _TaskTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpace.sm),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     StatusChip(task.status, needsApproval: needsApproval),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppSpace.xs),
                     Text(formatRelative(task.createdAt), style: theme.textTheme.labelSmall),
                   ],
                 ),

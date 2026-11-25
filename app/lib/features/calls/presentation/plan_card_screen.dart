@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
@@ -90,7 +91,9 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
       _phoneError = null;
     });
     try {
-      final created = await ref.read(callsControllerProvider.notifier).create(
+      final created = await ref
+          .read(callsControllerProvider.notifier)
+          .create(
             NewCallRequest(
               targetName: _target.text.trim(),
               phoneNumber: _phoneValue,
@@ -102,6 +105,7 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
               autoStart: true,
             ),
           );
+      HapticFeedback.lightImpact();
       if (mounted) context.pushReplacement('/calls/${created.id}');
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -122,24 +126,25 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
   }
 
   TextField _phoneField({required bool autofocus, String? helper}) => TextField(
-        key: const Key('plan-phone-field'),
-        controller: _phone,
-        autofocus: autofocus,
-        keyboardType: TextInputType.phone,
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-() ]'))],
-        decoration: InputDecoration(
-          labelText: '전화번호',
-          hintText: '예: 02-123-4567',
-          helperText: helper,
-          errorText: _phoneError,
-        ),
-        onChanged: (_) => setState(() {
-          _phoneEdited = true;
-          _phoneError = null;
-        }),
-      );
+    key: const Key('plan-phone-field'),
+    controller: _phone,
+    autofocus: autofocus,
+    keyboardType: TextInputType.phone,
+    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-() ]'))],
+    decoration: InputDecoration(
+      labelText: '전화번호',
+      hintText: '예: 02-123-4567',
+      helperText: helper,
+      errorText: _phoneError,
+    ),
+    onChanged: (_) => setState(() {
+      _phoneEdited = true;
+      _phoneError = null;
+    }),
+  );
 
-  TextField _textField(Key key, TextEditingController controller, {bool autofocus = true, int maxLines = 1}) => TextField(
+  TextField _textField(Key key, TextEditingController controller, {bool autofocus = true, int maxLines = 1}) =>
+      TextField(
         key: key,
         controller: controller,
         autofocus: autofocus,
@@ -158,14 +163,14 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
       appBar: AppBar(title: const Text('이렇게 걸어 볼게요')),
       body: ResponsiveBody(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
           children: [
             if (_askNumber) ...[
               _phoneField(
                 autofocus: true,
                 helper: draft.numberBlocked ? '긴급·특수번호에는 걸 수 없어요. 다른 번호를 알려 주세요.' : '번호만 알려 주시면 바로 걸게요.',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
             ],
             SectionCard(
               child: Column(
@@ -185,12 +190,15 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                       child: _editing.contains(_Field.phone)
                           ? _phoneField(autofocus: true)
                           : Wrap(
-                              spacing: 8,
+                              spacing: AppSpace.sm,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(formatPhone(_draftPhone!)),
                                 if (draft.phoneSource case final source?)
-                                  Text(source.label, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary)),
+                                  Text(
+                                    source.label,
+                                    style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.primary),
+                                  ),
                               ],
                             ),
                     ),
@@ -205,7 +213,7 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                         else
                           Text(_goal.text),
                         if (_goalTooLong) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpace.xs),
                           Text('부탁할 일이 너무 길어요.', style: TextStyle(color: theme.colorScheme.error)),
                         ],
                       ],
@@ -214,8 +222,8 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                   _PlanRow(
                     label: '조건',
                     child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: AppSpace.sm,
+                      runSpacing: AppSpace.sm,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         for (final (i, condition) in _conditions.indexed)
@@ -254,7 +262,8 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                     ),
                   _PlanRow(
                     label: '통화 언어',
-                    onTap: () => setState(() => _language = _language == CallLanguage.ko ? CallLanguage.en : CallLanguage.ko),
+                    onTap: () =>
+                        setState(() => _language = _language == CallLanguage.ko ? CallLanguage.en : CallLanguage.ko),
                     child: Text(_language.label),
                   ),
                   _PlanRow(
@@ -266,7 +275,7 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
               ),
             ),
             if (draft.source == IntakeSource.heuristic) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
               Text(
                 'AI 없이 간단히 정리했어요. 내용을 확인해 주세요.',
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -279,11 +288,13 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
         child: ResponsiveBody(
           shrinkHeight: true,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.md),
             child: FilledButton(
               key: const Key('plan-start'),
               onPressed: _submitting || !_canStart(settings) ? null : _start,
-              child: const Text('이대로 시작'),
+              child: _submitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('이대로 시작'),
             ),
           ),
         ),
@@ -302,20 +313,31 @@ class _PlanRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // REQ-009: each row is at least one tap target tall; the pencil is its own labeled button.
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 112,
-              child: Text(label, style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ),
-            Expanded(child: child),
-            if (onTap != null) Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
-          ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: kMinTapTarget),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 112,
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+              Expanded(child: child),
+              if (onTap != null)
+                IconButton(
+                  tooltip: '수정',
+                  onPressed: onTap,
+                  icon: Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                ),
+            ],
+          ),
         ),
       ),
     );

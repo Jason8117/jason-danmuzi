@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
@@ -44,7 +45,7 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
   void _followTranscript(CallTask? previous, CallTask? next) {
     if (next != null && next.status.isTerminal && (previous?.status.isOngoing ?? false)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) _scroll.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+        if (mounted) scrollToOffset(_scroll, 0, motionDuration(context, AppMotion.slow));
       });
       return;
     }
@@ -54,22 +55,46 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
     final nearBottom = _scroll.position.maxScrollExtent - _scroll.offset < 240;
     if (!nearBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-      }
+      if (!mounted || !_scroll.hasClients) return;
+      final duration = motionDuration(context, AppMotion.medium);
+      scrollToOffset(_scroll, _scroll.position.maxScrollExtent, duration);
+      // The list lays out lazily, so its estimated end moves once the last lines are built; settle on the real end.
+      Future<void>.delayed(duration, () => _settleAtBottom(3));
     });
   }
 
-  Future<void> _run(Future<void> Function() action) async {
-    setState(() => _busy = true);
-    await runWithFeedback(context, action);
-    if (mounted) setState(() => _busy = false);
+  void _settleAtBottom(int frames) {
+    if (!mounted || !_scroll.hasClients) return;
+    final position = _scroll.position;
+    if (position.pixels != position.maxScrollExtent) position.jumpTo(position.maxScrollExtent);
+    if (frames > 1) WidgetsBinding.instance.addPostFrameCallback((_) => _settleAtBottom(frames - 1));
   }
+
+  /// Which button is running; it shows progress while every action button is disabled (REQ-007).
+  String? _busyAction;
+
+  Future<void> _run(String action, Future<void> Function() run) async {
+    setState(() {
+      _busy = true;
+      _busyAction = action;
+    });
+    await runWithFeedback(context, run);
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _busyAction = null;
+      });
+    }
+  }
+
+  Widget _label(String action, Widget label) => _busyAction == action
+      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+      : label;
 
   /// SPEC-FOLLOWUP-001 REQ-014: the first call on a device waits for the trust notice.
   Future<void> _approvePlan(CallTask task) async {
     if (!await ensureTrustAcknowledged(context, ref) || !mounted) return;
-    await _run(() => _calls.approvePlan(task.id, openingLine: _editedOpeningLine));
+    await _run('start', () => _calls.approvePlan(task.id, openingLine: _editedOpeningLine));
   }
 
   Future<void> _editOpeningLine(String current) async {
@@ -132,10 +157,10 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
       body: ResponsiveBody(
         child: ListView(
           controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.xs, AppSpace.lg, AppSpace.xxl),
           children: [
             _CallHeader(task: task),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             ..._body(task),
           ],
         ),
@@ -167,23 +192,23 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
           const SectionCard(
             child: Row(
               children: [
-                SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                SizedBox(width: 14),
+                SizedBox(width: AppSpace.xl, height: AppSpace.xl, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                SizedBox(width: AppSpace.md),
                 Expanded(child: Text('어떻게 통화할지 계획을 세우고 있어요…')),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           _GoalCard(task: task),
         ];
       case TaskStatus.awaitingApproval:
         return [
           if (task.autoStartBlocked case final blocked?) ...[
             _AutoStartBlockedCard(blocked: blocked),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
           ],
           _GoalCard(task: task),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           if (task.plan case final plan?)
             _PlanReview(
               plan: plan,
@@ -197,27 +222,33 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
             const SectionCard(
               child: Row(
                 children: [
-                  SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                  SizedBox(width: 14),
+                  SizedBox(width: AppSpace.xl, height: AppSpace.xl, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                  SizedBox(width: AppSpace.md),
                   Text('통화 결과를 정리하고 있어요…'),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
           ],
           transcript ??
-              SectionCard(
-                child: Text(
-                  task.status == TaskStatus.inProgress ? '대화가 시작되면 여기에 실시간으로 보여드려요.' : '상대방이 전화를 받으면 대화가 여기에 나타나요.',
-                ),
-              ),
+              (task.status == TaskStatus.inProgress
+                  ? const MessageView(
+                      icon: Icons.forum_outlined,
+                      title: '대화를 기다리고 있어요',
+                      message: '대화가 시작되면 여기에 실시간으로 보여드려요.',
+                    )
+                  : const MessageView(
+                      icon: Icons.phone_in_talk_outlined,
+                      title: '대화를 기다리고 있어요',
+                      message: '상대방이 전화를 받으면 대화가 여기에 나타나요.',
+                    )),
           // SPEC-FOLLOWUP-001 REQ-015. Below the transcript so it never pushes live lines or the header down.
           if (task.status.isLiveCall) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Row(
               children: [
                 Icon(Icons.shield_outlined, size: 16, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(child: Text(liveCallTrustLine, style: Theme.of(context).textTheme.bodySmall)),
               ],
             ),
@@ -225,14 +256,18 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
         ];
       case TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled:
         return [
-          OutcomeCard(task: task),
+          // REQ-013: the follow-up actions sit in the result card's action row, right under the result.
+          OutcomeCard(
+            task: task,
+            actions: FollowUpActions(task: task),
+          ),
           if (task.approvals.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             _ApprovalHistory(approvals: task.approvals),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           _GoalCard(task: task),
-          if (transcript != null) ...[const SizedBox(height: 12), transcript],
+          if (transcript != null) ...[const SizedBox(height: AppSpace.md), transcript],
         ];
     }
   }
@@ -241,34 +276,42 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
     final danger = Theme.of(context).colorScheme.error;
     return switch (task.status) {
       TaskStatus.planning => [
-          Expanded(child: OutlinedButton(onPressed: _busy ? null : () => _run(() => _calls.cancel(task.id)), child: const Text('취소'))),
-        ],
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _busy ? null : () => _run('cancel', () => _calls.cancel(task.id)),
+            child: _label('cancel', const Text('취소')),
+          ),
+        ),
+      ],
       TaskStatus.awaitingApproval => [
-          Expanded(child: OutlinedButton(onPressed: _busy ? null : () => _run(() => _calls.cancel(task.id)), child: const Text('취소'))),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: FilledButton.icon(
-              onPressed: _busy ? null : () => _approvePlan(task),
-              icon: const Icon(Icons.call),
-              label: const Text('이대로 전화 걸기'),
-            ),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _busy ? null : () => _run('cancel', () => _calls.cancel(task.id)),
+            child: _label('cancel', const Text('취소')),
           ),
-        ],
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          flex: 2,
+          child: FilledButton.icon(
+            onPressed: _busy ? null : () => _approvePlan(task),
+            icon: _label('start', const Icon(Icons.call)),
+            label: const Text('이대로 전화 걸기'),
+          ),
+        ),
+      ],
       TaskStatus.dialing || TaskStatus.ringing || TaskStatus.inProgress => [
-          Expanded(
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: danger),
-              onPressed: _busy ? null : () => _run(() => _calls.cancel(task.id)),
-              icon: const Icon(Icons.call_end),
-              label: const Text('통화 끊기'),
-            ),
+        Expanded(
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: danger),
+            onPressed: _busy ? null : () => _run('hangup', () => _calls.cancel(task.id)),
+            icon: _label('hangup', const Icon(Icons.call_end)),
+            label: const Text('통화 끊기'),
           ),
-        ],
+        ),
+      ],
       TaskStatus.summarizing => const [],
-      TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled => [
-          Expanded(child: FollowUpActions(task: task)),
-        ],
+      TaskStatus.completed || TaskStatus.failed || TaskStatus.canceled => const [],
     };
   }
 }
@@ -282,17 +325,30 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (children.isEmpty && top == null) return const SizedBox.shrink();
+    // REQ-011: with enlarged text the pinned area never grows past half the screen, and at normal size never past
+    // two thirds; beyond that it scrolls inside, so the transcript above always keeps some room.
+    final enlarged = MediaQuery.textScalerOf(context).scale(1) > 1;
     return SafeArea(
       child: ResponsiveBody(
         shrinkHeight: true,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (top != null) ...[top!, const SizedBox(height: 10)],
-              if (children.isNotEmpty) Row(children: children),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * (enlarged ? 1 / 2 : 2 / 3)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, AppSpace.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (top != null)
+                  AnimatedSize(
+                    duration: motionDuration(context, AppMotion.medium),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpace.md),
+                      child: top,
+                    ),
+                  ),
+                if (children.isNotEmpty) Row(children: children),
+              ],
+            ),
           ),
         ),
       ),
@@ -311,38 +367,45 @@ class _CallHeader extends StatelessWidget {
     final live = task.status.isLiveCall;
 
     return Card(
-      color: live ? scheme.callLive.withValues(alpha: 0.1) : null,
+      color: live ? scheme.live.background : null,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpace.xl),
         child: Row(
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: live ? scheme.callLive : scheme.primaryContainer,
+              backgroundColor: live ? scheme.live.accent : scheme.primaryContainer,
               child: Icon(
                 live ? Icons.phone_in_talk_rounded : Icons.storefront_rounded,
-                color: live ? Colors.white : scheme.onPrimaryContainer,
+                color: live ? scheme.live.background : scheme.onPrimaryContainer,
                 size: 28,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpace.lg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(formatPhone(task.phoneNumber), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Row(
+                  Text(
+                    formatPhone(task.phoneNumber),
+                    style: theme.textTheme.titleMedium?.copyWith(color: live ? scheme.live.foreground : null),
+                  ),
+                  const SizedBox(height: AppSpace.xs),
+                  Wrap(
+                    spacing: AppSpace.sm,
+                    runSpacing: AppSpace.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       StatusChip(task.status, needsApproval: task.pendingApproval != null),
-                      if (task.status == TaskStatus.inProgress && task.connectedAt != null) ...[
-                        const SizedBox(width: 10),
+                      if (task.status == TaskStatus.inProgress && task.connectedAt != null)
                         _CallTimer(since: task.connectedAt!),
-                      ],
-                      if (task.isSimulated) ...[
-                        const SizedBox(width: 8),
-                        Text('시뮬레이션', style: theme.textTheme.labelSmall?.copyWith(color: scheme.tertiary)),
-                      ],
+                      if (task.isSimulated)
+                        Text(
+                          '시뮬레이션',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: live ? scheme.live.foreground : scheme.tertiary,
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -391,11 +454,7 @@ class _AutoStartBlockedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reason = ApiException(blocked.code, blocked.message).userMessage;
-    return SectionCard(
-      icon: Icons.info_outline_rounded,
-      color: Theme.of(context).colorScheme.warning.withValues(alpha: 0.1),
-      child: Text('바로 걸지 못했어요: $reason'),
-    );
+    return SectionCard(icon: Icons.info_outline_rounded, tone: CardTone.caution, child: Text('바로 걸지 못했어요: $reason'));
   }
 }
 
@@ -412,11 +471,11 @@ class _GoalCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(task.goal, style: theme.textTheme.bodyLarge?.copyWith(height: 1.5)),
+          Text(task.goal, style: theme.textTheme.bodyLarge),
           if (task.context?.isNotEmpty ?? false) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Text('알려줘도 되는 정보', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpace.xs),
             Text(task.context!),
           ],
         ],
@@ -442,23 +501,25 @@ class _PlanReview extends StatelessWidget {
           title: '첫 인사',
           icon: Icons.record_voice_over_outlined,
           trailing: TextButton(onPressed: onEditOpeningLine, child: const Text('수정')),
-          child: Text('"$openingLine"', style: theme.textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic, height: 1.5)),
+          child: Text(
+            '"$openingLine"',
+            style: theme.textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic, height: 1.5),
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         SectionCard(title: '통화 순서', icon: Icons.route_outlined, child: BulletList(plan.steps, numbered: true)),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         SectionCard(title: '물어볼 것', icon: Icons.help_outline_rounded, child: BulletList(plan.questionsToAsk)),
         if (plan.approvalPoints.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           SectionCard(
             title: '이럴 땐 통화 중에 먼저 물어볼게요',
             icon: Icons.pan_tool_alt_outlined,
-            color: theme.colorScheme.warning.withValues(alpha: 0.1),
             child: BulletList(plan.approvalPoints),
           ),
         ],
         if (plan.fallback.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           SectionCard(title: '목표를 못 이루면', icon: Icons.alt_route_rounded, child: Text(plan.fallback)),
         ],
       ],
@@ -481,24 +542,23 @@ class _ApprovalHistory extends StatelessWidget {
           for (final a in approvals)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                switch (a.status) {
-                  ApprovalStatus.approved => Icons.check_circle,
-                  ApprovalStatus.rejected => Icons.cancel,
-                  _ => Icons.timer_off_outlined,
-                },
-                color: a.status == ApprovalStatus.approved ? scheme.primary : scheme.error,
-              ),
+              leading: Icon(switch (a.status) {
+                ApprovalStatus.approved => Icons.check_circle,
+                ApprovalStatus.rejected => Icons.cancel,
+                _ => Icons.timer_off_outlined,
+              }, color: a.status == ApprovalStatus.approved ? scheme.primary : scheme.error),
               title: Text(a.question),
-              subtitle: Text([
-                switch (a.status) {
-                  ApprovalStatus.approved => '승인함',
-                  ApprovalStatus.rejected => '거절함',
-                  ApprovalStatus.expired => '시간 초과로 진행 안 함',
-                  ApprovalStatus.pending => '대기 중',
-                },
-                if (a.userComment != null && a.userComment!.isNotEmpty) '안내: ${a.userComment}',
-              ].join('\n')),
+              subtitle: Text(
+                [
+                  switch (a.status) {
+                    ApprovalStatus.approved => '승인함',
+                    ApprovalStatus.rejected => '거절함',
+                    ApprovalStatus.expired => '시간 초과로 진행 안 함',
+                    ApprovalStatus.pending => '대기 중',
+                  },
+                  if (a.userComment != null && a.userComment!.isNotEmpty) '안내: ${a.userComment}',
+                ].join('\n'),
+              ),
               isThreeLine: a.userComment != null && a.userComment!.isNotEmpty,
             ),
         ],

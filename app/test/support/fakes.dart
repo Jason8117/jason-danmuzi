@@ -95,6 +95,7 @@ class FakeCallsRepository extends CallsRepository {
   Future<CallTask> create(NewCallRequest request) async {
     createRequests.add(request);
     if (createError case final error?) throw error;
+    await hold?.future;
     return nextCreated!;
   }
 
@@ -114,8 +115,27 @@ class FakeCallsRepository extends CallsRepository {
     return intakeResult ?? IntakeResult(draft: PlanDraft.blank(text));
   }
 
+  /// When set, `list` throws this (SPEC-UX-001 AC-008 (4)).
+  Object? listError;
+
+  /// When set, `create`, `approvePlan` and `decide` wait for it before answering (SPEC-UX-001 AC-007).
+  Completer<void>? hold;
+
+  /// Every task id `approvePlan` received, in order.
+  final approvePlanCalls = <String>[];
+
   @override
-  Future<List<CallTask>> list() async => tasks;
+  Future<List<CallTask>> list() async {
+    if (listError case final error?) throw error;
+    return tasks;
+  }
+
+  @override
+  Future<CallTask> approvePlan(String id, {String? openingLine}) async {
+    approvePlanCalls.add(id);
+    await hold?.future;
+    return CallTask.fromJson(taskJson(id: id, version: 9, status: 'dialing'));
+  }
 
   @override
   Future<ServerInfo> serverInfo() async => const ServerInfo(realCalls: false, brain: 'heuristic');
@@ -123,6 +143,7 @@ class FakeCallsRepository extends CallsRepository {
   @override
   Future<CallTask> decide(String taskId, String approvalId, {required bool approve, String? comment}) async {
     if (decideError case final error?) throw error;
+    await hold?.future;
     decisions.add((approvalId: approvalId, approve: approve, comment: comment));
     return CallTask.fromJson(
       taskJson(

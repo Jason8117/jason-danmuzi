@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../core/theme/tokens.dart';
 
 // @MX:ANCHOR: [AUTO] The six trust statements shown before the first call, in settings and (1)(2)(5) on the manual form.
 // @MX:REASON: Each sentence must stay true against the server code (SPEC-FOLLOWUP-001 AC-013 command table); change wording only with that table.
@@ -48,16 +49,16 @@ class TrustStatementList extends StatelessWidget {
       children: [
         for (final statement in trustStatements)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.only(top: AppSpace.xs),
                   child: Icon(Icons.check_circle_outline, size: 18, color: theme.colorScheme.primary),
                 ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(statement, style: theme.textTheme.bodyMedium?.copyWith(height: 1.5))),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(child: Text(statement, style: theme.textTheme.bodyMedium)),
               ],
             ),
           ),
@@ -74,15 +75,15 @@ class _TrustNoticeSheet extends StatelessWidget {
     final theme = Theme.of(context);
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        padding: const EdgeInsets.only(left: AppSpace.xl, right: AppSpace.xl, bottom: AppSpace.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('전화하기 전에 알려 드려요', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             const TrustStatementList(),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('확인했어요')),
           ],
         ),

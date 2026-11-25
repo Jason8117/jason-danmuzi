@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../core/theme/tokens.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
@@ -85,7 +86,7 @@ class _NewCallScreenState extends ConsumerState<NewCallScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxxl),
             children: [
               Text('자주 하는 부탁', style: theme.textTheme.labelLarge),
               const SizedBox(height: 8),
@@ -161,10 +162,10 @@ class _NewCallScreenState extends ConsumerState<NewCallScreen> {
               ),
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(AppSpace.md),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -12,12 +12,12 @@ enum CallLanguage {
 }
 
 enum TaskStatus {
-  planning('계획 중'),
+  planning('계획 세우는 중'),
   awaitingApproval('확인 필요'),
-  dialing('연결 중'),
+  dialing('전화 거는 중'),
   ringing('신호 가는 중'),
   inProgress('통화 중'),
-  summarizing('정리 중'),
+  summarizing('결과 정리 중'),
   completed('완료'),
   failed('실패'),
   canceled('취소됨');
