@@ -1,0 +1,150 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+GoRouter buildRouter() => GoRouter(
+      initialLocation: '/',
+      routes: [
+        StatefulShellRoute.indexedStack(
+          builder: (c, s, shell) => Scaffold(
+            body: shell,
+            bottomNavigationBar: Text('TABBAR index=${shell.currentIndex}'),
+          ),
+          branches: [
+            StatefulShellBranch(routes: [
+              GoRoute(path: '/', builder: (c, s) => const Text('TODAY'), routes: []),
+              GoRoute(path: '/plan', builder: (c, s) => const Text('PLAN')),
+            ]),
+            StatefulShellBranch(routes: [
+              GoRoute(path: '/inbox', builder: (c, s) => const Text('INBOX')),
+              GoRoute(path: '/calls/:id', builder: (c, s) => Text('DETAIL ${s.pathParameters['id']}')),
+            ]),
+            StatefulShellBranch(routes: [
+              GoRoute(path: '/me', builder: (c, s) => const Text('ME')),
+              GoRoute(path: '/settings', builder: (c, s) => const Text('SETTINGS')),
+            ]),
+          ],
+        ),
+        GoRoute(path: '/assistant', builder: (c, s) => const Scaffold(body: Text('ASSISTANT')), routes: [GoRoute(path: 'plan', builder: (c, s) => const Scaffold(body: Text('APLAN')))]),
+      ],
+    );
+
+String tabbar(WidgetTester t) => (t.widget(find.textContaining('TABBAR')) as Text).data!;
+
+Future<GoRouter> boot(WidgetTester t) async {
+  final r = buildRouter();
+  await t.pumpWidget(MaterialApp.router(routerConfig: r));
+  await t.pumpAndSettle();
+  return r;
+}
+
+void main() {
+  testWidgets('A: push a route of another branch from today', (t) async {
+    final r = await boot(t);
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    print('A visible DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} tabbar=${find.textContaining('TABBAR').evaluate().isNotEmpty ? tabbar(t) : 'none'}');
+    r.pop();
+    await t.pumpAndSettle();
+    print('A after pop: TODAY=${find.text('TODAY').evaluate().isNotEmpty} INBOX=${find.text('INBOX').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+  testWidgets('B: go(/inbox) then push(/calls/1)', (t) async {
+    final r = await boot(t);
+    r.go('/inbox');
+    await t.pumpAndSettle();
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    print('B visible DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ${tabbar(t)}');
+    r.pop();
+    await t.pumpAndSettle();
+    print('B after pop: INBOX=${find.text('INBOX').evaluate().isNotEmpty} TODAY=${find.text('TODAY').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+  testWidgets('C: go(/calls/1) directly', (t) async {
+    final r = await boot(t);
+    r.go('/calls/1');
+    await t.pumpAndSettle();
+    print('C visible DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ${tabbar(t)} canPop=${r.canPop()}');
+  });
+  testWidgets('D: push /settings (branch 3) from today, then switch tab back', (t) async {
+    final r = await boot(t);
+    r.push('/settings');
+    await t.pumpAndSettle();
+    print('D visible SETTINGS=${find.text('SETTINGS').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+  testWidgets('E: push /assistant over inbox detail, pop back', (t) async {
+    final r = await boot(t);
+    r.go('/inbox');
+    await t.pumpAndSettle();
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    r.push('/assistant');
+    await t.pumpAndSettle();
+    print('E assistant visible=${find.text('ASSISTANT').evaluate().isNotEmpty} tabbar=${find.textContaining('TABBAR').hitTestable().evaluate().isNotEmpty}');
+    r.pop();
+    await t.pumpAndSettle();
+    print('E after pop: DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+  testWidgets('F: push /plan (branch 0) from inbox detail', (t) async {
+    final r = await boot(t);
+    r.go('/inbox');
+    await t.pumpAndSettle();
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    r.push('/plan');
+    await t.pumpAndSettle();
+    print('F visible PLAN=${find.text('PLAN').evaluate().isNotEmpty} ${tabbar(t)}');
+    r.pop();
+    await t.pumpAndSettle();
+    print('F after pop: DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+
+  testWidgets('G: from /assistant push /plan, then start: go(/inbox)+push(/calls/1); then back to today', (t) async {
+    final r = await boot(t);
+    r.push('/assistant');
+    await t.pumpAndSettle();
+    r.push('/plan');
+    await t.pumpAndSettle();
+    print('G plan visible=${find.text('PLAN').evaluate().isNotEmpty} tabbarVisible=${find.textContaining('TABBAR').hitTestable().evaluate().isNotEmpty} ${tabbar(t)}');
+    r.go('/inbox');
+    await t.pumpAndSettle();
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    print('G after start: DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ASSISTANT=${find.text('ASSISTANT').evaluate().isNotEmpty} ${tabbar(t)}');
+    r.go('/');
+    await t.pumpAndSettle();
+    print('G today tab shows: TODAY=${find.text('TODAY').evaluate().isNotEmpty} PLAN=${find.text('PLAN').evaluate().isNotEmpty} ${tabbar(t)}');
+  });
+  testWidgets('H: today pushes /plan, start does go(/inbox)+push; today tab later', (t) async {
+    final r = await boot(t);
+    r.push('/plan');
+    await t.pumpAndSettle();
+    r.go('/inbox');
+    await t.pumpAndSettle();
+    r.push('/calls/1');
+    await t.pumpAndSettle();
+    print('H detail ${tabbar(t)} DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty}');
+    r.go('/');
+    await t.pumpAndSettle();
+    print('H today tab: TODAY=${find.text('TODAY').evaluate().isNotEmpty} PLAN=${find.text('PLAN').evaluate().isNotEmpty}');
+  });
+
+  testWidgets('G2: from /assistant pop then push /plan', (t) async {
+    final r = await boot(t);
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/assistant'); await t.pumpAndSettle();
+    r.pop(); r.push('/plan'); await t.pumpAndSettle();
+    print('G2 PLAN=${find.text('PLAN').evaluate().isNotEmpty} ${tabbar(t)} exc=${t.takeException()}');
+  });
+  testWidgets('G3: child route /assistant/plan, then start go(/inbox)+push', (t) async {
+    final r = await boot(t);
+    r.push('/assistant'); await t.pumpAndSettle();
+    r.push('/assistant/plan'); await t.pumpAndSettle();
+    print('G3 APLAN=${find.text('APLAN').evaluate().isNotEmpty} tabbarVisible=${find.textContaining('TABBAR').hitTestable().evaluate().isNotEmpty} exc=${t.takeException()}');
+    r.pop(); await t.pumpAndSettle();
+    print('G3 back -> ASSISTANT=${find.text('ASSISTANT').evaluate().isNotEmpty}');
+    r.push('/assistant/plan'); await t.pumpAndSettle();
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    print('G3 start -> DETAIL=${find.text('DETAIL 1').evaluate().isNotEmpty} ASSISTANT=${find.text('ASSISTANT').evaluate().isNotEmpty} ${tabbar(t)} exc=${t.takeException()}');
+  });
+}

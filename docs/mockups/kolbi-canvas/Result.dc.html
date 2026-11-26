@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>작업 결과</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#111318}a:hover{color:#000}
+.scr{width:390px;height:844px;box-sizing:border-box;background:#fff;color:#111318;font-family:'Noto Sans KR',system-ui,sans-serif;letter-spacing:-0.02em;display:flex;flex-direction:column;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;padding:12px 20px;min-height:64px;box-sizing:border-box}
+.ib{width:44px;height:44px;border-radius:22px;background:#F4F5F7;border:0;display:flex;align-items:center;justify-content:center;color:#111318;text-decoration:none;flex:none}
+.ico{width:20px;height:20px;flex:none}
+.body{flex:1;overflow-y:auto;padding:0 20px 20px;display:flex;flex-direction:column;gap:20px}
+.muted{color:#6B7280}
+.fact{display:flex;align-items:center;gap:12px;min-height:52px;border-bottom:1px solid #F0F1F3;font-size:15px}
+.fk{width:84px;font-size:13px;color:#6B7280;flex:none}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;border-radius:28px;background:#111318;color:#fff;font-size:16px;font-weight:700;text-decoration:none}
+.cta:hover{color:#fff}
+.act{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:72px;border-radius:20px;background:#F4F5F7;color:#111318;font-size:13px;font-weight:700;text-decoration:none}
+.lk{display:flex;align-items:center;min-height:48px;font-size:14px;font-weight:600;text-decoration:none}
+</style>
+</helmet>
+<div class="scr">
+  <div class="top">
+    <a href="Inbox.dc.html" class="ib" aria-label="뒤로"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+    <span style="flex:1"></span>
+    <button class="ib" aria-label="더보기"><svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
+  </div>
+  <div class="body">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <span style="width:56px;height:56px;border-radius:28px;background:#ECFDF5;display:flex;align-items:center;justify-content:center"><svg style="width:28px;height:28px" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+      <h1 style="margin:0;font-size:30px;font-weight:800;line-height:1.22;letter-spacing:-0.035em">예약됐어요</h1>
+      <p class="muted" style="margin:0;font-size:15px">라 파스타 · 11월 28일(금) 오후 7시 · 2명</p>
+    </div>
+    <div>
+      <div class="fact"><span class="fk">예약자</span>김지은</div>
+      <div class="fact"><span class="fk">예약금</span>10,000원 · 승인함</div>
+      <div class="fact"><span class="fk">이용 시간</span>2시간</div>
+      <div class="fact"><span class="fk">확인 못 함</span><span class="muted">? 주차 가능 여부</span></div>
+      <div class="fact" style="border-bottom:0"><span class="fk">다음 할 일</span>10분 전에 도착해 주세요</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <a class="cta" href="Calendar.dc.html">캘린더에 추가</a>
+      <div style="display:flex;gap:8px">
+        <a class="act" href="PlaceSheet.dc.html"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6-7-12a7 7 0 0 1 14 0c0 6-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>길찾기</a>
+        <a class="act" href="Result.dc.html"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>공유</a>
+        <a class="act" href="Plan.dc.html"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/></svg>다시 걸기</a>
+      </div>
+    </div>
+    <div style="border-top:1px solid #F0F1F3;padding-top:4px">
+      <a class="lk" href="Live.dc.html"><span style="flex:1">근거 · “네, 7시 두 분 예약됐어요”</span><span class="muted">›</span></a>
+      <a class="lk" href="Live.dc.html"><span style="flex:1">대화 전체 · 결정 기록 1건</span><span class="muted">›</span></a>
+    </div>
+    <p class="muted" style="margin:0;font-size:12px">AI 비서가 통화해 정리했어요</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

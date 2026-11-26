@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>장소 후보</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#111318}a:hover{color:#000}
+.scr{width:390px;height:844px;box-sizing:border-box;background:#fff;color:#111318;font-family:'Noto Sans KR',system-ui,sans-serif;letter-spacing:-0.02em;display:flex;flex-direction:column;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;padding:12px 20px;min-height:64px;box-sizing:border-box}
+.ib{width:44px;height:44px;border-radius:22px;background:#F4F5F7;border:0;display:flex;align-items:center;justify-content:center;color:#111318;text-decoration:none;flex:none}
+.ico{width:20px;height:20px;flex:none}
+.body{flex:1;overflow-y:auto;padding:0 20px 24px;display:flex;flex-direction:column;gap:14px}
+.muted{color:#6B7280}
+.card{background:#fff;border-radius:24px;box-shadow:0 1px 2px rgba(17,19,24,.05),0 10px 28px rgba(17,19,24,.07);padding:18px;display:flex;flex-direction:column;gap:12px}
+.cta{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:24px;background:#111318;color:#fff;font-size:15px;font-weight:700;text-decoration:none}
+.cta:hover{color:#fff}
+.ghost{display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 20px;border-radius:24px;background:#F4F5F7;color:#111318;font-size:15px;font-weight:700;text-decoration:none;border:0;font-family:inherit}
+.tag{font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:#ECFDF5;color:#047857}
+</style>
+</helmet>
+<div class="scr">
+  <div class="top">
+    <a href="Main.dc.html" class="ib" aria-label="뒤로"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+  </div>
+  <div class="body">
+    <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:4px">
+      <p class="muted" style="margin:0;font-size:14px">“강남역 근처 파스타집, 금요일 7시 2명 예약해 줘” · <a href="Main.dc.html" style="font-weight:700">고치기</a></p>
+      <h1 style="margin:0;font-size:28px;line-height:1.25;font-weight:800;letter-spacing:-0.03em">어디로 전화할까요?</h1>
+      <p class="muted" style="margin:0;font-size:14px">가까운 3곳을 찾았어요</p>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:52px;height:52px;border-radius:16px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800">라</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:17px;font-weight:800">라 파스타</span><span class="muted" style="font-size:13px">양식 · 350m · 02-111-0000</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="tag">가장 가까워요</span></div>
+      <div style="display:flex;gap:8px"><a class="ghost" href="PlaceSheet.dc.html" style="flex:1">상세</a><a class="cta" href="Plan.dc.html" style="flex:1.6">여기로 전화</a></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:52px;height:52px;border-radius:16px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800">파</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:17px;font-weight:800">파스타 하우스</span><span class="muted" style="font-size:13px">양식 · 600m · 02-222-0000</span></span>
+      </div>
+      <div style="display:flex;gap:8px"><a class="ghost" href="PlaceSheet.dc.html" style="flex:1">상세</a><a class="cta" href="Plan.dc.html" style="flex:1.6">여기로 전화</a></div>
+    </div>
+    <div class="card" style="box-shadow:none;background:#FAFAFB">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="width:52px;height:52px;border-radius:16px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#6B7280">트</span>
+        <span style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:17px;font-weight:800">트라토리아 강남</span><span class="muted" style="font-size:13px">양식 · 820m · 전화번호가 없어요</span></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;padding-top:4px">
+      <a class="ghost" href="Places.dc.html" style="flex:1">다시 찾기</a>
+      <a class="ghost" href="Plan.dc.html" style="flex:1">번호 직접 입력</a>
+    </div>
+    <p class="muted" style="margin:0;font-size:12px;text-align:center">카카오 로컬 검색 결과 · 저장하지 않아요 · 업체는 예시</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

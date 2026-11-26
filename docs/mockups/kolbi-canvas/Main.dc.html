@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>콜비 홈</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#111318}a:hover{color:#000}
+.scr{width:390px;height:844px;box-sizing:border-box;background:#fff;color:#111318;font-family:'Noto Sans KR',system-ui,sans-serif;letter-spacing:-0.02em;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.ico{width:20px;height:20px;flex:none}
+.body{flex:1;overflow-y:auto;padding:8px 20px 120px;display:flex;flex-direction:column;gap:28px}
+.sec{font-size:17px;font-weight:700;margin:0}
+.muted{color:#6B7280}
+.card{background:#fff;border-radius:24px;box-shadow:0 1px 2px rgba(17,19,24,.05),0 10px 28px rgba(17,19,24,.07)}
+.tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:18px;min-width:104px;height:112px;box-sizing:border-box;padding:16px;border-radius:22px;background:#F4F5F7;text-decoration:none;color:#111318;font-size:14px;font-weight:700;flex:none}
+.tic{width:36px;height:36px;border-radius:18px;background:#fff;display:flex;align-items:center;justify-content:center}
+.place{display:flex;flex-direction:column;align-items:center;gap:8px;width:72px;text-decoration:none;color:#111318;font-size:12px;font-weight:500;text-align:center}
+.av{width:56px;height:56px;border-radius:28px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
+.nav{position:absolute;left:20px;right:20px;bottom:20px;height:64px;border-radius:32px;background:#fff;box-shadow:0 10px 32px rgba(17,19,24,.14);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;padding:0 8px;box-sizing:border-box}
+.nv{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;font-size:11px;font-weight:700;color:#6B7280;text-decoration:none;position:relative}
+.nv.on{color:#111318}
+.bd{position:absolute;top:4px;left:calc(50% + 4px);min-width:17px;height:17px;border-radius:9px;background:#C2410C;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;box-sizing:border-box}
+</style>
+</helmet>
+<div class="scr">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 4px">
+    <span style="font-size:15px;font-weight:800;letter-spacing:-0.01em">kolbi</span>
+    <a href="Me.dc.html" aria-label="내 정보" style="width:40px;height:40px;border-radius:20px;background:#111318;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;text-decoration:none">지</a>
+  </div>
+  <div class="body">
+    <div style="display:flex;flex-direction:column;gap:18px;padding-top:12px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <p class="muted" style="margin:0;font-size:15px;font-weight:500">지은 님, 안녕하세요</p>
+        <h1 style="margin:0;font-size:34px;line-height:1.18;font-weight:800;letter-spacing:-0.035em">무엇을<br>맡길까요?</h1>
+      </div>
+      <div class="card" style="padding:8px 8px 8px 20px;display:flex;align-items:center;gap:8px">
+        <label style="flex:1;display:flex">
+          <span style="position:absolute;width:1px;height:1px;overflow:hidden">부탁 입력</span>
+          <input type="text" placeholder="금요일 7시 2명, 파스타집 예약" style="flex:1;min-width:0;border:0;outline:none;font:inherit;font-size:16px;padding:14px 0;background:transparent;color:#111318">
+        </label>
+        <button aria-label="말로 부탁하기" style="width:48px;height:48px;border-radius:24px;border:0;background:#F4F5F7;color:#111318;display:flex;align-items:center;justify-content:center"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <a href="Places.dc.html" aria-label="보내기" style="width:48px;height:48px;border-radius:24px;background:#111318;color:#fff;display:flex;align-items:center;justify-content:center"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></a>
+      </div>
+      <div style="display:flex;gap:10px;overflow:hidden;margin-right:-20px">
+        <a class="tile" href="Places.dc.html"><span class="tic"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#111318" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>식당 예약</a>
+        <a class="tile" href="Plan.dc.html"><span class="tic"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#111318" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>영업시간 문의</a>
+        <a class="tile" href="Routine.dc.html"><span class="tic"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#111318" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/></svg></span>출석 알림</a>
+      </div>
+    </div>
+
+    <a href="Live.dc.html" aria-label="내 차례, 헤어살롱 봄, 예약금 확인이 필요해요, 42초 남음" style="background:#111318;color:#fff;border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:14px;text-decoration:none">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:4px;background:#FB923C"></span>
+        <span style="font-size:13px;font-weight:700;color:#FED7AA">내 차례</span>
+        <span style="flex:1"></span>
+        <span style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:#FED7AA">0:42 남음</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:19px;font-weight:800">예약금 10,000원, 진행할까요?</span>
+        <span style="font-size:14px;color:#C9CDD4">헤어살롱 봄 · 통화 중</span>
+      </div>
+      <span style="align-self:flex-start;min-height:40px;padding:0 18px;border-radius:20px;background:#fff;color:#111318;font-size:14px;font-weight:700;display:flex;align-items:center">확인하기</span>
+    </a>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline"><h2 class="sec" style="flex:1">진행 중</h2><a href="Inbox.dc.html" class="muted" style="font-size:14px;font-weight:500;text-decoration:none">전체</a></div>
+      <a href="Live.dc.html" class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px;text-decoration:none;color:#111318">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="av" style="width:44px;height:44px;font-size:15px;background:#ECFDF5;color:#047857">치</span>
+          <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:700">우리동네 치과</span><span style="font-size:13px;color:#047857;font-weight:600">● 통화 중 · 1:24</span></span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">
+          <span style="height:4px;border-radius:2px;background:#10B981"></span><span style="height:4px;border-radius:2px;background:#10B981"></span><span style="height:4px;border-radius:2px;background:#10B981"></span><span style="height:4px;border-radius:2px;background:#E5E7EB"></span>
+        </div>
+      </a>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <h2 class="sec">최근 장소</h2>
+      <div style="display:flex;gap:8px">
+        <a class="place" href="PlaceSheet.dc.html"><span class="av">라</span>라 파스타</a>
+        <a class="place" href="PlaceSheet.dc.html"><span class="av">치</span>우리동네 치과</a>
+        <a class="place" href="PlaceSheet.dc.html"><span class="av">봄</span>헤어살롱 봄</a>
+      </div>
+    </div>
+  </div>
+  <nav class="nav" aria-label="탭">
+    <a class="nv on" href="Main.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24" fill="#111318" stroke="#111318" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20H4z"/></svg>홈</a>
+    <a class="nv" href="Inbox.dc.html" aria-label="작업함, 내 차례 1개"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 10h8M8 14h5"/></svg>작업함<span class="bd" aria-hidden="true">1</span></a>
+    <a class="nv" href="Me.dc.html"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>내 정보</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

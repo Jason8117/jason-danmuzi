@@ -1,0 +1,74 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+late StatefulNavigationShell shellRef;
+GoRouter buildRouter() => GoRouter(
+      initialLocation: '/',
+      routes: [
+        StatefulShellRoute.indexedStack(
+          builder: (c, s, shell) { shellRef = shell; return Scaffold(body: shell, bottomNavigationBar: Text('TABBAR index=${shell.currentIndex}')); },
+          branches: [
+            StatefulShellBranch(routes: [GoRoute(path: '/', builder: (c, s) => const Text('TODAY')), GoRoute(path: '/plan', builder: (c, s) => const Text('PLAN'))]),
+            StatefulShellBranch(routes: [GoRoute(path: '/inbox', builder: (c, s) => const Text('INBOX')), GoRoute(path: '/calls/:id', builder: (c, s) => Text('DETAIL ${s.pathParameters['id']}'))]),
+            StatefulShellBranch(routes: [GoRoute(path: '/me', builder: (c, s) => const Text('ME')), GoRoute(path: '/settings', builder: (c, s) => const Text('SETTINGS'))]),
+          ],
+        ),
+        GoRoute(path: '/assistant', builder: (c, s) => const Scaffold(body: Text('ASSISTANT'))),
+      ],
+    );
+String tb(WidgetTester t) => (t.widget(find.textContaining('TABBAR')) as Text).data!;
+bool v(String s) => find.text(s).evaluate().isNotEmpty;
+Future<GoRouter> boot(WidgetTester t) async { final r = buildRouter(); await t.pumpWidget(MaterialApp.router(routerConfig: r)); await t.pumpAndSettle(); return r; }
+void main() {
+  testWidgets('X1 push plan on today, go inbox+push, then goBranch(0)', (t) async {
+    final r = await boot(t);
+    r.push('/plan'); await t.pumpAndSettle();
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    shellRef.goBranch(0); await t.pumpAndSettle();
+    print('X1 goBranch0: TODAY=${v('TODAY')} PLAN=${v('PLAN')} ${tb(t)} exc=${t.takeException()}');
+  });
+  testWidgets('X2 inbox detail kept across goBranch', (t) async {
+    final r = await boot(t);
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    shellRef.goBranch(0); await t.pumpAndSettle();
+    shellRef.goBranch(1); await t.pumpAndSettle();
+    print('X2 back to inbox: DETAIL=${v('DETAIL 1')} INBOX=${v('INBOX')} ${tb(t)}');
+    shellRef.goBranch(1, initialLocation: true); await t.pumpAndSettle();
+    print('X2 retap: DETAIL=${v('DETAIL 1')} INBOX=${v('INBOX')} ${tb(t)}');
+  });
+  testWidgets('X3 detail pushed on today (pumpAt), then goBranch(1)', (t) async {
+    final r = await boot(t);
+    r.push('/calls/1'); await t.pumpAndSettle();
+    shellRef.goBranch(1); await t.pumpAndSettle();
+    print('X3: DETAIL=${v('DETAIL 1')} INBOX=${v('INBOX')} ${tb(t)} exc=${t.takeException()}');
+  });
+  testWidgets('X4 go(/inbox) while inbox already has detail', (t) async {
+    final r = await boot(t);
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/2'); await t.pumpAndSettle();
+    r.pop(); await t.pumpAndSettle();
+    print('X4: INBOX=${v('INBOX')} DETAIL1=${v('DETAIL 1')} ${tb(t)}');
+  });
+
+  testWidgets('X5 reset today branch before start, then goBranch(0)', (t) async {
+    final r = await boot(t);
+    r.push('/plan'); await t.pumpAndSettle();
+    r.pop(); r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    shellRef.goBranch(0); await t.pumpAndSettle();
+    print('X5 pop-then-go: TODAY=${v('TODAY')} PLAN=${v('PLAN')} ${tb(t)} exc=${t.takeException()}');
+  });
+  testWidgets('X6 go(/) then go(/inbox)+push, then goBranch(0)', (t) async {
+    final r = await boot(t);
+    r.push('/plan'); await t.pumpAndSettle();
+    r.go('/'); r.go('/inbox'); await t.pumpAndSettle();
+    r.push('/calls/1'); await t.pumpAndSettle();
+    shellRef.goBranch(0); await t.pumpAndSettle();
+    print('X6 go-root-first: TODAY=${v('TODAY')} PLAN=${v('PLAN')} ${tb(t)} exc=${t.takeException()}');
+  });
+}
