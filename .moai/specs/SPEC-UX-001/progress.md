@@ -149,4 +149,28 @@ external_services_contacted: none
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: "the docs(SPEC-UX-001) sync commit that adds this section (resolve via git log)"
+sync_status: implemented
+run_commit_sha: d63740d   # implementation commit (M1-M5)
+run_evidence_commit_sha: c2e732d   # run-phase evidence commit; sync measured at this HEAD
+app_tests_at_sync: "00:08 +80: All tests passed! (exit 0)"   # .moai/state/verify/ux-sync/app-test.txt
+app_analyze_at_sync: "1 issue found. (info, test/support/fakes.dart:54:5 use_null_aware_elements = run baseline; exit 1 due to the info)"   # .moai/state/verify/ux-sync/analyze.txt
+server_tests_at_sync: "Test Files 14 passed (14) / Tests 387 passed (387) (exit 0)"   # .moai/state/verify/ux-sync/server-test.txt
+server_typecheck_exit_at_sync: 0   # .moai/state/verify/ux-sync/server-typecheck.txt
+evidence_dir_note: ".moai/state/verify/ux-sync/ is gitignored (local only)"
+acceptance_distinct_ac_ids: 15   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' acceptance.md | sort -u | wc -l
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated: 2026-11-25 -> 2026-11-27; spec/plan/acceptance bodies unchanged
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped   # --skip-mx semantics
+divergence:
+  planned_vs_changed_files: match   # git diff --name-only ba1ee17..d63740d = the 19 files of plan.md §B (15 app/lib + 4 app/test) + spec.md; no unplanned file
+  deviations: "§E.2 Deviations 1-6 (one commit for M1-M5; REQ-011 pinned-area cap; AC-006 pump count; AC-007 duplicate heavy haptic pre-existing; dart format on 10 files; device checks deferred)"
+  as_implemented_value_difference: "deviation 2 — REQ-011 pinned area is capped at 1/2 of the screen only while text is enlarged and at 2/3 at normal size; REQ body not edited, kept for owner review"
+device_check: deferred   # TalkBack / VoiceOver reading and real haptics not run
+project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]
+tech_md: unchanged   # no new dependency
+downstream_note_spec_module_001: "SPEC-MODULE-001 plan checks that SPEC-UX-001 is `completed`; this repository's sync terminal status is `implemented` (same as SPEC-STORE-001 etc.), which satisfies that precondition"
+```

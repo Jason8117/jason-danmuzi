@@ -1,6 +1,6 @@
 # 에픽 EPIC-ASSISTANT-UX — 개인 비서다운 첫 묶음
 
-작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`, 버전 0.3.0 — plan-audit iteration 1·2 반영(iteration 2: APPROVAL 0.92, INTAKE 0.89, FOLLOWUP 0.92 PASS, UX 0.84 FAIL → N5~N7 수정), iteration 3 대기).
+작성: 2026-11-21, jason (manager-spec). 기준 커밋 `c664596`. 상태: 계획 단계(네 SPEC 모두 `draft`, 버전 0.3.0 — plan-audit iteration 1·2 반영(iteration 2: APPROVAL 0.92, INTAKE 0.89, FOLLOWUP 0.92 PASS, UX 0.84 FAIL → N5~N7 수정), iteration 3 대기). 이후 갱신: SPEC-UX-001은 2026-11-27 sync-phase로 `status: implemented`가 되었다(구현 커밋 `d63740d`, 기록 `SPEC-UX-001/progress.md` §E.4).
 
 ## 1. 목표
 
