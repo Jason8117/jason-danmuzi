@@ -151,7 +151,7 @@ external_services_contacted: none
 
 ```yaml
 sync_complete_at: 2026-11-27
-sync_commit_sha: "the docs(SPEC-UX-001) sync commit that adds this section (resolve via git log)"
+sync_commit_sha: 9bf5f82   # follow-up commit records the sync-audit result
 sync_status: implemented
 run_commit_sha: d63740d   # implementation commit (M1-M5)
 run_evidence_commit_sha: c2e732d   # run-phase evidence commit; sync measured at this HEAD
@@ -168,9 +168,10 @@ mx_scan: skipped   # --skip-mx semantics
 divergence:
   planned_vs_changed_files: match   # git diff --name-only ba1ee17..d63740d = the 19 files of plan.md §B (15 app/lib + 4 app/test) + spec.md; no unplanned file
   deviations: "§E.2 Deviations 1-6 (one commit for M1-M5; REQ-011 pinned-area cap; AC-006 pump count; AC-007 duplicate heavy haptic pre-existing; dart format on 10 files; device checks deferred)"
-  as_implemented_value_difference: "deviation 2 — REQ-011 pinned area is capped at 1/2 of the screen only while text is enlarged and at 2/3 at normal size; REQ body not edited, kept for owner review"
+  as_implemented_value_difference: "deviation 2 — REQ-011 is met (1/2 cap while text is enlarged, call_detail_screen.dart:330,335; AC-011 passes). The 2/3 cap at normal size differs only from the plan.md §B note, which REQ-011 does not constrain (sync-audit C3)"
 device_check: deferred   # TalkBack / VoiceOver reading and real haptics not run
 project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]
 tech_md: unchanged   # no new dependency
-downstream_note_spec_module_001: "SPEC-MODULE-001 plan checks that SPEC-UX-001 is `completed`; this repository's sync terminal status is `implemented` (same as SPEC-STORE-001 etc.), which satisfies that precondition"
+downstream_note_spec_module_001: "SPEC-MODULE-001 plan checks that SPEC-UX-001 is `completed`, but this repository closes sync at `implemented` (SPEC-STORE-001 etc.). Owner asked to start SPEC-MODULE-001 after this sync (2026-11-27); MODULE progress.md records the precondition as met by `implemented` with that reason (sync-audit C1)"
+sync_audit: "PASS 85.8 (harmonic mean), .moai/reports/sync-audit/SPEC-UX-001-audit-1.md; C1, C3, C4 handled here; C2, F1, F2 recorded"
 ```
