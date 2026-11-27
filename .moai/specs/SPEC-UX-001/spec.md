@@ -2,7 +2,7 @@
 id: SPEC-UX-001
 title: "친근하고 정돈된 비서 화면 — 디자인 토큰, 공용 카드, 쉬운 상태 문구, 접근성"
 version: "0.3.0"
-status: implemented
+status: completed
 created: 2026-11-21
 updated: 2026-11-27
 author: jason

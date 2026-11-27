@@ -2,7 +2,7 @@
 id: SPEC-APPROVAL-001
 title: "통화 중 승인에 조건 한 줄 — 빠른 답, 민감정보 보호, 사용자 안내 기록"
 version: "0.3.0"
-status: implemented
+status: completed
 created: 2026-11-21
 updated: 2026-11-27
 author: jason

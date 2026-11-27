@@ -2,9 +2,9 @@
 id: SPEC-STORE-001
 title: "작업 저장소 내구성 — 쓰기 실패 격리, 제한된 재시도, 종료 시 저장 결과 보고"
 version: "0.2.0"
-status: implemented
+status: completed
 created: 2026-11-20
-updated: 2026-11-21
+updated: 2026-11-27
 author: jason
 priority: High
 phase: "v0.2.0 target"
