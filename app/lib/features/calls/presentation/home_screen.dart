@@ -9,27 +9,13 @@ import '../../../core/clock.dart';
 import '../../../core/config/app_settings.dart';
 import '../../../shell/kind_registration.dart';
 import '../../../shell/navigation.dart';
+import '../../../shell/request_intake.dart';
 import '../../../shell/routes.dart';
 import '../../../shell/tab_scaffold.dart';
 import '../../../shell/task_feed.dart';
 import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
 import 'call_templates.dart';
-
-/// Sends a one-line request to `POST /v1/intake` (SPEC-INTAKE-001 REQ-017). A server without the endpoint
-/// gets a blank draft (REQ-022); any other failure shows a snack bar and returns null.
-Future<PlanDraft?> requestPlanDraft(WidgetRef ref, ScaffoldMessengerState messenger, String text) async {
-  try {
-    // The input has no language picker; the plan card can switch the call language.
-    return (await ref.read(callsRepositoryProvider).intake(text, CallLanguage.ko)).draft;
-  } on ApiException catch (error) {
-    if (error.statusCode == 404) return PlanDraft.blank(text);
-    messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
-  } catch (error) {
-    messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
-  }
-  return null;
-}
 
 /// SPEC-INTAKE-001 REQ-017: one input at the top sends a one-line request to `POST /v1/intake` and opens the plan card.
 class HomeScreen extends ConsumerStatefulWidget {

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -11,12 +13,17 @@ import 'speech_recognizer.dart';
 /// [SpeechRecognizer] over `speech_to_text` (listening) and `permission_handler` (the four permission
 /// states and the settings link, which `speech_to_text` does not offer — plan-audit D5).
 ///
-/// A platform without the plugins (widget tests, unsupported desktops) throws [MissingPluginException] on
-/// the first call; that is reported as [MicPermission.unavailable] so the assistant opens in text mode.
+/// Dictation runs on iOS and Android only (the platforms with permission declarations). Anywhere else —
+/// web, desktop, and the widget-test host, where a plugin call never answers — every call reports
+/// [MicPermission.unavailable] without touching a plugin, so the assistant opens in text mode. A
+/// [MissingPluginException] on a supported platform is reported the same way.
 class PlatformSpeechRecognizer implements SpeechRecognizer {
-  PlatformSpeechRecognizer({SpeechToText? speech})
-    : _speech = speech ?? SpeechToText();
+  PlatformSpeechRecognizer({SpeechToText? speech, bool? supported})
+    : _speech = speech ?? SpeechToText(),
+      _supported =
+          supported ?? (!kIsWeb && (Platform.isIOS || Platform.isAndroid));
 
+  final bool _supported;
   final SpeechToText _speech;
   bool? _initialized;
   StreamController<SpeechEvent>? _session;
@@ -41,6 +48,7 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
 
   @override
   Future<MicPermission> permission() async {
+    if (!_supported) return MicPermission.unavailable;
     try {
       final statuses = [for (final p in _permissions) await p.status];
       return _combine(statuses, asked: false);
@@ -53,6 +61,7 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
 
   @override
   Future<MicPermission> requestPermission() async {
+    if (!_supported) return MicPermission.unavailable;
     try {
       final result = await _permissions.request();
       return _combine(result.values, asked: true);
@@ -65,6 +74,7 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
 
   @override
   Future<void> openAppSettings() async {
+    if (!_supported) return;
     try {
       await ph.openAppSettings();
     } on MissingPluginException {
@@ -75,6 +85,7 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
   /// Initializes only after the permissions are granted: `initialize` itself would raise the OS dialog.
   Future<bool> _ensureInitialized() async {
     if (_initialized case final done?) return done;
+    if (!_supported) return _initialized = false;
     try {
       _initialized = await _speech.initialize(
         onError: _onError,

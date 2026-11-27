@@ -323,7 +323,8 @@ void main() {
     expect(detailOf('c'), findsOneWidget);
     expect(isSelected(tester, tabTasks), isTrue);
 
-    // (2) send a request: the assistant closes and the plan card opens on the tasks tab.
+    // (2) send a request: the plan card opens over the assistant (/assistant/plan, SPEC-ASSIST-001 REQ-009);
+    // back returns to the assistant, and closing it shows the same detail on the tasks tab.
     await tapAndSettle(tester, find.byKey(assistantButton));
     await tester.enterText(
       find.byKey(const Key('assistant-intake-field')),
@@ -334,6 +335,11 @@ void main() {
     expect(repo.intakeCalls, ['내일 치과 예약']);
     expect(find.byKey(const Key('assistant-intake-field')), findsNothing);
     expect(find.byType(PlanCardScreen), findsOneWidget);
+    expect(find.byKey(tabTasks).hitTestable(), findsNothing);
+    await goBack(tester);
+    expect(find.byKey(const Key('assistant-intake-field')), findsOneWidget);
+    await tapAndSettle(tester, find.byKey(const Key('assistant-close')));
+    expect(detailOf('c'), findsOneWidget);
     expect(isSelected(tester, tabTasks), isTrue);
     expect(tester.takeException(), isNull);
     handle.dispose();

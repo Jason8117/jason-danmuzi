@@ -7,7 +7,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
 import '../../../shell/navigation.dart';
-import '../../../shell/routes.dart';
 import '../application/calls_controller.dart';
 import 'trust_notice.dart';
 
@@ -267,7 +266,8 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                   ),
                   _PlanRow(
                     label: '내 이름',
-                    onTap: () => context.pushNamed(RouteNames.settings),
+                    // Over the assistant this must be its child route (SPEC-ASSIST-001 REQ-009).
+                    onTap: () => openSettings(GoRouter.of(context)),
                     child: Text(settings.hasProfile ? settings.requesterName : '설정에서 입력해 주세요'),
                   ),
                 ],

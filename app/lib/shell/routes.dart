@@ -9,6 +9,11 @@ abstract final class RouteNames {
   static const me = 'me';
   static const settings = 'settings';
   static const assistant = 'assistant';
+
+  // SPEC-ASSIST-001 REQ-009: screens opened from the assistant are its child routes (research R1-G3).
+  static const assistantPlan = 'assistant-plan';
+  static const assistantSettings = 'assistant-settings';
+  static const assistantNew = 'assistant-new';
 }
 
 /// The four tabs, in branch order; the centre assistant button is not a tab (design.md D1.1).
