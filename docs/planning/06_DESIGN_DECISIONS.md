@@ -65,7 +65,7 @@
 
 ## 3. 디자인 토큰 — Midnight Indigo
 
-> **구현 확정(2026-11-27, SPEC-DESIGN-001).** §3.1~§3.3의 값은 바뀐 것 없이 그대로 `packages/kolbi_ui`에 들어갔다(`tokens.dart`의 `AppColors`, `app_theme.dart`의 역할 표·분위기 짝). 계획에 없던 값은 두 가지다: 무채색 칩 바탕은 밝은 모드 `#F1F2F8`, 어두운 모드 다크 표면 `#1B1F33`이고, `caution`(일부 달성)은 따로 색을 두지 않고 무채색과 같은 값을 쓴다. `#635BFF`는 채운 버튼 바탕·씨앗 색·진행 중 강조에만 쓰고 글자에는 쓰지 않는다(밝은 모드 `primary`는 `#4F46E5`, 어두운 모드는 `#A6ACFF`). 대비는 `packages/kolbi_ui/test/tokens_contrast_test.dart`가 확인하며, 가장 낮은 글자 짝은 `#635BFF` 위 흰 글자 4.70, 그다음이 무채색 칩 위 `#5F6478` 5.25다. 카드는 그림자 없이 1px 선(`#E6E8F0` / `#2A2E45`)을 그린다(§3.4).
+> **구현 확정(2026-11-27, SPEC-DESIGN-001).** §3.1~§3.3의 값은 바뀐 것 없이 그대로 `packages/kolbi_ui`에 들어갔다(`tokens.dart`의 `AppColors`, `app_theme.dart`의 역할 표·분위기 짝). 구현에서 확정한 값은 두 가지다(SPEC-DESIGN-001 plan §A.1, `#F1F2F8`은 §3.2 표에도 있음): 무채색 칩 바탕은 밝은 모드 `#F1F2F8`, 어두운 모드 다크 표면 `#1B1F33`이고, `caution`(일부 달성)은 따로 색을 두지 않고 무채색과 같은 값을 쓴다. `#635BFF`는 채운 버튼 바탕·씨앗 색·진행 중 강조에만 쓰고 글자에는 쓰지 않는다(밝은 모드 `primary`는 `#4F46E5`, 어두운 모드는 `#A6ACFF`). 대비는 `packages/kolbi_ui/test/tokens_contrast_test.dart`가 확인하며, 가장 낮은 글자 짝은 `#635BFF` 위 흰 글자 4.70, 그다음이 무채색 칩 위 `#5F6478` 5.25다. 카드는 그림자 없이 1px 선(`#E6E8F0` / `#2A2E45`)을 그린다(§3.4).
 
 ### 3.1 브랜드 색
 

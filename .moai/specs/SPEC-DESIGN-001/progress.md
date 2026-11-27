@@ -190,7 +190,7 @@ external_services_contacted: none
 
 ```yaml
 sync_complete_at: 2026-11-27
-sync_commit_sha: see git log (docs(SPEC-DESIGN-001) close sync)
+sync_commit_sha: e47e099
 sync_status: implemented   # orchestrator raises to completed after the sync audit passes (owner decision 2026-11-27)
 run_start_sha: 466c73b
 run_commit_sha: 3de1cee   # M3, last implementation commit (M1 7687615, M2 4430e31, M3 3de1cee)
@@ -229,10 +229,11 @@ plan_g_items:
   docs/planning/06_DESIGN_DECISIONS.md: "§3 implementation note (values unchanged; neutral chip bg, caution = neutral, #635BFF never text); §7 Q-1 and Q-2 closed"
   docs/planning/04_DESIGN_PLAN.md: "§4 revision block: caution = neutral, chip category table link (plan §A.2), seed now #635BFF"
   .moai/project/tech.md: "font asset, OFL licence, Pretendard v1.3.9 source and sha256, build size, main.dart call pending (SHELL)"
-  SPEC-UX-001: "not done in this commit: plan §G assigns the OD-2/OD-4 supersede note and the acceptance.md AC-002 seed expectation to manager-spec (body change); manager-docs may not edit another SPEC body"
+  SPEC-UX-001: "done in 8d6770f (spec 0.3.1: OD-2/OD-4 superseded by SPEC-DESIGN-001, AC-002 seed 0xFF635BFF)"
   SPEC-SHELL-001: "checked only: the main.dart line is in SHELL plan.md:54 and not yet in app/lib; SHELL docs unchanged"
 project_docs_synced: [.moai/project/tech.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, docs/planning/06_DESIGN_DECISIONS.md, docs/planning/04_DESIGN_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
-sync_audit: pending
+sync_audit: "PASS 89.8 (harmonic mean), .moai/reports/sync-audit/SPEC-DESIGN-001-audit-1.md; F1 Medium: variable font registered without weight entries or fontVariations, w600/w700 may render at 400 or synthetic bold on devices (owner device check); F2 dark neutral chip bg equals card colour (N4); F3 font 6.7MB; F4 registerKolbiFontLicenses call owned by SHELL-001"
+status_transition: implemented -> completed (sync audit passed, owner rule 2026-11-27)
 ```
 
 ## §F Phase 4 Mode Selection
