@@ -28,6 +28,9 @@ const legacyPaths = [
   'lib/core/router/app_router.dart',
 ];
 
+/// Files under lib/core that only re-export a moved file; they alone may point outside core (SPEC-SHELL-001 REQ-018).
+const coreReexportOnly = ['lib/core/router/app_router.dart'];
+
 final _directive = RegExp(r'''^\s*(?:import|export)\s+['"]([^'"]+)['"]''');
 final _feature = RegExp(r'^lib/features/([^/]+)/');
 
@@ -123,5 +126,63 @@ void main() {
             if (!File(resolveInApp(file, uri)!).existsSync()) uri,
     };
     expect(missing, isEmpty);
+  });
+
+  test('core does not import features', () {
+    final files = dartFiles('lib/core');
+    expect(files, isNotEmpty, reason: 'no files checked');
+
+    final found = <String>{};
+    final reexports = <String>{};
+    for (final file in files) {
+      for (final uri in directiveUris(file)) {
+        final target = resolveInApp(file, uri);
+        if (target == null) continue;
+        if (target.startsWith('lib/features/') ||
+            target.startsWith('lib/shell/')) {
+          (coreReexportOnly.contains(file) ? reexports : found).add(
+            '$file -> $target',
+          );
+        }
+      }
+    }
+    expect(found, isEmpty, reason: 'core reaches into features or the shell');
+    // The pinned list is exactly the re-export files that still point outside core.
+    expect({
+      for (final r in reexports) r.split(' -> ').first,
+    }, coreReexportOnly.toSet());
+    for (final path in coreReexportOnly) {
+      expect(
+        legacyPaths,
+        contains(path),
+        reason: '$path must be re-export only',
+      );
+    }
+  });
+
+  test('router and tab switching live in the shell', () {
+    final routers = [
+      for (final file in dartFiles('lib'))
+        if (File(file).readAsStringSync().contains('GoRouter(')) file,
+    ];
+    expect(routers, ['lib/shell/app_router.dart']);
+
+    final tabSwitch = RegExp(r'\.go\(|goNamed\(|goBranch\(');
+    final routeLiteral = RegExp(
+      r"""'/(calls|plan|settings|inbox|history|me|assistant)""",
+    );
+    final violations = <String>[];
+    for (final file in dartFiles('lib/features')) {
+      final lines = File(file).readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        if (tabSwitch.hasMatch(lines[i])) {
+          violations.add('$file:${i + 1} tab switch: ${lines[i].trim()}');
+        }
+        if (routeLiteral.hasMatch(lines[i])) {
+          violations.add('$file:${i + 1} route literal: ${lines[i].trim()}');
+        }
+      }
+    }
+    expect(violations, isEmpty);
   });
 }

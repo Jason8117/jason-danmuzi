@@ -12,6 +12,7 @@ import 'package:callmate/features/calls/domain/intake_models.dart';
 import 'package:callmate/features/calls/presentation/plan_card_screen.dart';
 import 'package:callmate/features/calls/presentation/widgets/approval_card.dart';
 import 'package:callmate/features/calls/presentation/widgets/outcome_card.dart';
+import 'package:callmate/shell/navigation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fakes.dart';
+import 'support/shell_support.dart' as shell;
 
 // SPEC-UX-001 AC-004, AC-006 (scroll), AC-007 .. AC-013. Elements are found by text, Key, type or semantics only.
 void main() {
@@ -648,6 +650,84 @@ void main() {
       find.text('대화 내용'),
     ]);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  // ---- SPEC-SHELL-001 AC-020 ------------------------------------------------------------------------------
+
+  testWidgets('shell screens meet the accessibility guidelines', (tester) async {
+    final handle = tester.ensureSemantics();
+    final shellScreens = <String, Future<shell.CountingCallsRepository> Function({bool dark, Size size, double textScale})>{
+      'today': ({dark = false, size = const Size(800, 2400), textScale = 1}) =>
+          shell.pumpShell(tester, tasks: shell.mixedTasks(), dark: dark, size: size, textScale: textScale),
+      for (final (name, key) in [('tasks', shell.tabTasks), ('history', shell.tabHistory), ('me', shell.tabMe)])
+        name: ({dark = false, size = const Size(800, 2400), textScale = 1}) async {
+          final repo = await shell.pumpShell(
+            tester,
+            tasks: shell.mixedTasks(),
+            dark: dark,
+            size: size,
+            textScale: textScale,
+          );
+          await tester.tap(find.byKey(key));
+          await shell.settle(tester);
+          return repo;
+        },
+      'detail (a)': ({dark = false, size = const Size(800, 2400), textScale = 1}) async {
+        final repo = await shell.pumpShell(
+          tester,
+          tasks: shell.mixedTasks(),
+          dark: dark,
+          size: size,
+          textScale: textScale,
+        );
+        openTask(shell.appRouter(tester), 'a');
+        await shell.settle(tester);
+        return repo;
+      },
+    };
+
+    // Guidelines, light and dark.
+    for (final dark in [false, true]) {
+      for (final MapEntry(key: name, value: pump) in shellScreens.entries) {
+        await pump(dark: dark);
+        for (final guideline in [
+          androidTapTargetGuideline,
+          iOSTapTargetGuideline,
+          labeledTapTargetGuideline,
+          textContrastGuideline,
+        ]) {
+          await expectLater(tester, meetsGuideline(guideline), reason: '$name dark=$dark ${guideline.description}');
+        }
+      }
+    }
+
+    // 360x640 at 2x text: no overflow, tab labels stay at most 1.5x.
+    for (final MapEntry(key: name, value: pump) in shellScreens.entries) {
+      await pump(size: const Size(360, 640), textScale: 2);
+      final error = tester.takeException();
+      expect(error, isNull, reason: '$name: $error');
+      for (final (key, label) in [
+        (shell.tabToday, '오늘'),
+        (shell.tabTasks, '업무'),
+        (shell.tabHistory, '기록'),
+        (shell.tabMe, '내 정보'),
+      ]) {
+        final text = find.descendant(of: find.byKey(key), matching: find.text(label));
+        expect(MediaQuery.textScalerOf(tester.element(text)).scale(14) / 14, lessThanOrEqualTo(1.5), reason: label);
+      }
+    }
+
+    // The approval card's [승인] can be reached and tapped.
+    final repo = await shellScreens['detail (a)']!(size: const Size(360, 640), textScale: 2);
+    final approve = find.descendant(of: find.byType(ApprovalCard), matching: find.text('승인'));
+    await tester.ensureVisible(approve);
+    await tester.pump();
+    await tester.tap(approve);
+    await shell.settle(tester);
+    expect(repo.decisions.single.approve, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    handle.dispose();
   });
 }
 

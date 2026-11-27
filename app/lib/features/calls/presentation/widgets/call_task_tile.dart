@@ -63,17 +63,23 @@ class CallTaskTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpace.sm),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    trailing ??
-                        StatusChip(task.status, needsApproval: needsApproval),
-                    const SizedBox(height: AppSpace.xs),
-                    Text(
-                      formatRelative(task.createdAt),
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
+                // With large text the chip wraps inside this width instead of pushing the row past the edge.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      trailing ??
+                          StatusChip(task.status, needsApproval: needsApproval),
+                      const SizedBox(height: AppSpace.xs),
+                      Text(
+                        formatRelative(task.createdAt),
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
