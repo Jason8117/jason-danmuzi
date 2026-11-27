@@ -212,4 +212,38 @@ external_services_contacted: none   # OpenAI and KAT were never called; fetch an
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: "the docs(SPEC-FOLLOWUP-001) sync commit that adds this section (resolve via git log)"
+sync_status: implemented
+run_commit_sha: 36a926e   # §E.3 value: last implementation commit (M5) on worktree branch worktree-agent-a5b78f4e1ddbd3153
+run_commit_sha_on_main: fad4e60   # the same M5 landed on main as fad4e60 (git diff --quiet 36a926e fad4e60 -> exit 0, identical tree); M6 evidence commit -> ba1ee17 on main
+run_start_sha: d161cababb99a65976dbe2289e32ce1f9a4d59df   # SPEC-INTAKE-001 M7 evidence commit on main
+depends_on_note: "depends_on SPEC-INTAKE-001 was `in-progress` when this run started; it closes at `implemented` in the sync commit just before this one (this repository's terminal value is `implemented`, see SPEC-UX-001 §E.4 sync-audit C1)"
+sync_evidence_source: orchestrator   # measured by the orchestrator on HEAD 8ad8239 on 2026-11-27, not by this agent; evidence under .moai/state/verify/coverage/ (gitignored, local only)
+app_tests_at_sync: "00:08 +84: All tests passed!"   # cd app && flutter --suppress-analytics test --coverage
+app_line_coverage_at_sync: "1497/1689 = 88.6% (app + kolbi_core + kolbi_ui, from app tests; combined.lcov)"
+server_tests_at_sync: "Tests 387 passed (387); Lines 95.42% (1085/1137), Statements 92.3%, Branches 81.49%, Functions 91.66%"   # npx vitest run --coverage (server.txt); 387 = the §E.2 M6 server count
+server_typecheck_exit_at_sync: 0   # npm --prefix server run typecheck
+web_build_at_sync: "✓ Built build/web"   # cd app && flutter build web --debug
+browser_run_at_sync: "web build against a simulated server (CALL_PROVIDER=simulated, no .env): plan card -> trust notice -> live call -> approval -> result card with summary, decisions and follow-up actions (다시 걸기 / 요약 복사 / 공유); browser console: no errors"
+acceptance_distinct_ac_ids: 17   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' acceptance.md | sort -u | wc -l -> 17; §E.3 ac_pass_count 16
+ac_count_note: "the 17th id is AC-021, a cross-reference to SPEC-INTAKE-001 AC-021 inside AC-014 (acceptance.md:202, \"SPEC-INTAKE-001 AC-021의 초안\"), not an AC of this SPEC; AC-001..AC-016 = 16 = ac_pass_count"
+ac_matrix_test_names_at_sync: all-present   # every test name cited in the §E.2 AC matrix found by grep -F in server/src or app/test at HEAD 8ad8239
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated: 2026-11-22 -> 2026-11-27; spec/plan/acceptance bodies unchanged
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped   # --skip-mx semantics
+divergence:
+  planned_vs_changed_files: "21 of 22 planned"   # git diff --name-only d161cab..fad4e60 = 21 plan.md §B files (5 server + 16 app incl. pubspec.yaml/pubspec.lock) + spec.md + progress.md; no unplanned file
+  planned_but_unchanged: [app/test/intake_flow_test.dart]   # AC-016 allowed a setup-line change; not needed (its tests never press a REQ-014 trigger), §E.2 M4
+  deviations: "§E.2 M4 live-call trust line placed below the transcript (keeps approval_flow_test.dart unmodified on 800x600); M5 each follow-up notice hides the current snackbar first; share result unavailable/dismissed not treated as failure; audit advisory A3-2 (statement (6) callback-number wording) left for manager-spec"
+later_changes:   # history not rewritten; paths below are the current locations at 8ad8239
+  SPEC-UX-001: "call_detail_screen.dart, plan_card_screen.dart, new_call_screen.dart, trust_notice.dart, widgets/follow_up_actions.dart, settings_screen.dart restyled (tokens, AppCard)"
+  SPEC-MODULE-001: "app/lib/features/calls/domain/follow_up.dart is now a re-export of packages/kolbi_core/lib/src/follow_up.dart; call_models.dart and intake_models.dart re-export packages/kolbi_core/lib/src/models/; app/pubspec.lock replaced by the workspace root pubspec.lock; share_plus stays a direct dependency of app/pubspec.yaml (^13.3.1) and kolbi_ui must not import it (packages/kolbi_ui/test/dependency_rules_test.dart); trust_notice.dart and widgets/follow_up_actions.dart stay in the app"
+device_check: deferred   # §E.2/§E.3: Android and iOS share sheet, default calendar accepting appointment.ics, and clipboard on device not run; at sync no Xcode/simulator on this Mac, so real-device screen reader and haptics were not run either; label stays "캘린더 파일 보내기" (OD-6)
+residual_risks_carried: "AC-008/AC-012 pass against the injected fake service only; the first call on a device passes two confirmations (plan card + trust notice); platforms that report share `unavailable` after a real failure show no toast"
+project_docs_synced: [.moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/dependencies.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # trust_notice.dart, widgets/follow_up_actions.dart, AppSettings.trustNoticeAcknowledged; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows this one
+tech_md: updated   # share_plus ^13.3.1 (the one new direct dependency, OD-1) was missing from tech.md and codemaps/dependencies.md; added in the docs(SPEC-ASSISTANT-UX) commit
+sync_audit: pending
+```
