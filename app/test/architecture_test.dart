@@ -10,6 +10,24 @@ const allowedCrossFeature = {
   'lib/features/settings/settings_screen.dart -> lib/features/calls/presentation/trust_notice.dart',
 };
 
+/// Old paths of the moved files (plan.md §B.4); they must only re-export the packages.
+const legacyPaths = [
+  'lib/core/network/api_client.dart',
+  'lib/core/network/live_channel.dart',
+  'lib/core/theme/app_theme.dart',
+  'lib/core/theme/tokens.dart',
+  'lib/core/utils/formatters.dart',
+  'lib/core/widgets/common.dart',
+  'lib/features/calls/domain/call_models.dart',
+  'lib/features/calls/domain/intake_models.dart',
+  'lib/features/calls/domain/counterparties.dart',
+  'lib/features/calls/domain/follow_up.dart',
+  'lib/features/calls/domain/approval_comment.dart',
+  'lib/features/calls/presentation/widgets/status_chip.dart',
+  'lib/features/calls/presentation/widgets/outcome_card.dart',
+  'lib/features/calls/presentation/widgets/transcript_view.dart',
+];
+
 final _directive = RegExp(r'''^\s*(?:import|export)\s+['"]([^'"]+)['"]''');
 final _feature = RegExp(r'^lib/features/([^/]+)/');
 
@@ -77,5 +95,33 @@ void main() {
       isEmpty,
       reason: 'allowlist entry no longer exists; remove it',
     );
+  });
+
+  test('legacy paths only re-export', () {
+    for (final path in legacyPaths) {
+      final source = File(path)
+          .readAsStringSync()
+          .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+          .replaceAll(RegExp(r'//[^\n]*'), '');
+      final statements = source
+          .split(';')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      expect(statements, isNotEmpty, reason: path);
+      for (final statement in statements) {
+        expect(statement, startsWith('export '), reason: path);
+      }
+    }
+  });
+
+  test('every package:callmate import in the tests points at a file', () {
+    final missing = <String>{
+      for (final file in dartFiles('test'))
+        for (final uri in directiveUris(file))
+          if (uri.startsWith('package:callmate/'))
+            if (!File(resolveInApp(file, uri)!).existsSync()) uri,
+    };
+    expect(missing, isEmpty);
   });
 }
