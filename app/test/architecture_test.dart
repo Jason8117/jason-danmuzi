@@ -24,7 +24,7 @@ List<String> dartFiles(String root) =>
 
 List<String> directiveUris(String path) => [
   for (final line in File(path).readAsLinesSync())
-    if (_directive.firstMatch(line)?.group(1) case final uri?) uri,
+    ?_directive.firstMatch(line)?.group(1),
 ];
 
 /// Resolves [uri] from [from] to an app path under `lib/`, or null when it points elsewhere.
