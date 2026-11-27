@@ -1,4 +1,6 @@
 // SPEC-SHELL-001 AC-001 .. AC-006, AC-013 (app), AC-017. Tabs and screens are found by Key, never by label.
+import 'dart:ui' show Tristate;
+
 import 'package:callmate/features/calls/domain/call_models.dart';
 import 'package:callmate/features/calls/domain/intake_models.dart';
 import 'package:callmate/features/calls/presentation/plan_card_screen.dart';
@@ -378,5 +380,81 @@ void main() {
           return y > approvals && y < ongoing;
         });
     expect(rows, hasLength(2));
+  });
+
+  testWidgets('me tab lists items and opens settings', (tester) async {
+    final handle = tester.ensureSemantics();
+    Finder inMe(Finder finder) =>
+        find.descendant(of: find.byKey(meScreen), matching: finder);
+    Future<void> openMe(Map<String, Object> prefs) async {
+      await pumpShell(tester, prefs: prefs);
+      await tapAndSettle(tester, find.byKey(tabMe));
+    }
+
+    // (1) a stored profile, the number masked in the middle
+    const stored = {
+      'requesterName': '김지은',
+      'callbackNumber': '010-1234-5678',
+      'trustNoticeAcknowledged': true,
+    };
+    await openMe(stored);
+    final card = find.byKey(const Key('me-profile'));
+    expect(
+      find.descendant(of: card, matching: find.text('김지은')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: card, matching: find.text('010-****-5678')),
+      findsOneWidget,
+    );
+    expect(inMe(find.text('010-1234-5678')), findsNothing);
+
+    final titles = ['비서', '권한과 안전', '앱'];
+    final tops = [
+      for (final t in titles) tester.getTopLeft(inMe(find.text(t))).dy,
+    ];
+    expect(tops[0], lessThan(tops[1]));
+    expect(tops[1], lessThan(tops[2]));
+    const items = [
+      '연결 앱 · 스킬', '연락처', '기억', '맡기는 방식', //
+      '권한 설정', '알림', '안전하게 쓰는 법', //
+      '화면 · 언어', '서버 연결(개발용)', '문의 · 신고', '계정',
+    ];
+    for (final item in items) {
+      expect(inMe(find.text(item)), findsOneWidget, reason: item);
+    }
+
+    // Not available yet: labelled, disabled, and tapping changes nothing.
+    final skills = find.byKey(const Key('me-item-연결 앱 · 스킬'));
+    expect(
+      find.descendant(of: skills, matching: find.text('곧 쓸 수 있어요')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSemantics(skills).flagsCollection.isEnabled,
+      Tristate.isFalse,
+    );
+    await tester.tap(skills, warnIfMissed: false);
+    await settle(tester);
+    expect(find.byKey(meScreen), findsOneWidget);
+    expect(find.text('AI 비서와 기록'), findsNothing);
+
+    // The profile card and the server item open settings.
+    await tapAndSettle(tester, card);
+    expect(find.text('AI 비서와 기록'), findsOneWidget);
+    await goBack(tester);
+    await tapAndSettle(tester, inMe(find.text('서버 연결(개발용)')));
+    expect(find.text('AI 비서와 기록'), findsOneWidget);
+
+    // (2) nothing stored
+    await openMe(const {'trustNoticeAcknowledged': true});
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('me-profile')),
+        matching: find.text('내 정보를 입력해 주세요'),
+      ),
+      findsOneWidget,
+    );
+    handle.dispose();
   });
 }

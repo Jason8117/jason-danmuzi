@@ -4,10 +4,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Feature-to-feature imports that exist today. SPEC-SHELL-001 removes the last one.
-const allowedCrossFeature = {
-  'lib/features/settings/settings_screen.dart -> lib/features/calls/presentation/trust_notice.dart',
-};
+/// Feature-to-feature imports that exist today: none since SPEC-SHELL-001 (REQ-018).
+const allowedCrossFeature = <String>{};
 
 /// Old paths of the moved files (plan.md §B.4); they must only re-export the packages.
 const legacyPaths = [
@@ -25,6 +23,9 @@ const legacyPaths = [
   'lib/features/calls/presentation/widgets/status_chip.dart',
   'lib/features/calls/presentation/widgets/outcome_card.dart',
   'lib/features/calls/presentation/widgets/transcript_view.dart',
+  // SPEC-SHELL-001: moved into app core / the shell.
+  'lib/features/calls/presentation/trust_notice.dart',
+  'lib/core/router/app_router.dart',
 ];
 
 final _directive = RegExp(r'''^\s*(?:import|export)\s+['"]([^'"]+)['"]''');
