@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
-import '../../../core/theme/tokens.dart';
 
 // @MX:ANCHOR: [AUTO] The six trust statements shown before the first call, in settings and (1)(2)(5) on the manual form.
 // @MX:REASON: Each sentence must stay true against the server code (SPEC-FOLLOWUP-001 AC-013 command table); change wording only with that table.

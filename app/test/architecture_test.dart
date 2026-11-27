@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Feature-to-feature imports that exist today. SPEC-SHELL-001 removes the last one.
 const allowedCrossFeature = {
-  'lib/features/settings/settings_screen.dart -> lib/features/calls/domain/call_models.dart',
   'lib/features/settings/settings_screen.dart -> lib/features/calls/presentation/trust_notice.dart',
 };
 

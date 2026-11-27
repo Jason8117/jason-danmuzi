@@ -2,21 +2,14 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kolbi_core/kolbi_core.dart';
+import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../core/network/api_client.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/theme/tokens.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
-import '../domain/call_models.dart';
 import 'trust_notice.dart';
 import 'widgets/approval_card.dart';
 import 'widgets/follow_up_actions.dart';
-import 'widgets/outcome_card.dart';
-import 'widgets/status_chip.dart';
-import 'widgets/transcript_view.dart';
 
 class CallDetailScreen extends ConsumerStatefulWidget {
   const CallDetailScreen({super.key, required this.taskId});

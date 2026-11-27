@@ -1,21 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kolbi_core/kolbi_core.dart';
+import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/network/live_channel.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/theme/tokens.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/common.dart';
 import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
-import '../domain/call_models.dart';
-import '../domain/counterparties.dart';
-import '../domain/intake_models.dart';
 import 'call_templates.dart';
-import 'widgets/status_chip.dart';
 
 /// SPEC-INTAKE-001 REQ-017: one input at the top sends a one-line request to `POST /v1/intake` and opens the plan card.
 class HomeScreen extends ConsumerStatefulWidget {

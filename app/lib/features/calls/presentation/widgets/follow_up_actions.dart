@@ -3,13 +3,10 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kolbi_core/kolbi_core.dart';
+import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:share_plus/share_plus.dart';
-
-import '../../../../core/theme/tokens.dart';
-import '../../domain/call_models.dart';
-import '../../domain/follow_up.dart';
-import '../../domain/intake_models.dart';
 
 /// The one place the app reaches the clipboard and the share sheet, so widget tests can swap it (SPEC-FOLLOWUP-001 §4).
 abstract interface class FollowUpService {

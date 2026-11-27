@@ -3,14 +3,11 @@ import 'dart:async';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kolbi_core/kolbi_core.dart';
+import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../../core/theme/app_theme.dart';
-import '../../../../core/theme/tokens.dart';
-import '../../../../core/widgets/common.dart';
 import '../../application/calls_controller.dart';
-import '../../domain/approval_comment.dart';
-import '../../domain/call_models.dart';
 
 /// Shown while the AI has put the other party on hold and is waiting for the user's decision.
 class ApprovalCard extends ConsumerStatefulWidget {
