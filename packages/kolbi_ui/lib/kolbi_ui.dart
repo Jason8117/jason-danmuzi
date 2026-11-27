@@ -1,6 +1,8 @@
 /// Kolbi UI: shared Flutter design tokens, theme and widgets (SPEC-MODULE-001).
 library;
 
+export 'src/kinds/task_kind_presenter.dart'
+    show TaskKindPresenter, UnknownKindPresenter, TaskKindPresenters;
 export 'src/input/code_point_formatter.dart'
     show CodePointLengthLimitingFormatter;
 export 'src/theme/app_theme.dart'
@@ -26,6 +28,9 @@ export 'src/widgets/common.dart'
         PulsingDot,
         runWithFeedback,
         describeError;
+export 'src/widgets/briefing_card.dart' show KolbiBriefingCard;
 export 'src/widgets/outcome_card.dart' show outcomeTone, OutcomeCard;
 export 'src/widgets/status_chip.dart' show StatusChip, StatusCategory;
+export 'src/widgets/step_timeline.dart' show KolbiStepTimeline;
+export 'src/widgets/tab_badge.dart' show KolbiTabBadge;
 export 'src/widgets/transcript_view.dart' show TranscriptView;

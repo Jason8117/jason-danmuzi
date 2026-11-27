@@ -14,6 +14,9 @@ void main() {
   setUpAll(() => initializeDateFormatting('ko'));
 
   Future<FakeCallsRepository> pumpApp(WidgetTester tester, List<CallTask> tasks) async {
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     SharedPreferences.setMockInitialValues({'requesterName': '김민수'});
     final prefs = await SharedPreferences.getInstance();
     final repo = FakeCallsRepository(tasks);

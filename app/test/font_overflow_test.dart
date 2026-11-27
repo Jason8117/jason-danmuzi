@@ -71,6 +71,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final manual = find.text('직접 입력하기');
+    await tester.scrollUntilVisible(manual, 200, scrollable: find.byType(Scrollable).first);
     expect(manual, findsOneWidget);
     expect(
       DefaultTextStyle.of(tester.element(manual)).style.fontFamily,

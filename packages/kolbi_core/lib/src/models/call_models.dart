@@ -225,10 +225,12 @@ class CallTask {
     this.connectedAt,
     this.endedAt,
     this.autoStartBlocked,
+    this.kind,
   });
 
   factory CallTask.fromJson(Map<String, dynamic> json) => CallTask(
         autoStartBlocked: AutoStartBlocked.tryParse(json['autoStartBlocked']),
+        kind: json['kind'] is String ? json['kind'] as String : null,
         id: json['id'] as String,
         version: json['version'] as int? ?? 0,
         targetName: json['targetName'] as String,
@@ -280,6 +282,9 @@ class CallTask {
 
   /// Why the server could not start the call the user confirmed on the plan card.
   final AutoStartBlocked? autoStartBlocked;
+
+  /// The task kind the server sent, if any; null reads as `call` (SPEC-SHELL-001 REQ-008).
+  final String? kind;
 
   ApprovalRequest? get pendingApproval {
     for (final approval in approvals) {

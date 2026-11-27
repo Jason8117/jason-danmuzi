@@ -6,6 +6,7 @@ import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../shell/navigation.dart';
 import '../application/calls_controller.dart';
 import 'call_templates.dart';
 import 'trust_notice.dart';
@@ -69,7 +70,7 @@ class _NewCallScreenState extends ConsumerState<NewCallScreen> {
 
     if (!mounted) return;
     setState(() => _submitting = false);
-    if (ok) context.pushReplacement('/calls/${created.id}');
+    if (ok) openTask(GoRouter.of(context), created.id);
   }
 
   String? _required(String? value, String message) => (value == null || value.trim().isEmpty) ? message : null;

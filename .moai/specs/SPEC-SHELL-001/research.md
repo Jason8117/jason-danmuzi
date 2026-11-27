@@ -1,4 +1,4 @@
-# SPEC-SHELL-001 조사 기록 (0.3.1, plan-phase)
+# SPEC-SHELL-001 조사 기록 (0.3.2, plan-phase; R2 표는 run 중 소유자 결정으로 확장)
 
 plan-audit 1차(`.moai/reports/plan-audit/SPEC-SHELL-001-review-1.md`)가 요구한 두 가지 근거를 담는다: (1) go_router 18.1.4에서 탭(갈래) 사이 이동이 실제로 어떻게 동작하는가, (2) 이 SPEC이 바꾸는 기존 테스트 전체 목록. 2026-11-26, HEAD c2e732d 기준.
 
@@ -63,6 +63,12 @@ plan-audit 1차(`.moai/reports/plan-audit/SPEC-SHELL-001-review-1.md`)가 요구
 | 다른 갈래 숨김 화면 | 뒤에 쌓인 갈래의 글자가 `find`에 걸리는가 | `IndexedStack`의 숨은 갈래는 `find`의 기본 `skipOffstage: true`로 빠짐 |
 | 쌓인 화면 아래에도 탭 바가 생김 | 탭 바가 화면 높이를 줄여 넘침·대비·누르는 영역 검사가 바뀌는가 | **그대로 통과해야 하는 기존 검사**(바뀌는 블록은 아님, 위험으로 관리): `accessibility_test.dart:132-139`의 화면별 지침 검사 목록, `:402-480`의 큰 글자 2.0 작은 화면 검사(고정 영역 높이 ≤ 320 포함). 깨지면 AC-021대로 plan으로 되돌림 |
 | 단계 설명 글자 | 상세의 다른 글자와 겹치는가 | "대기 중"(`call_detail_screen.dart:557`, 승인 기록)과 "취소"(끊기 버튼 `:282`·`:290`)와 겹치지 않게 단계 문구를 정함(design.md D2.3) |
+| 오늘 세로 순서(REQ-015) — run M4에서 발견 | 기본 800×600 화면에서 오늘의 글자·행을 찾는가 | `approval_flow_test.dart:36`("귀찮은 전화, 대신 걸어드릴게요"), `:44,47`("라 파스타" 행 누름) — **바뀜**: `pumpApp`을 800×2400·배율 1로 띄움(`tester.view.physicalSize`, `devicePixelRatio`, `addTearDown(tester.view.reset)`). 소유자 결정 2026-11-27 |
+| 오늘에서 끝난 작업 제외(REQ-015 / OD-1) — run M4에서 발견 | 끝난 작업의 상세를 오늘 행으로 여는가 | `approval_card_test.dart:45` `openCall`(`:176`이 끝난 작업으로 부름) — **바뀜**: 행 누름 대신 `routerProvider`로 `push('/calls/<id>')`. 소유자 결정 2026-11-27 |
+| 오늘 세로 순서(REQ-015) — run M4에서 발견 | 360×640·2배에서 "직접 입력하기"가 화면 안에 있는가 | `font_overflow_test.dart:73-74` — **바뀜**: `scrollUntilVisible('직접 입력하기')` 한 줄. 소유자 결정 2026-11-27 |
+| 상세 맨 위 단계 타임라인(REQ-010) — run M4에서 발견 | 360×640·2배 결과 상세에서 결과 카드가 화면 안에 있는가 | `accessibility_test.dart:480` — **바뀜**: `ensureVisible` 앞에 `scrollUntilVisible('다시 걸기')` 한 줄. 소유자 결정 2026-11-27 |
+
+위 마지막 네 행은 plan 단계 표에 없던 깨짐이다. 아래 문단의 규칙대로 run을 멈추고 소유자 결정(2026-11-27, 선택 A)으로 이 표와 AC-021 표에 함께 더했다. 같은 때 깨진 `accessibility_test.dart:223`(대화 자동 따라가기)은 테스트를 고치지 않고 앱의 단계 줄을 한 줄로 줄여 해결했다. 근거는 `progress.md` §E.2 "AC-021 table extended by owner decision 2026-11-27 (option A)".
 
 run 시작 때 같은 명령을 다시 실행해 이 표와 대조한다. 표 밖에서 깨지는 단언이 나오면 조용히 고치지 않고 **다시 plan 단계로 돌아가** 이 표와 AC-021을 고친 뒤 진행한다(plan-audit D1의 "run 중 빠져나갈 구멍" 지적 반영).
 

@@ -6,6 +6,8 @@ import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../shell/navigation.dart';
+import '../../../shell/routes.dart';
 import '../application/calls_controller.dart';
 import 'trust_notice.dart';
 
@@ -102,7 +104,8 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
             ),
           );
       HapticFeedback.lightImpact();
-      if (mounted) context.pushReplacement('/calls/${created.id}');
+      // SPEC-SHELL-001 REQ-005: the new task opens on the tasks tab; back returns to the tasks list.
+      if (mounted) openTask(GoRouter.of(context), created.id);
     } on ApiException catch (error) {
       if (!mounted) return;
       final numberProblem = error.code == 'invalid_phone' || error.code == 'blocked_number';
@@ -264,7 +267,7 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                   ),
                   _PlanRow(
                     label: '내 이름',
-                    onTap: () => context.push('/settings'),
+                    onTap: () => context.pushNamed(RouteNames.settings),
                     child: Text(settings.hasProfile ? settings.requesterName : '설정에서 입력해 주세요'),
                   ),
                 ],

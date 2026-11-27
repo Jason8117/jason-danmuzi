@@ -152,6 +152,9 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
           controller: _scroll,
           padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.xs, AppSpace.lg, AppSpace.xxl),
           children: [
+            // SPEC-SHELL-001 REQ-010: the six steps on top; everything below is unchanged.
+            KolbiStepTimeline(key: const Key('task-steps'), steps: taskSteps(task)),
+            const SizedBox(height: AppSpace.md),
             _CallHeader(task: task),
             const SizedBox(height: AppSpace.lg),
             ..._body(task),

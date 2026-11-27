@@ -5,7 +5,7 @@ import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/config/app_settings.dart';
-import '../calls/presentation/trust_notice.dart';
+import '../../core/widgets/trust_notice.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});

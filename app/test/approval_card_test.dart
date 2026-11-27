@@ -1,6 +1,7 @@
 import 'package:callmate/app.dart';
 import 'package:callmate/core/config/app_settings.dart';
 import 'package:callmate/core/network/api_client.dart';
+import 'package:callmate/core/router/app_router.dart';
 import 'package:callmate/features/calls/data/calls_repository.dart';
 import 'package:callmate/features/calls/domain/call_models.dart';
 import 'package:callmate/features/calls/presentation/approval_listener.dart';
@@ -42,7 +43,7 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.text('라 파스타').first);
+    ProviderScope.containerOf(tester.element(find.byType(CallMateApp))).read(routerProvider).push('/calls/${task.id}');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     return repo;

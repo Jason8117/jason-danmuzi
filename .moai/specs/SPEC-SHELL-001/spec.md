@@ -1,10 +1,10 @@
 ---
 id: SPEC-SHELL-001
 title: "5칸 셸과 작업 종류 등록부 — 오늘·업무·기록·내 정보, 가운데 비서 버튼, 업무 실행 단계"
-version: "0.3.1"
-status: draft
+version: "0.3.2"
+status: completed
 created: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-27
 author: jason
 priority: High
 phase: "v0.4.0 target"
@@ -24,6 +24,7 @@ related_specs: [SPEC-UX-001, SPEC-INTAKE-001, SPEC-FOLLOWUP-001, SPEC-ASSIST-001
 |------|------|------|------|
 | 0.1.0 | 2026-11-26 | jason (manager-spec) | 최초 작성 (draft). 3탭 셸 |
 | 0.2.0 | 2026-11-26 | jason | 디자인 검토 반영. 5칸 셸, 업무·기록, 토큰·글꼴·칩, 단계, 오늘 |
+| 0.3.2 | 2026-11-27 | jason (manager-spec) | sync 단계 주석. 소유자 결정 2026-11-27(선택 A)로 acceptance.md AC-021 표와 research.md R2 표에 run M4에서 발견한 기존 테스트 수정 네 건을 더함(`approval_flow_test` 화면 크기, `approval_card_test` `openCall`, `font_overflow_test` 스크롤, `accessibility_test:480` 스크롤; 원인 REQ-015 순서·OD-1·REQ-010). 요구사항·인수 기준 수(21 / 21)는 그대로 |
 | 0.3.1 | 2026-11-26 | jason | plan-audit 2차(FAIL 0.80, `.moai/reports/plan-audit/SPEC-SHELL-001-review-2.md`) 반영. `openTask`는 쌓인 화면을 모두 닫은 뒤 업무 탭으로(N1, research R1 보강 실험 X1~X6·Y1~Y3), 탭 누름은 `goBranch`, 이동 함수 네 개로 정리(N3), 승인·진행 중 묶음이 겹치지 않게(N4), 단계 표 빈칸·만료 문구(N5), 데이터 시간대(N6), AC-021 접근성 행(N2), 문서 정리(N7~N11) |
 | 0.3.0 | 2026-11-26 | jason | plan-audit 1차(FAIL 0.70, `.moai/reports/plan-audit/SPEC-SHELL-001-review-1.md`) 반영. 소유자 결정으로 토큰·글꼴·상태 칩을 SPEC-DESIGN-001로 떼고 Tier L로 올림(design.md·research.md 추가). go_router 탭 사이 이동을 실험으로 확인(research R1), 단계 기대 표·묶음·결과 칩·오늘 규칙을 design.md로(D2~D5), 기존 테스트 영향 전체 목록(research R2), 묶인 요구사항을 나눔(16 → 21) |
 
