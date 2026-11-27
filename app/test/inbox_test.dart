@@ -1,4 +1,5 @@
 // SPEC-SHELL-001 AC-007, AC-008, AC-010, AC-011, AC-012 (tasks tab and task detail). Found by Key where labels repeat.
+import 'package:callmate/shell/navigation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:material_ui/material_ui.dart';
@@ -170,5 +171,73 @@ void main() {
     await tester.tap(inTasks(find.text('다시 시도')));
     await tester.pump();
     expect(repo.listCalls, before + 1);
+  });
+
+  testWidgets('task detail shows the six steps above the existing detail', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    const names = ['요청 이해', '연락처 확인', '가능 여부 확인', '내 승인', '확정', '결과 보고'];
+    const states = {
+      'a': ['끝남', '끝남', '끝남', '지금', '대기', '대기'],
+      'b': ['끝남', '끝남', '대기', '대기', '대기', '대기'],
+      'c': ['끝남', '끝남', '지금', '대기', '대기', '대기'],
+      'd': ['끝남', '끝남', '끝남', '건너뜀', '끝남', '끝남'],
+      'e': ['끝남', '끝남', '실패', '대기', '대기', '대기'],
+    };
+    const lines = {
+      'a': (4, '응답을 기다리고 있어요'),
+      'b': (3, '다음 순서예요'),
+      'c': (3, '상대와 통화하고 있어요'),
+      'd': (4, '확인할 일이 없었어요'),
+      'e': (3, '통화가 이어지지 않았어요'),
+    };
+    for (final id in states.keys) {
+      await pumpShell(tester, tasks: mixedTasks(), size: const Size(800, 2400));
+      openTask(appRouter(tester), id);
+      await settle(tester);
+      final steps = find.byKey(const Key('task-steps'));
+      expect(steps, findsOneWidget, reason: id);
+      final tops = [
+        for (var n = 1; n <= 6; n++)
+          tester.getTopLeft(find.byKey(Key('task-step-$n'))).dy,
+      ];
+      for (var n = 1; n < 6; n++) {
+        expect(tops[n], greaterThan(tops[n - 1]), reason: '$id step ${n + 1}');
+      }
+      for (var n = 1; n <= 6; n++) {
+        final step = find.byKey(Key('task-step-$n'));
+        expect(
+          find.descendant(of: step, matching: find.text(names[n - 1])),
+          findsOneWidget,
+        );
+        expect(
+          tester.getSemantics(step).label,
+          '6단계 중 $n단계, ${names[n - 1]}, ${states[id]![n - 1]}',
+          reason: id,
+        );
+      }
+      final (n, line) = lines[id]!;
+      expect(
+        find.descendant(
+          of: find.byKey(Key('task-step-$n')),
+          matching: find.text(line),
+        ),
+        findsOneWidget,
+        reason: id,
+      );
+      // The steps sit on top; the existing header follows.
+      expect(
+        tester.getTopLeft(steps).dy,
+        lessThan(tester.getTopLeft(find.text('02-123-4567')).dy),
+        reason: id,
+      );
+      if (id == 'a') {
+        expect(find.text('예약금 1만 원 결제가 필요합니다. 진행할까요?'), findsOneWidget);
+        expect(find.text('네, 라 파스타입니다.'), findsOneWidget);
+        expect(find.text('상대방이 기다리고 있어요'), findsOneWidget);
+      }
+    }
+    handle.dispose();
   });
 }

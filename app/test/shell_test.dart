@@ -336,4 +336,47 @@ void main() {
     expect(tester.takeException(), isNull);
     handle.dispose();
   });
+
+  testWidgets('badge, tasks and today agree', (tester) async {
+    await pumpShell(tester, tasks: mixedTasks());
+    expect(
+      find.descendant(of: find.byKey(tabTasks), matching: find.text('2')),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('today-approvals-count'))).data,
+      '2',
+    );
+    // The approval listener still alerts only in-call approvals: a, never b's plan approval.
+    expect(find.textContaining('라 파스타 통화:'), findsOneWidget);
+    expect(find.textContaining('우리동네 치과 통화:'), findsNothing);
+
+    await tapAndSettle(tester, find.byKey(tabTasks));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tasks-count-approvals')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    final approvals = tester
+        .getTopLeft(find.byKey(const Key('tasks-group-approvals')))
+        .dy;
+    final ongoing = tester
+        .getTopLeft(find.byKey(const Key('tasks-group-ongoing')))
+        .dy;
+    final rows = find
+        .descendant(
+          of: find.byKey(tasksScreen),
+          matching: find.byKey(const Key('kind-call-row')),
+        )
+        .evaluate()
+        .where((e) {
+          final y = (e.renderObject! as RenderBox)
+              .localToGlobal(Offset.zero)
+              .dy;
+          return y > approvals && y < ongoing;
+        });
+    expect(rows, hasLength(2));
+  });
 }

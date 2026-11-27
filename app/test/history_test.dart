@@ -155,11 +155,12 @@ void main() {
       );
       // The result line: the summary when there is one, else the status wording.
       final line = outcome == null ? null : outcome['summary'] as String;
-      if (line != null)
+      if (line != null) {
         expect(
           find.descendant(of: rowOf(name), matching: find.text(line)),
           findsOneWidget,
         );
+      }
     }
   });
 }

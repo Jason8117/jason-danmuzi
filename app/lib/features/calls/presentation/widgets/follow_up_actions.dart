@@ -84,7 +84,12 @@ class _FollowUpActionsState extends ConsumerState<FollowUpActions> {
       runSpacing: AppSpace.sm,
       alignment: WrapAlignment.center,
       children: [
-        FilledButton.tonalIcon(
+        // A tonal look: the filled style's #635BFF would make this read like the main action (DESIGN plan-audit N6).
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
           onPressed: () => context.pushNamed(RouteNames.plan, extra: PlanDraft.fromTask(task)),
           icon: const Icon(Icons.replay),
           label: const Text('다시 걸기'),

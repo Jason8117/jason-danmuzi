@@ -477,6 +477,7 @@ void main() {
       size: phone,
       textScale: 2,
     );
+    await tester.scrollUntilVisible(find.text('다시 걸기'), 200, scrollable: find.byType(Scrollable).first);
     await tapVisible(find.text('다시 걸기'));
     expect(find.byType(PlanCardScreen), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -613,9 +614,8 @@ void main() {
     await pumpAt(tester, tasks: homeTasks(), size: const Size(800, 2400));
     expectOrder([
       find.byKey(const Key('home-intake-field')),
-      find.text('최근 통화한 곳'),
       find.text('진행 중'),
-      find.text('지난 통화'),
+      find.text('최근 통화한 곳'),
     ]);
 
     await pumpAt(tester, location: '/plan', extra: draft(phoneNumber: null), size: const Size(800, 2400));

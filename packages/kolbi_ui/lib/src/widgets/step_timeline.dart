@@ -79,9 +79,11 @@ class _StepRow extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: color),
             const SizedBox(width: AppSpace.md),
+            // Name and line share one row, so the six steps stay short above the call details.
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Wrap(
+                spacing: AppSpace.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     step.id.label,
