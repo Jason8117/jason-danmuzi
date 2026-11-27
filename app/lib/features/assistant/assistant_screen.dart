@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kolbi_ui/kolbi_ui.dart';
@@ -67,13 +68,30 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
   }
 
   AssistantPhase? _phase;
+  String _announced = const AssistantState(AssistantPhase.idle).statusLabel;
 
   void _onState() {
     final next = _controller.value;
+    _announce(next);
     final entering = next.isText && _phase != AssistantPhase.text;
     _phase = next.phase;
     if (entering && next.words.isNotEmpty) _fill(next.words);
     setState(() {});
+  }
+
+  /// REQ-002 / REQ-014: one polite announcement per change of the status chip, never for partial words; the
+  /// final sentence is read with the change to processing.
+  void _announce(AssistantState state) {
+    if (state.isText || state.statusLabel == _announced) return;
+    _announced = state.statusLabel;
+    final message = state.phase == AssistantPhase.processing
+        ? '${state.statusLabel}. ${state.words}'
+        : state.statusLabel;
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      message,
+      TextDirection.ltr,
+    );
   }
 
   /// Replaces the input and puts the cursor at the end, so the user can keep typing.
@@ -118,7 +136,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
   Widget build(BuildContext context) {
     final state = _controller.value;
     return Theme(
-      data: AppTheme.dark(),
+      data: KolbiTheme.immersive(),
       child: Builder(
         builder: (context) => Scaffold(
           key: const Key('assistant-screen'),
@@ -139,24 +157,15 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
     );
   }
 
-  Widget _orb(double size) => ExcludeSemantics(
-    child: SizedBox.square(
-      key: const Key('assistant-orb'),
-      dimension: size,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              Colors.white,
-              Color(0xFFA6ACFF),
-              Color(0xFF635BFF),
-              Color(0xFF2E2A78),
-            ],
-          ),
-        ),
-      ),
-    ),
+  /// The decorative orb (REQ-002); the screen states the same thing in the chip.
+  Widget _orb(AssistantState state, double size) => KolbiOrb(
+    key: const Key('assistant-orb'),
+    size: size,
+    state: switch (state.phase) {
+      AssistantPhase.listening => KolbiOrbState.listening,
+      AssistantPhase.processing => KolbiOrbState.processing,
+      _ => KolbiOrbState.idle,
+    },
   );
 
   Widget _textMode(BuildContext context, AssistantState state) {
@@ -171,7 +180,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
           AppSpace.xxl,
         ),
         children: [
-          Center(child: _orb(56)),
+          Center(child: _orb(state, 56)),
           if (state.notice case final notice?) ...[
             const SizedBox(height: AppSpace.md),
             Text(notice, textAlign: TextAlign.center),
@@ -216,10 +225,19 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
                 ),
                 const SizedBox(height: AppSpace.lg),
                 Center(
-                  child: GestureDetector(
-                    onTap: _controller.tapOrb,
-                    child: _orb(160),
-                  ),
+                  // While waiting, tapping the orb listens again; the tap target carries the label, the
+                  // orb itself stays out of the semantics tree.
+                  child: state.phase == AssistantPhase.idle
+                      ? Semantics(
+                          button: true,
+                          label: '말하기 시작',
+                          child: GestureDetector(
+                            excludeFromSemantics: true,
+                            onTap: _controller.tapOrb,
+                            child: _orb(state, 160),
+                          ),
+                        )
+                      : _orb(state, 160),
                 ),
                 const SizedBox(height: AppSpace.lg),
                 Text(

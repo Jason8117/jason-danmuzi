@@ -8,6 +8,7 @@ export 'src/input/code_point_formatter.dart'
 export 'src/theme/app_theme.dart'
     show AppTheme, CardTone, ToneColors, StatusColors;
 export 'src/theme/fonts.dart' show registerKolbiFontLicenses;
+export 'src/theme/immersive_theme.dart' show KolbiTheme;
 export 'src/theme/tokens.dart'
     show
         AppSpace,
@@ -29,6 +30,7 @@ export 'src/widgets/common.dart'
         runWithFeedback,
         describeError;
 export 'src/widgets/briefing_card.dart' show KolbiBriefingCard;
+export 'src/widgets/orb.dart' show KolbiOrb, KolbiOrbState;
 export 'src/widgets/outcome_card.dart' show outcomeTone, OutcomeCard;
 export 'src/widgets/status_chip.dart' show StatusChip, StatusCategory;
 export 'src/widgets/step_timeline.dart' show KolbiStepTimeline;

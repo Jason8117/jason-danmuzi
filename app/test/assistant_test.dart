@@ -1,5 +1,6 @@
 // SPEC-ASSIST-001 AC-001 .. AC-010, AC-014 (assistant). The recognizer is always the fake, except where a
 // test checks that the real one degrades without plugins.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:callmate/app.dart';
@@ -14,6 +15,7 @@ import 'package:callmate/features/calls/domain/intake_models.dart';
 import 'package:callmate/features/calls/presentation/call_templates.dart';
 import 'package:callmate/features/calls/presentation/plan_card_screen.dart';
 import 'package:callmate/shell/navigation.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -659,4 +661,153 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  // AC-002
+  testWidgets('orb state is shown in words and announced', (tester) async {
+    for (final reduceMotion in [false, true]) {
+      const sentence = '오늘 저녁 7시 예약해 줘';
+      final speech = FakeSpeechRecognizer(
+        sessions: [
+          [const SpeechPartial('오늘'), const SpeechFinal(sentence)],
+        ],
+      );
+      final hold = Completer<void>();
+      final repo = await pumpAssistantApp(
+        tester,
+        speech: speech,
+        setup: (r) => r.intakeHold = hold,
+      );
+      if (reduceMotion) {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(disableAnimations: true);
+      }
+      tester.takeAnnouncements();
+      await openFromButton(tester);
+      expect(chipText(tester), '듣고 있어요', reason: 'reduce=$reduceMotion');
+      if (reduceMotion) {
+        expect(
+          find.descendant(
+            of: find.byKey(orb),
+            matching: find.byType(AnimatedBuilder),
+          ),
+          findsNothing,
+        );
+      }
+      await tester.pump(
+        const Duration(milliseconds: 100),
+      ); // partial: no announcement
+      await tester.pump(const Duration(milliseconds: 100)); // final
+      await tester.pump();
+      expect(chipText(tester), '처리하고 있어요', reason: 'reduce=$reduceMotion');
+      expect(repo.intakeCalls, [sentence]);
+      final said = tester.takeAnnouncements();
+      expect(said.map((a) => a.message), ['듣고 있어요', '처리하고 있어요. $sentence']);
+      expect(
+        said.map((a) => a.assertiveness),
+        everyElement(Assertiveness.polite),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(orb),
+          matching: find.byType(ExcludeSemantics),
+          matchRoot: true,
+        ),
+        findsWidgets,
+      );
+      if (reduceMotion) {
+        expect(
+          find.descendant(
+            of: find.byKey(orb),
+            matching: find.byType(AnimatedBuilder),
+          ),
+          findsNothing,
+        );
+      }
+      hold.complete();
+      await settle(tester);
+      expect(find.byType(PlanCardScreen), findsOneWidget);
+    }
+  });
+
+  // AC-014 (assistant)
+  testWidgets('immersive screens meet the accessibility guidelines', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final cases = <String, FakeSpeechRecognizer Function()>{
+      'idle': () => FakeSpeechRecognizer(
+        sessions: [
+          [const SpeechNoSpeech()],
+        ],
+      ),
+      'listening': () => FakeSpeechRecognizer(
+        sessions: [
+          [const SpeechPartial('내일 치과')],
+        ],
+      ),
+      'text': () => FakeSpeechRecognizer(status: MicPermission.denied),
+    };
+    for (final MapEntry(key: name, value: make) in cases.entries) {
+      for (final small in [false, true]) {
+        await pumpAssistantApp(
+          tester,
+          speech: make(),
+          tasks: withRecentPlace(),
+          size: small ? const Size(360, 640) : const Size(800, 2400),
+          textScale: small ? 2 : 1,
+        );
+        await openFromButton(tester);
+        await settle(tester);
+        expect(tester.takeException(), isNull, reason: '$name small=$small');
+        if (small) continue;
+        for (final guideline in [
+          androidTapTargetGuideline,
+          iOSTapTargetGuideline,
+          labeledTapTargetGuideline,
+          textContrastGuideline,
+        ]) {
+          await expectLater(
+            tester,
+            meetsGuideline(guideline),
+            reason: '$name ${guideline.description}',
+          );
+        }
+        if (name != 'text') {
+          for (final label in ['글로 입력하기', '말하기 끝내고 보내기', '그만하기']) {
+            expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
+          }
+        }
+      }
+    }
+
+    // Partial words never announce; the final sentence does, once, as it is sent.
+    final speech = FakeSpeechRecognizer(
+      sessions: [
+        [
+          const SpeechPartial('내일'),
+          const SpeechPartial('내일 치과'),
+          const SpeechPartial('내일 치과 예약'),
+          const SpeechFinal('내일 치과 예약 바꿔 줘'),
+        ],
+      ],
+    );
+    final hold = Completer<void>();
+    await pumpAssistantApp(
+      tester,
+      speech: speech,
+      setup: (r) => r.intakeHold = hold,
+    );
+    tester.takeAnnouncements();
+    await openFromButton(tester);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeAnnouncements().map((a) => a.message), ['듣고 있어요']);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+    expect(tester.takeAnnouncements().map((a) => a.message), [
+      '처리하고 있어요. 내일 치과 예약 바꿔 줘',
+    ]);
+    hold.complete();
+    await settle(tester);
+    handle.dispose();
+  });
 }
