@@ -2,6 +2,7 @@
 import 'dart:ui' show Tristate;
 
 import 'package:callmate/app.dart';
+import 'package:callmate/core/network/live_channel.dart';
 import 'package:callmate/core/clock.dart';
 import 'package:callmate/core/config/app_settings.dart';
 import 'package:callmate/core/router/app_router.dart';
@@ -130,12 +131,18 @@ class CountingCallsRepository extends FakeCallsRepository {
   CountingCallsRepository(super.tasks);
 
   int listCalls = 0;
+  int _opened = 0;
 
   @override
   Future<List<CallTask>> list() {
     listCalls++;
     return super.list();
   }
+
+  /// [live] first; a reload (`[다시 시도]`) closes the old channel, so later opens get a fresh one.
+  @override
+  LiveConnection openLiveChannel() =>
+      _opened++ == 0 ? live : FakeLiveConnection();
 }
 
 /// Starts the whole app with [tasks], the fixed clock and a stored profile.
@@ -168,6 +175,8 @@ Future<CountingCallsRepository> pumpShell(
   final fixed = now ?? shellNow;
   await tester.pumpWidget(
     ProviderScope(
+      // No automatic retry: a failing list stays failed, so error states and reload counts are exact.
+      retry: (retryCount, error) => null,
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
         callsRepositoryProvider.overrideWithValue(repo),

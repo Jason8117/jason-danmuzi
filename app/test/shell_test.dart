@@ -119,6 +119,39 @@ void main() {
       await tapAndSettle(tester, find.byKey(tabTasks));
       expect(detailOf('c'), findsNothing);
       expect(find.byKey(tasksScreen), findsOneWidget);
+
+      // (2) history with 30 finished tasks, scrolled down: re-tapping history scrolls to the top.
+      await pumpShell(
+        tester,
+        size: const Size(800, 1200),
+        tasks: [
+          for (var i = 0; i < 30; i++)
+            shellTask(
+              'f$i',
+              '끝난 곳 $i',
+              status: 'completed',
+              outcome: successOutcome(),
+              updatedAt: shellNow
+                  .subtract(Duration(hours: i))
+                  .toIso8601String(),
+            ),
+        ],
+      );
+      await tapAndSettle(tester, find.byKey(tabHistory));
+      final list = find
+          .descendant(
+            of: find.byKey(historyScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.drag(list, const Offset(0, -1500));
+      await settle(tester);
+      expect(
+        tester.state<ScrollableState>(list).position.pixels,
+        greaterThan(0),
+      );
+      await tapAndSettle(tester, find.byKey(tabHistory));
+      expect(tester.state<ScrollableState>(list).position.pixels, 0);
     },
   );
 
@@ -204,6 +237,30 @@ void main() {
     await pumpShell(tester, tasks: mixedTasks());
     await tapAndSettle(tester, find.text('라 파스타'));
     await expectOnTask('a', '(1)');
+
+    // (2) the tasks tab's row
+    await pumpShell(tester, tasks: mixedTasks());
+    await tapAndSettle(tester, find.byKey(tabTasks));
+    await tapAndSettle(
+      tester,
+      find.descendant(
+        of: find.byKey(tasksScreen),
+        matching: find.text('헤어살롱 봄'),
+      ),
+    );
+    await expectOnTask('c', '(2)');
+
+    // (3) the history tab's row
+    await pumpShell(tester, tasks: mixedTasks());
+    await tapAndSettle(tester, find.byKey(tabHistory));
+    await tapAndSettle(
+      tester,
+      find.descendant(
+        of: find.byKey(historyScreen),
+        matching: find.text('관리사무소'),
+      ),
+    );
+    await expectOnTask('d', '(3)');
 
     // (4) [이대로 시작] on a plan card opened from today; tapping today then shows today, not the card.
     // Without a's approval, so its snack bar never covers [이대로 시작].
