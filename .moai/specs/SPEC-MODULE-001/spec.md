@@ -2,9 +2,9 @@
 id: SPEC-MODULE-001
 title: "워크스페이스와 패키지 분리 — kolbi_core(헤드리스)·kolbi_ui(공용 UI) 추출, 동작 불변"
 version: "0.2.2"
-status: draft
+status: implemented
 created: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-27
 author: jason
 priority: High
 phase: "v0.4.0 target"

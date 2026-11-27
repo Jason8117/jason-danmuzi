@@ -5,6 +5,7 @@
 - 근거: 현재 코드(인용한 `path:line`은 2026-11-26 작업 트리 기준), `docs/planning/03_SERVICE_FEATURE_PLAN.md`(이하 "03"), `docs/planning/04_DESIGN_PLAN.md`(이하 "04"), `docs/04_SDK_ADDON_PLATFORM_ARCHITECTURE.md`(이하 "SDK 제안"), `.moai/project/{product,structure,tech}.md`.
 - 표기: **가정**은 근거 없이 둔 설계 전제, **검증 필요**는 외부 계약(허브, A2A 세부 필드, 외부 API)과 맞춰 보아야 하는 항목이다. 코드 조각은 모양을 보이기 위한 설계용 의사 코드이며 최종 이름은 각 SPEC의 run 단계에서 정한다.
 - 개정 이력
+  - 2026-11-27: SPEC-MODULE-001 sync. §1.1을 패키지 분리 뒤 상태로, §2.3 `kolbi_core` 외부 의존에 `characters`, §2.4 R-1·R-2 금지 목록을 실제 규칙 테스트에 맞춤(`package:riverpod/`·`package:shared_preferences/`, `package:share_plus/`·`package:kolbi_core/src/`), R-3 허용 목록 경과.
   - 2026-11-26: 디자인 검토 반영(`docs/planning/06_DESIGN_DECISIONS.md`, 이하 "06"). 셸 5갈래와 `assistant`·`history` 모듈(§2.5), `kolbi_ui`의 Agent 컴포넌트와 Midnight Indigo 토큰·Pretendard(§2.3), 업무·기록 묶음 규칙(§3.5), 업무 실행 단계 계산(§3.6), Theme Override(§7.2), 결정 AD-8~AD-10(§10).
 
 ---
@@ -13,20 +14,23 @@
 
 ### 1.1 앱(`app/`)
 
-- 패키지 하나(`name: callmate`, `app/pubspec.yaml:1`), Flutter 3.50.1, Riverpod 3(`flutter_riverpod: ^3.5.0`), go_router, `package:material_ui/material_ui.dart`.
-- 소스 29개 파일. `core/`(설정·네트워크·라우터·테마·유틸·공용 위젯)와 `features/calls/`(domain·data·application·presentation), `features/settings/`.
-- 테스트 11개 파일, 테스트 선언 80개. 2026-11-26 `flutter --suppress-analytics test` 실행 결과: `+80: All tests passed!`.
-- 확장을 막는 결합(코드로 확인):
+SPEC-MODULE-001(2026-11-27, 구현 커밋 `09ac0aa`) 뒤의 모양이다. 분리 전 모양(2026-11-26 작업 트리)은 이 절의 개정 전 판과 `.moai/specs/SPEC-MODULE-001/spec.md`에 있다.
 
-| 위치 | 결합 | 근거 |
+- 저장소 루트의 Dart pub 워크스페이스(`pubspec.yaml`, `name: kolbi_workspace`) 하나에 `app`, `packages/kolbi_core`, `packages/kolbi_ui`가 있고, 세 패키지 모두 `resolution: workspace`다. 잠금 파일은 루트 `pubspec.lock` 하나다(`app/pubspec.lock` 없음). 루트 `test/workspace_test.dart`가 이 구성을 검사한다.
+- 앱은 여전히 패키지 하나(`name: callmate`, `app/pubspec.yaml:1`), Flutter 3.50.1, Riverpod 3(`flutter_riverpod: ^3.5.0`), go_router, `package:material_ui/material_ui.dart`. 의존에 `kolbi_core`·`kolbi_ui`가 더해졌다.
+- 소스: `app/lib` 30개 파일(그중 14개는 옛 경로를 지키는 다시 내보내기 파일), `packages/*/lib` 18개 파일(배럴 2 + `src/` 16). 앱 소스는 두 배럴(`package:kolbi_core/kolbi_core.dart`, `package:kolbi_ui/kolbi_ui.dart`)만 가져온다.
+- 테스트: 앱 80개(수정 없음) + `app/test/architecture_test.dart` 4개 = 84개, `kolbi_core` 3개, `kolbi_ui` 4개, 루트 2개. 2026-11-27 `6cdf8af`에서 실행: 앱 `00:07 +84: All tests passed!`, `kolbi_core` `00:00 +3`, `kolbi_ui` `00:00 +4`, 루트 `00:00 +2`.
+- 분리 전에 확인한 결합과 지금 상태:
+
+| 위치 | 분리 전 결합 | 지금 |
 |---|---|---|
-| 도메인 모델 | `call_models.dart`·`intake_models.dart`·`counterparties.dart`가 `@immutable` 하나 때문에 `package:flutter/foundation.dart`를 가져온다 | `app/lib/features/calls/domain/call_models.dart:1`, `:73` |
-| 승인 코멘트 | 순수 함수(`codePointLength`, `hasSensitiveDigits`)와 입력 포매터(`TextInputFormatter`)가 한 파일에 있다 | `app/lib/features/calls/domain/approval_comment.dart:17`, `:34`, `:68` |
-| 저장소 | 서버 접근 클래스(`CallsRepository`)와 Riverpod 공급자(`apiClientProvider`)가 한 파일에 있다 | `app/lib/features/calls/data/calls_repository.dart:29`, `:91` |
-| 라우터 | `core/router/app_router.dart`가 모든 화면을 직접 가져온다(셸 역할을 `core`가 하고 있음) | `app/lib/core/router/app_router.dart:4-11` |
-| 기능 간 | 설정 화면이 통화 기능의 화면 조각(`trust_notice.dart`)을 가져온다 | `app/lib/features/settings/settings_screen.dart:10` |
-| 승인 카드 | 위젯이 앱 상태(`calls_controller.dart`)를 직접 읽는다 | `app/lib/features/calls/presentation/widgets/approval_card.dart:10` |
-| 공용 위젯 | `describeError`가 네트워크 예외 타입을 안다 | `app/lib/core/widgets/common.dart:3`, `:269` |
+| 도메인 모델 | `call_models.dart`·`intake_models.dart`·`counterparties.dart`가 `@immutable` 하나 때문에 `package:flutter/foundation.dart`를 가져왔다 | `kolbi_core`(`packages/kolbi_core/lib/src/models/`)로 옮기며 `package:meta/meta.dart`로 바꿈. `kolbi_core`의 Flutter import 0 |
+| 승인 코멘트 | 순수 함수(`codePointLength`, `hasSensitiveDigits`)와 입력 포매터(`TextInputFormatter`)가 한 파일에 있었다 | 순수 함수는 `kolbi_core` `src/approval_comment.dart`(`package:characters` 사용), 포매터는 `kolbi_ui` `src/input/code_point_formatter.dart`. 옛 경로는 두 패키지를 함께 다시 내보냄 |
+| 저장소 | 서버 접근 클래스(`CallsRepository`)와 Riverpod 공급자(`apiClientProvider`)가 한 파일에 있었다 | 클래스·이벤트는 `kolbi_core` `src/data/calls_repository.dart`, 공급자 3개는 앱 `app/lib/features/calls/data/calls_repository.dart:8`, `:15`, `:17`에 남음 |
+| 라우터 | `core/router/app_router.dart`가 모든 화면을 직접 가져온다(셸 역할을 `core`가 하고 있음) | 그대로(`app/lib/core/router/app_router.dart:5-10`). SPEC-SHELL-001에서 셸로 옮긴다 |
+| 기능 간 | 위반 두 건: 설정 화면이 통화 기능의 모델(`call_models.dart`)과 화면 조각(`trust_notice.dart`)을 가져왔다 | 모델은 `kolbi_core` 배럴 import로 풀림. `trust_notice.dart` 한 건만 남아 `app/test/architecture_test.dart` 허용 목록에 있다(`settings_screen.dart:8`). SPEC-SHELL-001에서 비운다 |
+| 승인 카드 | 위젯이 앱 상태(`calls_controller.dart`)를 직접 읽는다(분리 전 `approval_card.dart:11`) | 그래서 앱에 남음(`app/lib/features/calls/presentation/widgets/approval_card.dart:10`). 콜백 모양으로 바꾸는 일은 SPEC-SDK-001 |
+| 공용 위젯 | `describeError`가 네트워크 예외 타입을 안다 | `kolbi_ui` `src/widgets/common.dart:3`(`kolbi_core` 배럴 import), `:269`. `kolbi_ui → kolbi_core`는 허용된 방향이다 |
 
 ### 1.2 서버(`server/`)
 
@@ -87,7 +91,7 @@ workspace:
 
 | 패키지 | 담는 것 | 담지 않는 것 | 외부 의존(허용) |
 |---|---|---|---|
-| `kolbi_core` | 작업·계획·승인·결과·장소·반복 모델과 JSON 해석, `TaskStatus`와 서버 문자열 대응, `TaskKind` 서술자와 등록부, HTTP 클라이언트(`ApiClient`), 실시간 채널(`LiveChannel`), 서버 접근(`CallsRepository` → 이후 `KolbiClient`), 이벤트 타입, 버전 병합 규칙, 순수 계산(최근 장소, 공유 문구, 일정 파일, 승인 코멘트 검사, 전화번호·시간 표시 형식), `AuthTokenProvider` 인터페이스 | 위젯, `BuildContext`, Riverpod, `shared_preferences`, 라우팅 | `http`, `web_socket_channel`, `intl`, `meta` |
+| `kolbi_core` | 작업·계획·승인·결과·장소·반복 모델과 JSON 해석, `TaskStatus`와 서버 문자열 대응, `TaskKind` 서술자와 등록부, HTTP 클라이언트(`ApiClient`), 실시간 채널(`LiveChannel`), 서버 접근(`CallsRepository` → 이후 `KolbiClient`), 이벤트 타입, 버전 병합 규칙, 순수 계산(최근 장소, 공유 문구, 일정 파일, 승인 코멘트 검사, 전화번호·시간 표시 형식), `AuthTokenProvider` 인터페이스 | 위젯, `BuildContext`, Riverpod, `shared_preferences`, 라우팅 | `characters`, `http`, `intl`, `meta`, `web_socket_channel`(`packages/kolbi_core/pubspec.yaml`, SPEC-MODULE-001) |
 | `kolbi_ui` | 디자인 토큰(`tokens.dart`, SPEC-UX-001), 테마(`AppTheme`, `CardTone`), 공용 위젯(`AppCard`, `SectionCard`, `MessageView`, `PulsingDot`, `ResponsiveBody`, `BulletList`), 상태 칩, 결과 카드, 대화 기록, 입력 포매터, `TaskKind` 화면 기여 인터페이스, 이후 임베드용 흐름(`KolbiTaskFlow`, `KolbiApprovalCard`, `KolbiPlanCard`, `KolbiTaskProgress`, `KolbiResultCard`) | 앱 상태(Riverpod 공급자), 라우터, 앱 설정, 앱 전용 문구 묶음(통화 템플릿) | `flutter`, `material_ui`, `kolbi_core` |
 | `app` | 셸(5칸 탭·가운데 비서 버튼, 라우팅, 온보딩, 알림 연결), 기능 모듈, Riverpod 상태, 설정 저장, `TaskKind` 등록 | 다른 앱이 다시 쓸 도메인 로직 | `kolbi_core`, `kolbi_ui`, 지금의 앱 의존성 |
 
@@ -113,9 +117,9 @@ kolbi_core  ◄──  kolbi_ui  ◄──  app (셸 → 기능 모듈)
 
 | # | 규칙 | 검사 방법 |
 |---|---|---|
-| R-1 | `kolbi_core`는 `package:flutter/`, `dart:ui`, `package:flutter_riverpod/`, `package:kolbi_ui/`, `package:callmate/`를 가져오지 않는다 | `packages/kolbi_core/test/dependency_rules_test.dart`가 `lib/**` import 줄을 읽어 금지 목록과 대조 |
-| R-2 | `kolbi_ui`는 `package:callmate/`, `package:go_router/`, `package:flutter_riverpod/`, `package:shared_preferences/`를 가져오지 않는다 | `packages/kolbi_ui/test/dependency_rules_test.dart` |
-| R-3 | 앱 기능 모듈(`app/lib/features/<a>/`)은 다른 기능 모듈(`features/<b>/`)을 가져오지 않는다. 기능 간 이동은 경로 이름으로만 한다 | `app/test/architecture_test.dart`. SPEC-MODULE-001에서는 기존 위반 1건(설정 → `trust_notice.dart`)을 허용 목록에 두고, SPEC-SHELL-001에서 허용 목록을 비운다 |
+| R-1 | `kolbi_core`는 `package:flutter/`, `dart:ui`, `package:flutter_riverpod/`, `package:riverpod/`, `package:shared_preferences/`, `package:kolbi_ui/`, `package:callmate/`를 가져오지 않는다 | `packages/kolbi_core/test/dependency_rules_test.dart`가 `lib/**` import 줄을 읽어 금지 목록과 대조 |
+| R-2 | `kolbi_ui`는 `package:callmate/`, `package:go_router/`, `package:flutter_riverpod/`, `package:shared_preferences/`, `package:share_plus/`, `package:kolbi_core/src/`를 가져오지 않는다 | `packages/kolbi_ui/test/dependency_rules_test.dart` |
+| R-3 | 앱 기능 모듈(`app/lib/features/<a>/`)은 다른 기능 모듈(`features/<b>/`)을 가져오지 않는다. 기능 간 이동은 경로 이름으로만 한다 | `app/test/architecture_test.dart`. SPEC-MODULE-001은 허용 목록을 기존 위반 2건(설정 → `call_models.dart`, 설정 → `trust_notice.dart`)으로 시작했고, `call_models.dart`가 `kolbi_core` 배럴로 풀려 지금은 1건(`trust_notice.dart`)이다. 목록에 없는 기능 간 import와 더는 없는 허용 항목은 모두 실패로 본다. SPEC-SHELL-001에서 허용 목록을 비운다 |
 | R-4 | 앱 `core/`는 `features/`를 가져오지 않는다. 화면을 아는 곳은 셸(`app/lib/shell/`)뿐이다 | 같은 테스트. SPEC-SHELL-001에서 라우터를 셸로 옮기며 적용 |
 | R-5 | 패키지의 공개 표면은 배럴 파일(`lib/kolbi_core.dart`, `lib/kolbi_ui.dart`)이다. 다른 패키지는 `package:kolbi_core/src/...`를 가져오지 않는다 | 같은 테스트들(앱·kolbi_ui가 `/src/`를 가져오면 실패) |
 

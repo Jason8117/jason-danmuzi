@@ -8,9 +8,15 @@
 
 ```
 .
-├── app/                  Flutter 클라이언트 (iOS, Android, web 타깃 디렉터리 존재)
+├── pubspec.yaml          Dart pub 워크스페이스 루트(name: kolbi_workspace, workspace: app, packages/kolbi_core, packages/kolbi_ui)
+├── pubspec.lock          워크스페이스 전체의 잠금 파일 하나(app/pubspec.lock은 없음)
+├── test/                 workspace_test.dart — 워크스페이스 구성 검사(루트 `dart test`, pre-commit 게이트가 실행)
+├── packages/
+│   ├── kolbi_core/       순수 Dart(Flutter 의존 없음): 모델, 형식 함수, ApiClient, LiveChannel, CallsRepository. 배럴 lib/kolbi_core.dart, 구현 lib/src/
+│   └── kolbi_ui/         Flutter: 디자인 토큰, 테마, 공용 위젯, 입력 포매터. 배럴 lib/kolbi_ui.dart, 구현 lib/src/
+├── app/                  Flutter 클라이언트 (iOS, Android, web 타깃 디렉터리 존재, resolution: workspace)
 │   ├── lib/              앱 소스
-│   ├── test/             위젯·단위 테스트
+│   ├── test/             위젯·단위 테스트(architecture_test.dart: 앱 의존 규칙)
 │   ├── android/ ios/ web/  플랫폼별 프로젝트
 │   └── pubspec.yaml
 ├── server/               Fastify + TypeScript 백엔드 (헤드리스: REST, WebSocket, 웹훅)
@@ -92,23 +98,31 @@ lib/
 ├── main.dart, app.dart
 ├── core/
 │   ├── config/app_settings.dart     서버 URL·토큰 설정(shared_preferences + 빌드 정의)
-│   ├── network/api_client.dart      REST 클라이언트
-│   ├── network/live_channel.dart    WebSocket 채널
+│   ├── network/api_client.dart      REST 클라이언트 (다시 내보내기 → kolbi_core src/network/api_client.dart)
+│   ├── network/live_channel.dart    WebSocket 채널 (다시 내보내기 → kolbi_core src/network/live_channel.dart)
 │   ├── router/app_router.dart       go_router 라우트
-│   ├── theme/app_theme.dart         밝은·어두운 테마, 카드 분위기(CardTone)·상태 색(대비 기준 포함)
-│   ├── theme/tokens.dart            디자인 토큰(간격·모서리·움직임·최소 탭 크기 48), 움직임 줄이기 처리, WCAG 대비 계산
-│   ├── widgets/common.dart          공용 위젯(AppCard, SectionCard, MessageView 빈 상태, PulsingDot 등)
-│   ├── utils/                       포매터
+│   ├── theme/app_theme.dart         밝은·어두운 테마, 카드 분위기(CardTone)·상태 색(대비 기준 포함) (다시 내보내기 → kolbi_ui src/theme/app_theme.dart)
+│   ├── theme/tokens.dart            디자인 토큰(간격·모서리·움직임·최소 탭 크기 48), 움직임 줄이기 처리, WCAG 대비 계산 (다시 내보내기 → kolbi_ui src/theme/tokens.dart)
+│   ├── widgets/common.dart          공용 위젯(AppCard, SectionCard, MessageView 빈 상태, PulsingDot 등) (다시 내보내기 → kolbi_ui src/widgets/common.dart)
+│   ├── utils/formatters.dart        포매터 (다시 내보내기 → kolbi_core src/format/formatters.dart)
 └── features/
     ├── calls/
-    │   ├── domain/call_models.dart          모델
-    │   ├── data/calls_repository.dart       서버 접근
+    │   ├── domain/                          call_models·intake_models·counterparties·follow_up·approval_comment 모두 다시 내보내기(→ kolbi_core src/; approval_comment는 kolbi_ui의 CodePointLengthLimitingFormatter도 함께)
+    │   ├── data/calls_repository.dart       Riverpod 공급자 3개(apiClientProvider 등) + kolbi_core CallsRepository·이벤트 다시 내보내기
     │   ├── application/calls_controller.dart  Riverpod 상태 관리, 버전 병합
-    │   └── presentation/                    화면(home, new_call, call_detail), approval_listener, call_templates, widgets/
+    │   └── presentation/                    화면(home, new_call, call_detail), approval_listener, call_templates, widgets/(approval_card·follow_up_actions는 앱에 남음; status_chip·outcome_card·transcript_view는 다시 내보내기 → kolbi_ui src/widgets/)
     └── settings/settings_screen.dart
 ```
 
 의존 방향은 주로 `presentation → application → data → domain`이며, `core/`는 모든 기능이 공유한다. 다만 엄격하게 지켜지지는 않아 `presentation`이 `data`를 직접 가져오는 곳도 있다(예: `home_screen.dart`의 `calls_repository.dart` import).
+
+SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_core/kolbi_core.dart`·`package:kolbi_ui/kolbi_ui.dart`를 가져온다. 옛 경로 14개는 테스트 import를 고치지 않기 위해 다시 내보내기 파일로 남아 있다(이후 SPEC에서 지움). 패키지 의존 방향은 `kolbi_core ◄── kolbi_ui ◄── app`이며, 다음 테스트가 import 줄을 글자로 읽어 검사한다.
+
+| 테스트 | 검사 |
+|---|---|
+| `packages/kolbi_core/test/dependency_rules_test.dart` | `lib/`가 `package:flutter/`, `dart:ui`, `package:flutter_riverpod/`, `package:riverpod/`, `package:shared_preferences/`, `package:kolbi_ui/`, `package:callmate/`를 가져오지 않음 |
+| `packages/kolbi_ui/test/dependency_rules_test.dart` | `lib/`가 `package:callmate/`, `package:go_router/`, `package:flutter_riverpod/`, `package:shared_preferences/`, `package:share_plus/`, `package:kolbi_core/src/`를 가져오지 않음 |
+| `app/test/architecture_test.dart` | 앱이 패키지 `src/`를 직접 가져오지 않음, 기능 간 import는 허용 목록 1건(`settings_screen.dart` → `trust_notice.dart`)뿐, 옛 경로 14개는 다시 내보내기만 함, 테스트의 `package:callmate` import가 모두 실제 파일을 가리킴 |
 
 ### 라우트 (`core/router/app_router.dart`)
 
@@ -151,16 +165,16 @@ lib/
 
 | 변경 내용 | 위치 |
 |---|---|
-| 상태 추가·전이 규칙 | `server/src/domain/types.ts`, `domain/stateMachine.ts` (+ 앱 `call_models.dart`, `status_chip.dart`) |
+| 상태 추가·전이 규칙 | `server/src/domain/types.ts`, `domain/stateMachine.ts` (+ `packages/kolbi_core/lib/src/models/call_models.dart`, `packages/kolbi_ui/lib/src/widgets/status_chip.dart`) |
 | 차단 번호·번호 형식 | `server/src/domain/phone.ts` (강제 위치는 `services/callService.ts`) |
 | 통화 계획·프롬프트 | `server/src/brain/` (시나리오 템플릿은 `domain/scenario.ts`) |
 | 새 통신사·발신 제공자 | `server/src/providers/`에 `CallProvider` 구현 추가(웹훅이 필요하면 `routes()`로 선언) 후 `container.ts`, `config.ts`에 선택 조건 추가. `http/app.ts`는 고치지 않는다 |
 | 외부 응답 검증 | `server/src/providers/kat/schemas.ts`, `providers/realtimeEvents.ts` |
 | 종료 절차·예산 | `server/src/shutdown.ts`, `index.ts` |
 | 상한·제한 시간 | `server/src/config.ts` 기본값, `CallService` 옵션 |
-| API 라우트·요청 검증 | `server/src/http/app.ts`, `http/schemas.ts` (+ 앱 `api_client.dart`, `calls_repository.dart`) |
+| API 라우트·요청 검증 | `server/src/http/app.ts`, `http/schemas.ts` (+ `packages/kolbi_core/lib/src/network/api_client.dart`, `packages/kolbi_core/lib/src/data/calls_repository.dart`) |
 | 저장 방식 | `server/src/store/taskStore.ts` |
-| 화면·UI | `app/lib/features/calls/presentation/` |
+| 화면·UI | `app/lib/features/calls/presentation/` (공용 토큰·테마·위젯은 `packages/kolbi_ui/lib/src/`) |
 | 서버 주소·토큰 설정 | `app/lib/core/config/app_settings.dart` |
 
 ## 목표 방향 (미구현, 소유자 진술 기준)
@@ -174,4 +188,4 @@ lib/
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af).

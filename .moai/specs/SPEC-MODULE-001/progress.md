@@ -163,7 +163,36 @@ external_services_contacted: none
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: see git log (docs(SPEC-MODULE-001) close sync)
+sync_status: implemented
+run_commit_sha: 09ac0aa   # M5, last implementation commit (M1 509f972 .. M5 09ac0aa)
+run_evidence_commit_sha: 6cdf8af   # run-phase evidence commit; sync measured at this HEAD
+pushed_state: "ba1ee17..6cdf8af main -> main; git rev-list --count --left-right origin/main...HEAD -> 0 0 (before this sync commit; this commit is not pushed)"
+measured_by: orchestrator on HEAD 6cdf8af, 2026-11-27
+root_workspace_test_at_sync: "dart test -> 00:00 +2: All tests passed!"
+app_tests_at_sync: "cd app && flutter --suppress-analytics test -> 00:07 +84: All tests passed!"
+kolbi_core_tests_at_sync: "cd packages/kolbi_core && dart test -> 00:00 +3: All tests passed!"
+kolbi_ui_tests_at_sync: "cd packages/kolbi_ui && flutter --suppress-analytics test -> 00:00 +4: All tests passed!"
+protected_paths_diff_at_sync: "git diff --stat 9814f24 -- server/ app/test/ .moai/config/ -> only app/test/architecture_test.dart | 126 +"
+acceptance_distinct_ac_ids: 15   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' .moai/specs/SPEC-MODULE-001/acceptance.md | sort -u | wc -l
+frontmatter_status_transitions:
+  spec.md: draft -> implemented   # updated: 2026-11-26 -> 2026-11-27; spec/plan/acceptance bodies unchanged
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped
+coverage: not-measured
+divergence:
+  planned_vs_changed_files: "git diff --name-only 9814f24..09ac0aa -> 56 files: plan.md §B.1/§B.2 (16 new src files, 2 barrels, 2 package pubspecs, 4 package tests), §B.4 (14 legacy re-exports), §B.3 app files whose imports changed (app.dart, app_router, calls_controller, calls_repository, call_detail/home/new_call/plan_card screens, trust_notice, approval_card, follow_up_actions, settings_screen), §B.5 (root pubspec.yaml, app/pubspec.lock -> pubspec.lock, app/pubspec.yaml, app/test/architecture_test.dart, .gitignore), plus test/workspace_test.dart (unplanned). §B.3 files listed but unchanged (no import of a moved path): main.dart, core/config/app_settings.dart, approval_listener.dart, call_templates.dart"
+  unplanned_files: "test/workspace_test.dart and root dev_dependency test ^1.29.0 (owner decision 2026-11-27, §E.2 Deviations 1): the pre-commit gate runs dart test at the workspace root; lock change = test 1.32.0 label transitive -> direct dev only"
+  ac008_test_ordering: "AC-008 tests (legacy paths only re-export; test imports point at a file) added in M4, not M2, because they fail until all 14 legacy files are re-exports (§E.2 Deviations 3)"
+  formatter_stays_one_milestone: "M3 kept CodePointLengthLimitingFormatter in app approval_comment.dart while re-exporting the kolbi_core names; M4 moved it to kolbi_ui (§E.2 Deviations 4)"
+  other: "root lock seeded from old app lock to avoid transitive drift (§E.2 Deviations 2); packages have no analysis_options.yaml (§E.2 Deviations 5)"
+  plan_label_note: "plan.md §G names 12_IMPLEMENTATION_PLAN.md R-3 for the allowlist note, but 12's R-3 row is about shell/token test changes; the allowlist history was written in 12 §3 (1차 구조 검사) and in 11 §2.4 R-3, where the rule lives"
+project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/product/12_IMPLEMENTATION_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
+tech_md: unchanged   # app direct dependency versions unchanged; package dependencies recorded in codemaps/dependencies.md
+sync_audit: pending
+```
 
 ## §F Phase 4 Mode Selection
 

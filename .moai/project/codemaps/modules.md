@@ -78,32 +78,41 @@
 
 ## Flutter 앱 (`app/lib/`)
 
+SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파일은 본문이 공용 패키지로 옮겨졌고, 옛 경로에는 `export` 줄만 남아 있다(테스트 import를 고치지 않기 위함). 앱 소스는 배럴 `package:kolbi_core/kolbi_core.dart`·`package:kolbi_ui/kolbi_ui.dart`를 가져오며, 공개 인터페이스는 각 배럴의 `show` 목록과 같다. 패키지 쪽 위치는 아래 「공용 패키지」 절에 있다.
+
 ### `core/`
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
 | `config/app_settings.dart` | `sharedPreferencesProvider`, `AppSettings`(`serverUrl`, `apiToken`, `requesterName`, `callbackNumber`, `defaultServerUrl`), `SettingsController`, `settingsProvider` | `main.dart`, `calls_repository.dart`, `home_screen.dart`, `new_call_screen.dart`, `settings_screen.dart` |
-| `network/api_client.dart` | `ApiException`, `ApiClient`(`get`, `post`, `delete`, `webSocketUri`) — 요청 제한 시간 20초 | `calls_repository.dart`, `settings_screen.dart`, `core/widgets/common.dart` |
-| `network/live_channel.dart` | `LiveStatus`, `LiveConnection`, `LiveChannel` — 재연결 대기는 `min(30, 2^attempt)`초 | `calls_repository.dart`, `calls_controller.dart`, `home_screen.dart` |
+| `network/api_client.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/network/api_client.dart`) | `ApiException`, `ApiClient`(`get`, `post`, `delete`, `webSocketUri`) — 요청 제한 시간 20초 | `calls_repository.dart`, `settings_screen.dart`, `core/widgets/common.dart` |
+| `network/live_channel.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/network/live_channel.dart`) | `LiveStatus`, `LiveConnection`, `LiveChannel` — 재연결 대기는 `min(30, 2^attempt)`초 | `calls_repository.dart`, `calls_controller.dart`, `home_screen.dart` |
 | `router/app_router.dart` | `routerProvider` | `app.dart`, `approval_listener.dart` |
-| `theme/app_theme.dart` | `AppTheme`, `CardTone`(neutral·attention·positive·caution·critical), `ToneColors`, 상태 색 | `app.dart`, 여러 화면·위젯 |
-| `theme/tokens.dart` | `AppSpace`(4~32), `AppRadius`(12·16·20·pill), `AppMotion`(150·250·400 ms, `pulse` 1100 ms), `kMinTapTarget`(48), `motionDuration`, `scrollToOffset`, `relativeLuminance`, `contrastRatio` | `app_theme.dart`, `common.dart`, `features/calls/presentation/**`, `settings_screen.dart` |
-| `utils/formatters.dart` | 형식 함수(세부 미확인) | `home_screen`, `new_call_screen`, `call_detail_screen` |
-| `widgets/common.dart` | `ResponsiveBody`, `AppCard`(공용 카드: 머리 줄·본문·행동 줄·`tone`), `SectionCard`, `BulletList`, `MessageView`(공용 빈 상태), `PulsingDot`, `runWithFeedback`, `describeError` | 화면과 위젯 전반 |
+| `theme/app_theme.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/theme/app_theme.dart`) | `AppTheme`, `CardTone`(neutral·attention·positive·caution·critical), `ToneColors`, 상태 색 | `app.dart`, 여러 화면·위젯 |
+| `theme/tokens.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/theme/tokens.dart`) | `AppSpace`(4~32), `AppRadius`(12·16·20·pill), `AppMotion`(150·250·400 ms, `pulse` 1100 ms), `kMinTapTarget`(48), `motionDuration`, `scrollToOffset`, `relativeLuminance`, `contrastRatio` | `app_theme.dart`, `common.dart`, `features/calls/presentation/**`, `settings_screen.dart` |
+| `utils/formatters.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/format/formatters.dart`) | `formatPhone`, `formatDuration`, `formatRelative`, `formatClock` | `home_screen`, `new_call_screen`, `call_detail_screen` |
+| `widgets/common.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/common.dart`) | `ResponsiveBody`, `AppCard`(공용 카드: 머리 줄·본문·행동 줄·`tone`), `SectionCard`, `BulletList`, `MessageView`(공용 빈 상태), `PulsingDot`, `runWithFeedback`, `describeError` | 화면과 위젯 전반 |
 
 ### `features/calls/`
 
 | 계층 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|---|
-| domain | `call_models.dart` | `CallLanguage`, `TaskStatus`, `Speaker`, `ApprovalStatus`, `OutcomeResult`, `TranscriptEntry`, `CallPlan`, `ApprovalRequest`, `CallOutcome`, `CallTask`, `NewCallRequest`, `ServerInfo` | 거의 모든 calls 파일, `settings_screen.dart`, `app_router.dart` |
-| data | `calls_repository.dart` | `CallsEvent`(`TasksSnapshot`, `TaskUpdated`, `TaskDeleted`), `CallsRepository`(`serverInfo`, `list`, `create`, `approvePlan`, `cancel`, `decide`, `delete`, `openLiveChannel`, `parseEvent`), `apiClientProvider`, `callsRepositoryProvider`, `serverInfoProvider` | `calls_controller.dart`, `home_screen.dart` |
+| domain | `call_models.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/models/call_models.dart`; 같은 방식으로 `intake_models`·`counterparties` → `src/models/`, `follow_up` → `src/follow_up.dart`, `approval_comment` → `src/approval_comment.dart` + kolbi_ui `src/input/code_point_formatter.dart`) | `CallLanguage`, `TaskStatus`, `Speaker`, `ApprovalStatus`, `OutcomeResult`, `TranscriptEntry`, `CallPlan`, `ApprovalRequest`, `CallOutcome`, `CallTask`, `NewCallRequest`, `ServerInfo` | 거의 모든 calls 파일, `settings_screen.dart`, `app_router.dart` |
+| data | `calls_repository.dart` (공급자는 앱에 남고, 클래스·이벤트는 `packages/kolbi_core/lib/src/data/calls_repository.dart`에서 다시 내보냄) | `CallsEvent`(`TasksSnapshot`, `TaskUpdated`, `TaskDeleted`), `CallsRepository`(`serverInfo`, `list`, `create`, `approvePlan`, `cancel`, `decide`, `delete`, `openLiveChannel`, `parseEvent`) — kolbi_core; `apiClientProvider`, `callsRepositoryProvider`, `serverInfoProvider` — 앱 | `calls_controller.dart`, `home_screen.dart` |
 | application | `calls_controller.dart` | `LiveStatusController`, `liveStatusProvider`, `CallsController`, `callsControllerProvider`, `sortedTasksProvider`, `taskProvider`(family), `PendingApproval`, `pendingApprovalsProvider` | 화면, `approval_listener.dart`, `approval_card.dart` |
-| presentation | `home_screen.dart`, `new_call_screen.dart`, `call_detail_screen.dart`, `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`, `outcome_card`, `status_chip`, `transcript_view`) | `app_router.dart`, `app.dart` |
+| presentation | `home_screen.dart`, `new_call_screen.dart`, `call_detail_screen.dart`, `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`·`follow_up_actions`는 앱에 남음; `outcome_card`·`status_chip`·`transcript_view`는 다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/`) | `app_router.dart`, `app.dart` |
 
 ### `features/settings/settings_screen.dart`
 
-`SettingsScreen`. 설정 저장(`settingsProvider`)과 서버 정보 조회에 `ApiClient`를 직접 쓴다. 사용처는 `app_router.dart`.
+`SettingsScreen`. 설정 저장(`settingsProvider`)과 서버 정보 조회에 `ApiClient`를 직접 쓴다(`kolbi_core` 배럴로). 사용처는 `app_router.dart`.
+
+## 공용 패키지 (`packages/`, SPEC-MODULE-001)
+
+| 패키지 | 파일(`lib/src/`) | 배럴 |
+|---|---|---|
+| `kolbi_core`(순수 Dart) | `models/call_models.dart`, `models/intake_models.dart`, `models/counterparties.dart`, `follow_up.dart`, `approval_comment.dart`(상수·`codePointLength`·`truncateToCodePoints`·`withQuickReply`·`hasSensitiveDigits`), `network/api_client.dart`, `network/live_channel.dart`, `format/formatters.dart`, `data/calls_repository.dart`(이벤트·`CallsRepository`) | `lib/kolbi_core.dart` |
+| `kolbi_ui`(Flutter) | `theme/tokens.dart`, `theme/app_theme.dart`, `widgets/common.dart`, `widgets/status_chip.dart`, `widgets/outcome_card.dart`, `widgets/transcript_view.dart`, `input/code_point_formatter.dart`(`CodePointLengthLimitingFormatter`) | `lib/kolbi_ui.dart` |
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af).

@@ -7,6 +7,7 @@
 - 개정 이력
   - 2026-11-26: 디자인 검토 반영(`docs/planning/06_DESIGN_DECISIONS.md`). SPEC-SHELL-001 범위를 5칸 셸·디자인 토큰·업무 실행·기록으로 넓히고, SPEC-ASSIST-001(AI 비서와 받아쓰기)을 3차로 넣어 이후 차수를 하나씩 미뤘다. 에픽은 SPEC 7개다.
   - 2026-11-26(plan-audit 1차 뒤): 소유자 결정으로 SHELL-001에서 토큰·글꼴·상태 칩을 SPEC-DESIGN-001로 떼어 2차로 두고, SHELL-001은 Tier L(3차), ASSIST-001은 4차로 미뤘다. 에픽은 SPEC 8개다. 아래 §1 표가 기준이며, §2의 차수 번호는 이 표에 맞춰 읽는다(DESIGN 2차, SHELL 3차, ASSIST 4차, PLACE 5차, ROUTINE 6차, HUB 7차, SDK 8차).
+  - 2026-11-27: SPEC-MODULE-001 sync. §3 1차 구조 검사의 기능 간 허용 목록 경과(2건으로 시작, 지금 1건)를 적었다.
 
 ---
 
@@ -115,7 +116,7 @@ ROUTINE-001은 PLACE-001과 서로 기대지 않는다. 다만 두 SPEC이 홈·
 
 | 차수 | 앱 | 서버 | 구조 검사 |
 |---|---|---|---|
-| 1 | `cd app && flutter --suppress-analytics test`(80개, 수정 없음), `flutter analyze` | 변경 없음 확인 | `kolbi_core` Flutter import 0, `/src/` 직접 import 0, 기능 간 import(허용 목록 1건) |
+| 1 | `cd app && flutter --suppress-analytics test`(80개, 수정 없음), `flutter analyze` | 변경 없음 확인 | `kolbi_core` Flutter import 0, `/src/` 직접 import 0, 기능 간 import(허용 목록은 2건 — 설정 → `call_models.dart`, 설정 → `trust_notice.dart` — 으로 시작해 지금 1건 `trust_notice.dart`. 11 §2.4 R-3, SPEC-MODULE-001 sync 2026-11-27) |
 | 2 | 같음 + 셸·업무·기록·오늘·업무 실행·내 정보 위젯 테스트, `taskSteps` 단위 테스트, 접근성 지침(누르는 영역·대비·글자 2.0) 확대 | 변경 없음 확인 | 기능 간 import 0(허용 목록 비움), `core/` → `features/` 0 |
 | 3 | AI 비서 위젯 테스트(가짜 인식기), 다크 대비 | 변경 없음 확인 | `kolbi_ui`·`kolbi_core`가 음성 인식 패키지를 가져오지 않음 |
 | 4 | 장소 선택·상세 위젯 테스트 | `npm --prefix server test`, `npm --prefix server run typecheck` | `places`가 `store`를 가져오지 않음 |

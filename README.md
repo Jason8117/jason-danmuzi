@@ -65,9 +65,15 @@ flutter run            # iOS 시뮬레이터 또는 Android 에뮬레이터 선�
 
 ## 테스트
 
+앱과 공용 패키지는 저장소 루트의 Dart pub 워크스페이스 하나로 묶여 있습니다. 잠금 파일은 루트 `pubspec.lock` 하나이므로, 처음에는 루트에서 의존성을 받습니다.
+
 ```bash
-cd server && npm test && npm run typecheck
-cd app && flutter analyze && flutter test
+flutter pub get                                   # 저장소 루트에서, 워크스페이스 전체
+dart test                                         # 루트: 워크스페이스 구성 검사(test/workspace_test.dart)
+cd app && flutter analyze && flutter test         # 앱
+cd packages/kolbi_core && dart test               # 헤드리스 패키지(순수 Dart)
+cd packages/kolbi_ui && flutter test              # 공용 UI 패키지
+cd server && npm test && npm run typecheck        # 서버(워크스페이스와 무관)
 ```
 
 ## 폴더 구조
@@ -78,10 +84,18 @@ server/src
   providers/    통화 공급자 (시뮬레이터, KAT Cloud + OpenAI Realtime)
   services/     CallService: 상태 머신, 통화 중 승인, 한도
   http/         REST · WebSocket API
+pubspec.yaml    워크스페이스 루트(app, packages/kolbi_core, packages/kolbi_ui)
+pubspec.lock    워크스페이스 전체의 잠금 파일
+test/           워크스페이스 구성 검사
+packages/
+  kolbi_core/   순수 Dart: 모델, 형식 함수, 서버 접근(ApiClient, CallsRepository), 실시간 채널
+  kolbi_ui/     Flutter: 디자인 토큰, 테마, 공용 위젯, 입력 포매터
 app/lib
-  core/         설정, 네트워크, 라우터, 테마, 공통 위젯
+  core/         설정, 라우터 (네트워크·테마·공통 위젯·포매터 경로는 패키지를 다시 내보냄)
   features/
     calls/      domain · data · application · presentation
     settings/
 docs/           설계 문서
 ```
+
+앱 코드는 `package:kolbi_core/kolbi_core.dart`와 `package:kolbi_ui/kolbi_ui.dart` 배럴만 가져옵니다. 패키지 사이 의존 규칙은 각 패키지의 `test/dependency_rules_test.dart`와 `app/test/architecture_test.dart`가 검사합니다.
