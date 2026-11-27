@@ -5,6 +5,7 @@
 - 근거: 현재 코드(인용한 `path:line`은 2026-11-26 작업 트리 기준), `docs/planning/03_SERVICE_FEATURE_PLAN.md`(이하 "03"), `docs/planning/04_DESIGN_PLAN.md`(이하 "04"), `docs/04_SDK_ADDON_PLATFORM_ARCHITECTURE.md`(이하 "SDK 제안"), `.moai/project/{product,structure,tech}.md`.
 - 표기: **가정**은 근거 없이 둔 설계 전제, **검증 필요**는 외부 계약(허브, A2A 세부 필드, 외부 API)과 맞춰 보아야 하는 항목이다. 코드 조각은 모양을 보이기 위한 설계용 의사 코드이며 최종 이름은 각 SPEC의 run 단계에서 정한다.
 - 개정 이력
+  - 2026-11-27: SPEC-SHELL-001 sync. §2.5에 구현된 셸 경로·이름·갈래와 탭 사이 이동 규칙(SHELL research R1)을 더하고, AD-10에 "셸 밖 경로 위에 탭 경로를 `push`하지 않는다"를 보강.
   - 2026-11-27: SPEC-MODULE-001 sync. §1.1을 패키지 분리 뒤 상태로, §2.3 `kolbi_core` 외부 의존에 `characters`, §2.4 R-1·R-2 금지 목록을 실제 규칙 테스트에 맞춤(`package:riverpod/`·`package:shared_preferences/`, `package:share_plus/`·`package:kolbi_core/src/`), R-3 허용 목록 경과.
   - 2026-11-26: 디자인 검토 반영(`docs/planning/06_DESIGN_DECISIONS.md`, 이하 "06"). 셸 5갈래와 `assistant`·`history` 모듈(§2.5), `kolbi_ui`의 Agent 컴포넌트와 Midnight Indigo 토큰·Pretendard(§2.3), 업무·기록 묶음 규칙(§3.5), 업무 실행 단계 계산(§3.6), Theme Override(§7.2), 결정 AD-8~AD-10(§10).
 
@@ -189,6 +190,29 @@ app/lib/
 | `routine` | `/routines/:id` | SCR-T07 | SPEC-ROUTINE-001 |
 
 지금 경로(`/`, `/calls/new`, `/plan`, `/calls/:id`, `/settings`)를 모두 그대로 둔다. 테스트(`accessibility_test.dart`의 `pumpAt(location: ...)`)와 이후 알림 딥링크가 이 경로를 쓴다.
+
+**SPEC-SHELL-001 구현(2026-11-27).** 위 원래 배치·경로 이름 표 가운데 실제로 만든 것은 다음과 같다. 장소·반복·온보딩 모듈과 `home`·`plan`·`task_detail`·`results` 분리는 아직 없다(오늘·계획 카드·상세는 `features/calls`에 남음, OD-5).
+
+| 경로 | 이름(`RouteNames`) | 갈래 | 화면 |
+|---|---|---|---|
+| `/` | `today` | 오늘 | SCR-H01 오늘(`HomeScreen`) |
+| `/calls/new` | `new-call` | 오늘 | 직접 입력 |
+| `/plan` | `plan` | 오늘 | SCR-H04 계획 카드(`extra`로 초안) |
+| `/inbox` | `inbox` | 업무 | SCR-T01 업무 |
+| `/calls/:id` | `task` | 업무 | SCR-T02·T05(작업 종류의 상세, call은 통화 상세 + 단계 타임라인) |
+| `/history` | `history` | 기록 | SCR-R01 기록 |
+| `/me` | `me` | 내 정보 | SCR-M01 내 정보 |
+| `/settings` | `settings` | 내 정보 | 기존 설정 |
+| `/assistant` | `assistant` | 셸 밖(루트) | 임시 비서(OD-6, SPEC-ASSIST-001이 SCR-A01로 바꿈) |
+
+- 배치: `app/lib/shell/`에 `app_router.dart`(유일한 `GoRouter`), `routes.dart`(`RouteNames`, `AppTab`), `navigation.dart`, `tab_scaffold.dart`, `assistant_placeholder.dart`, `kind_registration.dart`, `task_feed.dart`. 옛 `core/router/app_router.dart`는 `routerProvider`를 다시 내보내기만 한다. 위 계약의 "경로 정의를 돌려주는 함수"는 만들지 않았고, 셸 라우터가 기능 화면을 직접 등록한다.
+- 이동 규칙(go_router 18.1.4, SHELL research R1): 기능 화면은 `go`·`goNamed`·`goBranch`를 부르지 않고 `navigation.dart`의 네 함수와 경로 이름만 쓴다(`architecture_test.dart`가 검사).
+  - `openTask(router, id)`: 쌓인 화면(비서 포함)을 모두 닫고 `goNamed(inbox)` 다음 `pushNamed(task)`. 뒤로 가면 업무 첫 화면이다. 닫지 않고 `go`+`push`만 하면 탭 바로 오늘에 돌아왔을 때 계획 카드가 남는다(R1 X1·X6, 해법 Y1~Y3).
+  - `openTab(router, tab)`: 탭 바를 누른 것처럼 셸의 `goBranch`. 그 탭에 쌓인 화면은 그대로 남는다.
+  - `openAssistant(router)`: 셸 밖 `/assistant`를 지금 탭 위에 `push`. 닫으면 원래 탭·화면으로 돌아간다.
+  - `submitFromAssistant(router, draft)`: 비서를 먼저 닫고 계획 카드를 `push`.
+  - 그 밖의 같은 탭 안 이동은 경로 이름으로 `pushNamed`한다. 그냥 `push`는 지금 탭 위에 쌓인다.
+- 상태: 업무·기록·내 정보가 함께 쓰는 작업 목록·묶음은 위 계약의 "앱 `core/`" 대신 `shell/task_feed.dart`에 두었다. 기능이 `features/calls`를 가져오지 않게 하려는 것이며, 그 결과 기능 간 import 허용 목록이 비었다. 신뢰 안내 조각은 `kolbi_ui`가 아니라 앱 `core/widgets/trust_notice.dart`로 옮겼다(SHELL design.md D7).
 
 ---
 
@@ -731,4 +755,4 @@ flowchart LR
 | AD-7 | 기능 간 이동은 경로 이름으로만 | 기능 모듈끼리 화면 직접 가져오기 | 기능을 SDK 흐름으로 옮기거나 지울 때 서로 엮이지 않게 |
 | AD-8 | 업무 실행 단계와 기록 묶음을 앱(`kolbi_core`)에서 계산 | 서버에 `steps` 필드 추가 | `/v1` 불변(에픽 D-1). 서버 상태 이름 전환(Phase 0) 때 서버 필드로 옮길 수 있게 순수 함수 하나로 모은다 |
 | AD-9 | 음성 인식은 앱 의존으로만 | `kolbi_ui`에 넣기 | SDK 호스트에 마이크 권한·패키지를 강요하지 않는다. `kolbi_ui`의 Orb는 상태만 받아 그린다 |
-| AD-10 | AI 비서는 셸 갈래가 아닌 루트 모달 경로 | 다섯째 탭 갈래 | 가운데 버튼은 "어디서든 부르기"(F-ASST-02)라 현재 탭 스택을 바꾸지 않아야 한다. 닫으면 원래 탭 위치로 돌아간다 |
+| AD-10 | AI 비서는 셸 갈래가 아닌 루트 모달 경로 | 다섯째 탭 갈래 | 가운데 버튼은 "어디서든 부르기"(F-ASST-02)라 현재 탭 스택을 바꾸지 않아야 한다. 닫으면 원래 탭 위치로 돌아간다. 보강(SPEC-SHELL-001, 2026-11-27): 셸 밖 경로(`/assistant`) 위에 탭 경로를 `push`하지 않는다. go_router 18에서 assert가 나므로(SHELL research R1-G), 비서에서 계획 카드·설정으로 갈 때는 비서를 먼저 닫는다(`submitFromAssistant`) |

@@ -97,44 +97,65 @@
 
 ```
 lib/
-├── main.dart, app.dart
+├── main.dart, app.dart              main.dart가 registerKolbiFontLicenses()로 Pretendard 라이선스를 등록(SPEC-SHELL-001)
+├── shell/                           SPEC-SHELL-001. 기능 화면을 모으는 유일한 곳
+│   ├── app_router.dart              유일한 GoRouter: StatefulShellRoute 4갈래 + 셸 밖 /assistant
+│   ├── routes.dart                  경로 이름 RouteNames, 탭 AppTab(today·tasks·history·me)
+│   ├── navigation.dart              탭 사이 이동 함수 네 개(openTask, openTab, openAssistant, submitFromAssistant)와 taskLocation
+│   ├── tab_scaffold.dart            다섯 칸 탭 바(가운데 비서 버튼, 업무 배지, 다시 누름, 라벨 배율 상한 1.3), BranchStack, TabScrollScope
+│   ├── assistant_placeholder.dart   임시 비서 화면(부탁 입력·보내기·예시 칩, OD-6; SPEC-ASSIST-001이 바꿈)
+│   ├── kind_registration.dart       작업 종류 등록부·표시자 공급자, call 종류 표시자, TaskDetailRoute
+│   └── task_feed.dart               기능들이 함께 읽는 작업 목록·묶음·기록 날짜 공급자, 다시 불러오기
 ├── core/
+│   ├── clock.dart                   주입 가능한 시계 clockProvider(오늘 인사·날짜, 묶음 기준 시각)
 │   ├── config/app_settings.dart     서버 URL·토큰·요청자 설정, 신뢰 안내 확인 기록(shared_preferences + 빌드 정의)
 │   ├── network/api_client.dart      REST 클라이언트 (다시 내보내기 → kolbi_core src/network/api_client.dart)
 │   ├── network/live_channel.dart    WebSocket 채널 (다시 내보내기 → kolbi_core src/network/live_channel.dart)
-│   ├── router/app_router.dart       go_router 라우트
+│   ├── router/app_router.dart       다시 내보내기 → shell/app_router.dart의 routerProvider(테스트 호환)
 │   ├── theme/app_theme.dart         밝은·어두운 테마(Midnight Indigo 색, Pretendard), 카드 분위기(CardTone)·상태 색(대비 기준 포함) (다시 내보내기 → kolbi_ui src/theme/app_theme.dart)
 │   ├── theme/tokens.dart            디자인 토큰(간격·모서리·움직임·최소 탭 크기 48), 움직임 줄이기 처리, WCAG 대비 계산 (다시 내보내기 → kolbi_ui src/theme/tokens.dart)
 │   ├── widgets/common.dart          공용 위젯(AppCard, SectionCard, MessageView 빈 상태, PulsingDot 등) (다시 내보내기 → kolbi_ui src/widgets/common.dart)
+│   ├── widgets/trust_notice.dart    신뢰 안내 문구·첫 통화 전 시트(SPEC-SHELL-001에서 features/calls/presentation/에서 옮김)
 │   ├── utils/formatters.dart        포매터 (다시 내보내기 → kolbi_core src/format/formatters.dart)
 └── features/
     ├── calls/
     │   ├── domain/                          call_models·intake_models·counterparties·follow_up·approval_comment 모두 다시 내보내기(→ kolbi_core src/; approval_comment는 kolbi_ui의 CodePointLengthLimitingFormatter도 함께)
     │   ├── data/calls_repository.dart       Riverpod 공급자 3개(apiClientProvider 등) + kolbi_core CallsRepository·이벤트 다시 내보내기
     │   ├── application/calls_controller.dart  Riverpod 상태 관리, 버전 병합
-    │   └── presentation/                    화면(home, plan_card, new_call, call_detail), trust_notice(신뢰 안내 문구·첫 통화 전 시트), approval_listener, call_templates, widgets/(approval_card·follow_up_actions는 앱에 남음; status_chip·outcome_card·transcript_view는 다시 내보내기 → kolbi_ui src/widgets/)
+    │   └── presentation/                    화면(home = 오늘 탭, plan_card, new_call, call_detail = 맨 위 단계 타임라인), trust_notice(다시 내보내기 → core/widgets/trust_notice.dart), approval_listener, call_templates, widgets/(approval_card·follow_up_actions·call_task_tile(작업 행, 옛 홈 _TaskTile)은 앱에 남음; status_chip·outcome_card·transcript_view는 다시 내보내기 → kolbi_ui src/widgets/)
+    ├── inbox/inbox_screen.dart              업무 탭(SCR-T01): 개수 세 칸, 승인 요청·진행 중·반복 묶음, 기록 링크, 빈 상태·오류
+    ├── history/history_screen.dart          기록 탭(SCR-R01): 서울 날짜 묶음, 결과 칩·결과 한 줄
+    ├── me/me_screen.dart                    내 정보 탭(SCR-M01): 프로필 카드, 비서·권한과 안전·앱 항목, 설정 연결
     └── settings/settings_screen.dart
 ```
 
-의존 방향은 주로 `presentation → application → data → domain`이며, `core/`는 모든 기능이 공유한다. 다만 엄격하게 지켜지지는 않아 `presentation`이 `data`를 직접 가져오는 곳도 있다(예: `home_screen.dart`의 `calls_repository.dart` import).
+의존 방향은 주로 `presentation → application → data → domain`이며, `core/`는 모든 기능이 공유한다. `shell/`은 기능 화면을 모아 라우터에 등록하고, 업무·기록·내 정보 기능은 `features/calls`를 직접 가져오지 않고 `shell/`의 공급자(`task_feed.dart`, `kind_registration.dart`)와 이동 함수(`navigation.dart`, `routes.dart`)를 쓴다(SPEC-SHELL-001). 다만 엄격하게 지켜지지는 않아 `presentation`이 `data`를 직접 가져오는 곳도 있다(예: `home_screen.dart`의 `calls_repository.dart` import).
 
-SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_core/kolbi_core.dart`·`package:kolbi_ui/kolbi_ui.dart`를 가져온다. 옛 경로 14개는 테스트 import를 고치지 않기 위해 다시 내보내기 파일로 남아 있다(이후 SPEC에서 지움). 패키지 의존 방향은 `kolbi_core ◄── kolbi_ui ◄── app`이며, 다음 테스트가 import 줄을 글자로 읽어 검사한다.
+SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_core/kolbi_core.dart`·`package:kolbi_ui/kolbi_ui.dart`를 가져온다. 옛 경로는 테스트 import를 고치지 않기 위해 다시 내보내기 파일로 남아 있다(이후 SPEC에서 지움). SPEC-MODULE-001의 14개에 SPEC-SHELL-001이 `core/router/app_router.dart`와 `features/calls/presentation/trust_notice.dart`를 더해 16개다. 패키지 의존 방향은 `kolbi_core ◄── kolbi_ui ◄── app`이며, 다음 테스트가 import 줄을 글자로 읽어 검사한다.
 
 | 테스트 | 검사 |
 |---|---|
 | `packages/kolbi_core/test/dependency_rules_test.dart` | `lib/`가 `package:flutter/`, `dart:ui`, `package:flutter_riverpod/`, `package:riverpod/`, `package:shared_preferences/`, `package:kolbi_ui/`, `package:callmate/`를 가져오지 않음 |
 | `packages/kolbi_ui/test/dependency_rules_test.dart` | `lib/`가 `package:callmate/`, `package:go_router/`, `package:flutter_riverpod/`, `package:shared_preferences/`, `package:share_plus/`, `package:kolbi_core/src/`를 가져오지 않음 |
-| `app/test/architecture_test.dart` | 앱이 패키지 `src/`를 직접 가져오지 않음, 기능 간 import는 허용 목록 1건(`settings_screen.dart` → `trust_notice.dart`)뿐, 옛 경로 14개는 다시 내보내기만 함, 테스트의 `package:callmate` import가 모두 실제 파일을 가리킴 |
+| `app/test/architecture_test.dart` | 앱이 패키지 `src/`를 직접 가져오지 않음, 기능 간 import 허용 목록이 비어 있음(SPEC-SHELL-001), 옛 경로는 다시 내보내기만 함, 테스트의 `package:callmate` import가 모두 실제 파일을 가리킴, `core/`는 기능·셸을 가져오지 않음(고정된 다시 내보내기 파일 `core/router/app_router.dart` 제외), `GoRouter(`는 `lib/shell/app_router.dart`에만 있고 `lib/features/`에는 `.go(`·`goNamed(`·`goBranch(`와 경로 글자(`'/calls` 등)가 없음 |
 
-### 라우트 (`core/router/app_router.dart`)
+### 라우트 (`shell/app_router.dart`, SPEC-SHELL-001)
 
-| 경로 | 화면 |
-|---|---|
-| `/` | `HomeScreen` |
-| `/calls/new` | 새 통화(직접 입력 양식) |
-| `/plan` | `PlanCardScreen`(계획 카드, `extra`로 `PlanDraft`를 받으며 없으면 `/`로 돌아감) |
-| `/calls/:id` | 통화 상세 |
-| `/settings` | `SettingsScreen` |
+`StatefulShellRoute` 4갈래(탭)와 셸 밖 최상위 경로 `/assistant`로 이루어진다. 옛 경로 다섯 개는 그대로 두고 갈래에 나누어 넣었다.
+
+| 경로 | 이름(`RouteNames`) | 갈래(탭) | 화면 |
+|---|---|---|---|
+| `/` | `today` | 오늘 | `HomeScreen`(오늘 대시보드) |
+| `/calls/new` | `new-call` | 오늘 | 새 통화(직접 입력 양식) |
+| `/plan` | `plan` | 오늘 | `PlanCardScreen`(계획 카드, `extra`로 `PlanDraft`를 받으며 없으면 `/`로 돌아감) |
+| `/inbox` | `inbox` | 업무 | `InboxScreen` |
+| `/calls/:id` | `task` | 업무 | `TaskDetailRoute` → 작업 종류의 상세(call이면 통화 상세 + 단계 타임라인) |
+| `/history` | `history` | 기록 | `HistoryScreen` |
+| `/me` | `me` | 내 정보 | `MeScreen` |
+| `/settings` | `settings` | 내 정보 | `SettingsScreen` |
+| `/assistant` | `assistant` | 셸 밖(탭 바 없음) | `AssistantPlaceholderScreen` |
+
+탭 사이 이동은 `shell/navigation.dart`의 함수로만 한다. 작업 열기(`openTask`)는 쌓인 화면을 모두 닫고 업무 탭을 고른 뒤 상세를 올리므로 뒤로 가면 업무 첫 화면이다. 비서에서 계획 카드로 갈 때(`submitFromAssistant`)는 비서를 먼저 닫는다. go_router 18에서 셸 밖 경로 위에 탭 경로를 올리면 assert가 나기 때문이다(SPEC-SHELL-001 research R1).
 
 ## 클라이언트–서버 계약
 
@@ -177,7 +198,10 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 | 상한·제한 시간 | `server/src/config.ts` 기본값, `CallService` 옵션 |
 | API 라우트·요청 검증 | `server/src/http/app.ts`, `http/schemas.ts` (+ `packages/kolbi_core/lib/src/network/api_client.dart`, `packages/kolbi_core/lib/src/data/calls_repository.dart`) |
 | 저장 방식 | `server/src/store/taskStore.ts` |
-| 화면·UI | `app/lib/features/calls/presentation/` (공용 토큰·테마·위젯은 `packages/kolbi_ui/lib/src/`) |
+| 화면·UI | `app/lib/features/calls/presentation/`(오늘·계획·상세), `app/lib/features/{inbox,history,me}/` (공용 토큰·테마·위젯은 `packages/kolbi_ui/lib/src/`) |
+| 탭·경로·탭 사이 이동 | `app/lib/shell/`(`app_router.dart`, `routes.dart`, `navigation.dart`, `tab_scaffold.dart`) |
+| 새 작업 종류 | `packages/kolbi_core/lib/src/kinds/`(서술자)와 `packages/kolbi_ui/lib/src/kinds/task_kind_presenter.dart`(표시자)를 구현해 `app/lib/shell/kind_registration.dart`에 등록 |
+| 업무 묶음·배지·기록 날짜·단계 계산 | `packages/kolbi_core/lib/src/tasks/task_groups.dart`, `task_steps.dart` |
 | 서버 주소·토큰 설정 | `app/lib/core/config/app_settings.dart` |
 
 ## 목표 방향 (미구현, 소유자 진술 기준)
@@ -191,4 +215,4 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452).

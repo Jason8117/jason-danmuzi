@@ -183,7 +183,63 @@ external_services_contacted: none
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: pending-backfill   # this sync commit cannot name its own SHA; read it with `git log -1 --format=%h -- .moai/specs/SPEC-SHELL-001/progress.md`
+sync_status: implemented   # orchestrator raises to completed after the sync audit passes (owner rule 2026-11-27)
+run_start_sha: 2fef928   # 2fef928b882e55ea23e379ad9674063758f5f2f2
+run_commit_sha: 5b15c79   # M6, last implementation commit (M1 d030b0b, M2 07565f5, M3 19d58ca, M4 1048911, M5 d99abac, M6 5b15c79)
+run_evidence_commit_sha: b67d452   # run-phase evidence commit; HEAD before this sync commit
+route: B   # Tier L; branch feat/SPEC-SHELL-001 in worktree /Users/jason/Documents/Jason-Danmuzi/wt-shell-001; PR pending (owner merges)
+pushed_state: not-pushed
+measured_by: orchestrator on the worktree tree at b67d452, 2026-11-27 (not re-run by manager-docs)
+root_workspace_test_at_sync: "dart test -> 00:00 +2: All tests passed!"
+app_tests_at_sync: "cd app && flutter test -> 00:10 +109: All tests passed!"
+app_analyze_at_sync: "flutter analyze -> 1 issue found. (baseline info test/support/fakes.dart:54:5)"
+kolbi_ui_tests_at_sync: "flutter test -> +68: All tests passed!"
+kolbi_core_tests_at_sync: "dart test -> +27: All tests passed!"
+protected_paths_diff_at_sync: "git diff --stat 2fef928 -- server/ -> empty; app/test/ = 11 files, 1437 insertions(+), 8 deletions(-)"
+feature_navigation_grep_at_sync: 'grep -rnE "\.go\(|goNamed\(|goBranch\(" app/lib/features -> 0 lines'
+acceptance_distinct_ac_ids: 21   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' .moai/specs/SPEC-SHELL-001/acceptance.md | sort -u | wc -l -> 21 (AC-001..AC-021); no suffixed ids, so no difference from the 21 ACs in spec/plan; REQ/AC 21/21 unchanged by the 0.3.2 annotation
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated 2026-11-26 -> 2026-11-27; version 0.3.1 -> 0.3.2 (manager-spec annotation below)
+spec_body_annotation:   # acting as manager-spec, owner decision 2026-11-27 option A; no other body edits
+  acceptance.md: "AC-021 table + 4 rows (approval_flow_test pumpApp 800x2400; approval_card_test openCall via routerProvider push '/calls/<id>'; font_overflow_test scrollUntilVisible('직접 입력하기'); accessibility_test:480 scrollUntilVisible('다시 걸기')), each with cause (REQ-015 order / OD-1 / REQ-010) and 'owner decision 2026-11-27', plus a note that AC-019's unmodified list now admits these rows"
+  research.md: "R2 table + the same 4 rows + a note (accessibility_test:223 fixed in the app, no test edit)"
+  spec.md: "HISTORY row 0.3.2"
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped
+coverage: not-measured
+divergence:
+  planned_vs_changed_files: "plan.md §B lists 44 files; git diff --name-only 2fef928..5b15c79 -> 52 files = 43 planned + 9 unplanned; planned but unchanged: app/lib/app.dart (registration lives in the shell providers, MaterialApp.title kept; §E.2 E7.10)"
+  unplanned_files:
+    - "packages/kolbi_core/lib/src/models/call_models.dart: CallTask.kind (String?, missing or non-string -> null -> call), needed by AC-008 (E7.1)"
+    - "app/lib/shell/task_feed.dart: shared task list / groups / history days / reload providers so inbox, history and me do not import features/calls (E7.4)"
+    - "app/lib/features/calls/presentation/widgets/call_task_tile.dart: former home _TaskTile as CallTaskTile, chip column capped at 40 % width (E7.9)"
+    - "packages/kolbi_core/test/support/tasks.dart, app/test/support/shell_support.dart: test support (E7.3)"
+    - "app/test/approval_flow_test.dart, approval_card_test.dart, font_overflow_test.dart: the option A edits (owner decision 2026-11-27)"
+    - ".moai/specs/SPEC-SHELL-001/spec.md: status draft -> in-progress at run start"
+  deviations_from_e2_e7: "11 items: CallTask.kind; TaskStepState name (material_ui exports StepState); extra test support files and step_timeline_test covering badge/briefing/presenters; cross-feature data through shell/task_feed + kind_registration; non-Scaffold tab shell + inner MediaQuery + BranchStack HeroMode off + label scale clamp 1.3 and 57 px bar; openTab via Expando-registered StatefulNavigationShell with go fallback, TabScrollScope; assistant placeholder scope (input, send, chips; no profile -> close then settings); test-only Riverpod retry off and CountingCallsRepository; CallTaskTile chip cap; app.dart unchanged; OD-2/4/5/6/7/8 defaults"
+debt_carried:
+  - "REQ-008 / REQ-012 / REQ-021 mix GEARS forms (plan-audit iteration 3, left to plan owner)"
+  - "D8 ASSIST plan openTask wording (fix with SPEC-ASSIST-001)"
+debt_closed:
+  - "D9 AC-018 grep now checks goBranch( (architecture_test 'router and tab switching live in the shell')"
+  - "DESIGN-001 carry: registerKolbiFontLicenses() called in app/lib/main.dart"
+browser_check: done   # orchestrator, web build vs simulated server, no .env, 2026-11-27
+browser_check_observations: "Today order date -> greeting -> input -> chips -> 4 shortcut cards -> simulation notice -> empty state; 5-slot tab bar; centre button opens the temporary assistant; live call opens with the step timeline on top and Tasks selected; Tasks counters 진행 중 0 · 승인 대기 0 · 오늘 완료 1 + routines + history link; History grouped under '오늘 · 11월 27일' with result chip; Me profile card + 3 groups; console no errors. Note: the temporary assistant follows device dark mode, while plan text describes a light temporary screen (E7.11 OD-6); SPEC-ASSIST-001 replaces the screen"
+device_check: pending   # owner: real device run (tab bar, big text, Pretendard weights)
+pre_commit_hook_note: "orchestrator patched .git/hooks/pre-commit to clear GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE before `moai gate` (owner option A, 2026-11-27); the hook is untracked and may be overwritten by `moai update`; this sync commit ran the hook normally"
+plan_g_items:
+  .moai/project/structure.md: "app tree with shell/, core/clock, core/widgets/trust_notice, features/{inbox,history,me}; route table (path, name, branch, screen) and move rules; architecture_test row; where-to-change rows"
+  docs/product/11_ARCHITECTURE.md: "§2.5 SPEC-SHELL-001 implementation block (routes, layout, four move functions per research R1, shared state in shell/task_feed); AD-10 reinforced (no push of a tab route over /assistant); revision entry"
+  docs/planning/04_DESIGN_PLAN.md: "§17.2 today date/greeting/briefing rules (design.md D5); §17.6 step description fixed wording (design.md D2.3); revision entry"
+  README.md: "new '화면 구성' paragraph (5-slot tabs, six steps, temporary assistant); folder tree with shell/, inbox/, history/, me/"
+  codemaps: "modules.md (core clock/trust_notice/router re-export, CallTask.kind, shell/ and inbox/history/me tables, kolbi_core kinds/tasks/particle and kolbi_ui presenter/timeline/briefing/badge, main.dart font-licence call); entry-points.md (main.dart step, ApprovalListener -> openTask, route table with branches and callers incl. /assistant); dependencies.md (go_router users, mermaid router node, core->features inversion and cross-feature exception resolved)"
+  .moai/specs/EPIC-KOLBI-APP/overview.md: "SHELL-001 implemented(0.3.2, 2026-11-27)"
+project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/04_DESIGN_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
+sync_audit: pending
+```
 
 ## §F Phase 4 Mode Selection
 

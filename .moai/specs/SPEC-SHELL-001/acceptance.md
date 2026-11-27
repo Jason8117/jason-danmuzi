@@ -191,6 +191,12 @@ grep -rn "지난 통화\|home-intake\|최근 통화한 곳\|'CallMate'\|'기록'
   |---|---|---|
   | `accessibility_test.dart` | "screens follow the wireframe order"의 홈 순서 블록(`:614-619`) | 데이터 `homeTasks()`(`:41-45`, 진행 중 1건 + 끝난 2건, 대기 승인 없음)는 바꾸지 않는다. 기대 목록을 `find.byKey(const Key('home-intake-field'))` → `find.text('진행 중')` → `find.text('최근 통화한 곳')`으로 바꾼다("지난 통화" 제거, "확인이 필요해요"는 이 데이터에서 나오지 않으므로 넣지 않음 — plan-audit 2차 N2) |
   | `plan_card_test.dart` | 시작 뒤 뒤로 가기 블록(`:194-196`) | `find.text('CallMate')` → `find.byKey(Key('tasks-screen'))`(REQ-005: 뒤로 = 업무 첫 화면, REQ-015: 워드마크) |
+  | `approval_flow_test.dart` | `pumpApp`의 화면 크기(`:16` 뒤 세 줄) | 기본 800×600 대신 `tester.view.physicalSize = const Size(800, 2400)`, `devicePixelRatio = 1`, `addTearDown(tester.view.reset)`. 원인: REQ-015 순서 — 오늘 화면의 "귀찮은 전화, 대신 걸어드릴게요"(`:36`)와 작업 행 "라 파스타"(`:44,47`)가 첫 화면 아래로 밀려 `find`와 누름이 닿지 않음. 소유자 결정 2026-11-27 |
+  | `approval_card_test.dart` | `openCall`(`:45`, `:176`이 끝난 작업으로 부름) | 오늘의 "라 파스타" 행 누름 대신 `routerProvider`를 읽어 `push('/calls/<id>')`(import 한 줄 추가). 원인: REQ-015 / OD-1 — 오늘은 끝난 작업을 보이지 않음. 소유자 결정 2026-11-27 |
+  | `font_overflow_test.dart` | 360×640·2배 블록(`:73-74`) | "직접 입력하기"까지 `scrollUntilVisible` 한 줄 추가. 원인: REQ-015 순서 — 날짜·인사·브리핑 아래로 밀려 화면 밖(offstage)이 됨. 소유자 결정 2026-11-27 |
+  | `accessibility_test.dart` | 결과 상세 큰 글자 검사(`:480`) | `ensureVisible` 앞에 `scrollUntilVisible(find.text('다시 걸기'), …)` 한 줄 추가. 원인: REQ-010 — 맨 위 단계 타임라인이 결과 카드를 화면 밖으로 밀어 `Bad state: No element`. 소유자 결정 2026-11-27 |
+
+  표 확장(소유자 결정 2026-11-27, 선택 A): 위 표의 마지막 네 행(`approval_flow_test.dart`부터)은 run M4에서 REQ-015·REQ-010을 구현하자 원래 표 밖의 기존 블록 다섯 곳(`approval_flow_test.dart` 두 곳 포함)이 깨져, 아래 문단의 절차대로 소유자 확인을 받아 더한 것이다. 여섯째 깨짐(`accessibility_test.dart:223`, 대화 자동 따라가기)은 테스트를 고치지 않고 앱에서 해결했다. 이 확장에 따라 AC-019의 "수정 없이" 목록 가운데 `approval_flow_test.dart`·`approval_card_test.dart`는 이 표의 행만 바뀐 채 통과하면 된다. diff 원문과 깨짐 기록은 `progress.md` §E.2 "AC-021 table extended by owner decision 2026-11-27 (option A)"에 있다.
 
   run에서 이 표 밖의 기존 단언이 깨지면 고치지 않고 plan 단계로 돌아가 research R2와 이 표를 고친 뒤(소유자 확인) 다시 진행한다.
 - 확인: `git diff` 원문을 `progress.md`에 기록
