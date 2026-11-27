@@ -5,9 +5,27 @@ import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/config/app_settings.dart';
+import '../../../shell/kind_registration.dart';
+import '../../../shell/navigation.dart';
+import '../../../shell/routes.dart';
 import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
 import 'call_templates.dart';
+
+/// Sends a one-line request to `POST /v1/intake` (SPEC-INTAKE-001 REQ-017). A server without the endpoint
+/// gets a blank draft (REQ-022); any other failure shows a snack bar and returns null.
+Future<PlanDraft?> requestPlanDraft(WidgetRef ref, ScaffoldMessengerState messenger, String text) async {
+  try {
+    // The input has no language picker; the plan card can switch the call language.
+    return (await ref.read(callsRepositoryProvider).intake(text, CallLanguage.ko)).draft;
+  } on ApiException catch (error) {
+    if (error.statusCode == 404) return PlanDraft.blank(text);
+    messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
+  }
+  return null;
+}
 
 /// SPEC-INTAKE-001 REQ-017: one input at the top sends a one-line request to `POST /v1/intake` and opens the plan card.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -42,28 +60,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!_canSend) return;
     // The plan card needs the requester's name; the typed text stays where it is meanwhile.
     if (!ref.read(settingsProvider).hasProfile) {
-      context.push('/settings');
+      context.pushNamed(RouteNames.settings);
       return;
     }
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _sending = true);
-    PlanDraft? draft;
-    try {
-      // The home has no language picker; the plan card can switch the call language.
-      draft = (await ref.read(callsRepositoryProvider).intake(text, CallLanguage.ko)).draft;
-    } on ApiException catch (error) {
-      // REQ-022: a server without /v1/intake still gets a plan card, with the text as the goal.
-      if (error.statusCode == 404) {
-        draft = PlanDraft.blank(text);
-      } else {
-        messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
-      }
-    } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
-    }
+    final draft = await requestPlanDraft(ref, messenger, text);
     if (!mounted) return;
     setState(() => _sending = false);
-    if (draft != null) context.push('/plan', extra: draft);
+    if (draft != null) context.pushNamed(RouteNames.plan, extra: draft);
   }
 
   @override
@@ -72,6 +77,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final settings = ref.watch(settingsProvider);
 
     return Scaffold(
+      key: const Key('today-screen'),
       appBar: AppBar(
         title: const Text('CallMate'),
         actions: [
@@ -79,7 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           IconButton(
             tooltip: '설정',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
+            onPressed: () => context.pushNamed(RouteNames.settings),
           ),
         ],
       ),
@@ -93,7 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               sending: _sending,
               onChanged: () => setState(() {}),
               onSend: _canSend ? _send : null,
-              onManual: () => context.push(settings.hasProfile ? '/calls/new' : '/settings'),
+              onManual: () => context.pushNamed(settings.hasProfile ? RouteNames.newCall : RouteNames.settings),
               suggestions: recentCounterparties(value),
               onFill: _fill,
             ),
@@ -103,7 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             title: '서버와 연결되지 않았어요',
             message: describeError(error),
             actions: [
-              OutlinedButton(onPressed: () => context.push('/settings'), child: const Text('서버 설정')),
+              OutlinedButton(onPressed: () => context.pushNamed(RouteNames.settings), child: const Text('서버 설정')),
               FilledButton(onPressed: () => ref.invalidate(callsControllerProvider), child: const Text('다시 시도')),
             ],
           ),
@@ -260,16 +266,20 @@ class _TaskList extends ConsumerWidget {
           if (isSimulated) const _SimulationBanner(),
           if (!hasProfile) const _ProfilePrompt(),
           if (tasks.isEmpty) const _EmptyState(),
-          if (ongoing.isNotEmpty) ...[const _SectionHeader('진행 중'), for (final task in ongoing) _TaskTile(task: task)],
+          if (ongoing.isNotEmpty) ...[const _SectionHeader('진행 중'), for (final task in ongoing) _row(context, ref, task)],
           if (finished.isNotEmpty) ...[
             const _SectionHeader('지난 통화'),
-            for (final task in finished) _TaskTile(task: task),
+            for (final task in finished) _row(context, ref, task),
           ],
         ],
       ),
     );
   }
 }
+
+/// A task row drawn by its kind's presenter; tapping it opens the task on the tasks tab (REQ-005, REQ-007).
+Widget _row(BuildContext context, WidgetRef ref, CallTask task) =>
+    presenterForTask(ref, task).buildRow(context, task, onTap: () => openTask(GoRouter.of(context), task.id));
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.title);
@@ -326,7 +336,7 @@ class _ProfilePrompt extends StatelessWidget {
           children: [
             const Text('AI 비서가 "○○님을 대신해 전화드렸어요"라고 소개할 때 사용해요.'),
             const SizedBox(height: AppSpace.md),
-            FilledButton.tonal(onPressed: () => context.push('/settings'), child: const Text('내 정보 입력')),
+            FilledButton.tonal(onPressed: () => context.pushNamed(RouteNames.settings), child: const Text('내 정보 입력')),
           ],
         ),
       ),
@@ -346,67 +356,6 @@ class _EmptyState extends StatelessWidget {
         icon: Icons.support_agent_rounded,
         title: '귀찮은 전화, 대신 걸어드릴게요',
         message: '예약, 문의, 요금 할인, 환불 요청까지.\n목적만 알려주시면 AI 비서가 통화하고 결과를 정리해 드려요.',
-      ),
-    );
-  }
-}
-
-class _TaskTile extends StatelessWidget {
-  const _TaskTile({required this.task});
-  final CallTask task;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final needsApproval = task.pendingApproval != null;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.md),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => context.push('/calls/${task.id}'),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpace.lg),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Icon(
-                    task.status.isLiveCall ? Icons.phone_in_talk_rounded : Icons.call_outlined,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(task.targetName, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: AppSpace.xs),
-                      Text(
-                        task.outcome?.summary ?? task.goal,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpace.sm),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    StatusChip(task.status, needsApproval: needsApproval),
-                    const SizedBox(height: AppSpace.xs),
-                    Text(formatRelative(task.createdAt), style: theme.textTheme.labelSmall),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

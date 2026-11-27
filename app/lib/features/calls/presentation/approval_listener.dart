@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/router/app_router.dart';
+import '../../../shell/navigation.dart';
 import '../application/calls_controller.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -26,8 +27,7 @@ class _ApprovalListenerState extends ConsumerState<ApprovalListener> {
       if (!_announced.add(approval.id)) continue;
 
       final router = ref.read(routerProvider);
-      final detailPath = '/calls/${task.id}';
-      if (router.state.uri.path == detailPath) continue;
+      if (router.state.uri.path == taskLocation(router, task.id)) continue;
 
       HapticFeedback.heavyImpact();
       scaffoldMessengerKey.currentState?.showSnackBar(
@@ -35,7 +35,7 @@ class _ApprovalListenerState extends ConsumerState<ApprovalListener> {
           duration: const Duration(seconds: 12),
           behavior: SnackBarBehavior.floating,
           content: Text('${task.targetName} 통화: ${approval.question}'),
-          action: SnackBarAction(label: '답하기', onPressed: () => router.push(detailPath)),
+          action: SnackBarAction(label: '답하기', onPressed: () => openTask(router, task.id)),
         ),
       );
     }

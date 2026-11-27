@@ -193,7 +193,7 @@ void main() {
     // pageBack() looks for the English "Back" tooltip; the app runs in Korean.
     await tapAndSettle(tester, find.byType(BackButton));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('CallMate'), findsOneWidget);
+    expect(find.byKey(const Key('tasks-screen')), findsOneWidget);
   });
 
   testWidgets('starts the call with one tap (2) needs 8 digits', (tester) async {

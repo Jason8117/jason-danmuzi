@@ -8,6 +8,8 @@ import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../shell/routes.dart';
+
 /// The one place the app reaches the clipboard and the share sheet, so widget tests can swap it (SPEC-FOLLOWUP-001 §4).
 abstract interface class FollowUpService {
   Future<void> copyText(String text);
@@ -83,7 +85,7 @@ class _FollowUpActionsState extends ConsumerState<FollowUpActions> {
       alignment: WrapAlignment.center,
       children: [
         FilledButton.tonalIcon(
-          onPressed: () => context.push('/plan', extra: PlanDraft.fromTask(task)),
+          onPressed: () => context.pushNamed(RouteNames.plan, extra: PlanDraft.fromTask(task)),
           icon: const Icon(Icons.replay),
           label: const Text('다시 걸기'),
         ),
