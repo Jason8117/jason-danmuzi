@@ -190,5 +190,5 @@ device_check: deferred   # §E.2 "검증하지 않은 것": pinned card height a
 residual_risks_carried: "AI following user_comment / rule 7 in a real call is not verified automatically; A1-2 two dates joined by one space are masked; A1-3 a hyphenated phone token between card halves leaves both halves unmasked"
 project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # domain/approvalComment.ts rows added; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows the FOLLOWUP sync commit
 tech_md: unchanged   # no new dependency
-sync_audit: pending
+sync_audit: "PASS 89.2 (harmonic mean), .moai/reports/sync-audit/ASSISTANT-UX-THREE-audit-1.md; low findings C1 (depends_on terminal status), C5 (masking edges, OD-1/OD-4) recorded"
 ```

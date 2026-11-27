@@ -195,5 +195,5 @@ device_check: not-run   # §E.3 cross_platform_build not-applicable; no device r
 residual_risks_carried: "over-masking of amounts like 15000000원 and 0-leading order numbers (visible and editable on the plan card, not tested); the first call on a device passes two confirmations (plan card [이대로 시작] + trust notice [확인했어요]), a small gap from owner decision 3"
 project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # domain/intake.ts, plan_card_screen.dart, /plan route, POST /v1/intake; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows the FOLLOWUP sync commit
 tech_md: unchanged   # no new dependency
-sync_audit: pending
+sync_audit: "PASS 86.6 (harmonic mean), .moai/reports/sync-audit/ASSISTANT-UX-THREE-audit-1.md; C1 depends_on override not logged at run time, C3 design.md vector typo left for manager-spec"
 ```

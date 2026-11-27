@@ -245,5 +245,5 @@ device_check: deferred   # §E.2/§E.3: Android and iOS share sheet, default cal
 residual_risks_carried: "AC-008/AC-012 pass against the injected fake service only; the first call on a device passes two confirmations (plan card + trust notice); platforms that report share `unavailable` after a real failure show no toast"
 project_docs_synced: [.moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/dependencies.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # trust_notice.dart, widgets/follow_up_actions.dart, AppSettings.trustNoticeAcknowledged; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows this one
 tech_md: updated   # share_plus ^13.3.1 (the one new direct dependency, OD-1) was missing from tech.md and codemaps/dependencies.md; added in the docs(SPEC-ASSISTANT-UX) commit
-sync_audit: pending
+sync_audit: "PASS 87.2 (harmonic mean), .moai/reports/sync-audit/ASSISTANT-UX-THREE-audit-1.md; C4 share and calendar verified with fakes only (device check deferred), C6 two confirmations on first call"
 ```
