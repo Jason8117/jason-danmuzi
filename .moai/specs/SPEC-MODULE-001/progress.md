@@ -191,7 +191,7 @@ divergence:
   plan_label_note: "plan.md §G names 12_IMPLEMENTATION_PLAN.md R-3 for the allowlist note, but 12's R-3 row is about shell/token test changes; the allowlist history was written in 12 §3 (1차 구조 검사) and in 11 §2.4 R-3, where the rule lives"
 project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/product/12_IMPLEMENTATION_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
 tech_md: unchanged   # app direct dependency versions unchanged; package dependencies recorded in codemaps/dependencies.md
-sync_audit: pending
+sync_audit: "PASS 88.4 (harmonic mean), .moai/reports/sync-audit/SPEC-MODULE-001-audit-1.md; C1 fixed (codemaps api_client user path); K1 rule-test forbidden lists, K2 no package analysis_options.yaml, K3 coverage unmeasured recorded as debt"
 ```
 
 ## §F Phase 4 Mode Selection

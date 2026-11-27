@@ -85,7 +85,7 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
 | `config/app_settings.dart` | `sharedPreferencesProvider`, `AppSettings`(`serverUrl`, `apiToken`, `requesterName`, `callbackNumber`, `defaultServerUrl`), `SettingsController`, `settingsProvider` | `main.dart`, `calls_repository.dart`, `home_screen.dart`, `new_call_screen.dart`, `settings_screen.dart` |
-| `network/api_client.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/network/api_client.dart`) | `ApiException`, `ApiClient`(`get`, `post`, `delete`, `webSocketUri`) — 요청 제한 시간 20초 | `calls_repository.dart`, `settings_screen.dart`, `core/widgets/common.dart` |
+| `network/api_client.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/network/api_client.dart`) | `ApiException`, `ApiClient`(`get`, `post`, `delete`, `webSocketUri`) — 요청 제한 시간 20초 | `calls_repository.dart`, `settings_screen.dart`, `packages/kolbi_ui/lib/src/widgets/common.dart` |
 | `network/live_channel.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/network/live_channel.dart`) | `LiveStatus`, `LiveConnection`, `LiveChannel` — 재연결 대기는 `min(30, 2^attempt)`초 | `calls_repository.dart`, `calls_controller.dart`, `home_screen.dart` |
 | `router/app_router.dart` | `routerProvider` | `app.dart`, `approval_listener.dart` |
 | `theme/app_theme.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/theme/app_theme.dart`) | `AppTheme`, `CardTone`(neutral·attention·positive·caution·critical), `ToneColors`, 상태 색 | `app.dart`, 여러 화면·위젯 |
