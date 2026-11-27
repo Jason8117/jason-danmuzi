@@ -241,3 +241,8 @@ dist-ssr/
 .vercel/
 .netlify/
 .firebase/
+
+# ===========================================
+# Dart pub workspace (SPEC-MODULE-001)
+# ===========================================
+.dart_tool/

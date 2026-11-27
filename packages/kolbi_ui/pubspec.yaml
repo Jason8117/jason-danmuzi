@@ -1,0 +1,19 @@
+name: kolbi_ui
+description: "Shared Kolbi Flutter UI: design tokens, theme and common widgets."
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.14.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  kolbi_core: ^0.1.0
+  material_ui: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

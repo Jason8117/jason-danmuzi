@@ -1,0 +1,14 @@
+name: kolbi_workspace
+description: "Pub workspace root for the Kolbi app and its shared packages."
+publish_to: 'none'
+
+environment:
+  sdk: ^3.14.0
+
+workspace:
+  - app
+  - packages/kolbi_core
+  - packages/kolbi_ui
+
+dev_dependencies:
+  test: ^1.29.0
