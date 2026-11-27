@@ -1,7 +1,7 @@
 ---
 id: SPEC-UX-001
 title: "친근하고 정돈된 비서 화면 — 디자인 토큰, 공용 카드, 쉬운 상태 문구, 접근성"
-version: "0.3.0"
+version: "0.3.1"
 status: completed
 created: 2026-11-21
 updated: 2026-11-27
@@ -25,6 +25,7 @@ related_specs: [SPEC-APPROVAL-001, SPEC-INTAKE-001, SPEC-OUTCOME-001]
 | 0.1.0 | 2026-11-21 | jason (manager-spec) | 최초 작성 (draft). 에픽 EPIC-ASSISTANT-UX의 마지막 SPEC |
 | 0.2.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 1 반영: D18 승인 카드의 실시간 영역은 나타날 때 질문만 알리고 남은 시간은 30초·10초에만 한 번씩 알림, D19 진행 점 주기 1100 ms를 `pulse` 토큰으로 추가하고 대화 따라가기 스크롤 300 ms를 `medium` 250 ms로 바꿈, D20 grep 검사의 한계 기록, D21 빈 홈의 칩 위치를 SPEC-INTAKE-001 REQ-018 (b)에 맞춤. REQ/AC 번호·개수 불변 |
 | 0.3.0 | 2026-11-21 | jason (manager-spec) | plan-audit iteration 2 반영: N5 AC-012 (1)은 남은 초 형태(`\d+\s*초`)만 금지, N6 승인 카드가 현재 시각 함수 `now`를 받게 하고(`package:clock` 직접 의존 없음) AC-012 준비를 가짜 시각으로, N7 움직임 시간이 0이면 스크롤은 `jumpTo`, A1 알림은 `SemanticsService.sendAnnouncement`(지원 안 하면 별도 실시간 영역 노드), 제안 항목 와이어프레임을 한 덩어리 글로, 캘린더 라벨 "캘린더 파일 보내기". REQ/AC 번호·개수 불변 |
+| 0.3.1 | 2026-11-27 | jason (manager-spec) | SPEC-DESIGN-001 plan §G: OD-2(씨앗 색)·OD-4(글꼴)는 SPEC-DESIGN-001이 대신함으로 표시, AC-002 씨앗 색 기대값을 `0xFF635BFF`로. 대비·글자 단계·분위기 짝 규칙과 REQ/AC 번호·개수는 그대로 |
 
 ## 1. 배경과 목적
 
@@ -83,9 +84,9 @@ related_specs: [SPEC-APPROVAL-001, SPEC-INTAKE-001, SPEC-OUTCOME-001]
 | ID | 결정 사항 | 상태 | 결정 내용 |
 |----|-----------|------|-----------|
 | OD-1 | 이 SPEC의 순서 | **DEFAULT (pending owner review)** | 마지막. 이유는 `plan.md` §A.0. 처음으로 옮기려면 앞선 세 SPEC의 `depends_on`과 이 SPEC의 대상 목록을 바꾸고, 계획 카드·후속 행동 재디자인을 각 기능 SPEC으로 넘긴다. |
-| OD-2 | 씨앗 색 | **DEFAULT (pending owner review)** | 지금의 초록(`0xFF1F8A70`) 유지. 친근함은 표면 색 단계·둥근 정도·여백으로 만든다. 바꾸려면 상수 하나와 AC-002의 대비 표를 다시 계산한다. |
+| OD-2 | 씨앗 색 | **SPEC-DESIGN-001이 대신함** (2026-11-27, 씨앗 색 `0xFF635BFF`) | (구현 당시) 지금의 초록(`0xFF1F8A70`) 유지. 친근함은 표면 색 단계·둥근 정도·여백으로 만든다. 바꾸려면 상수 하나와 AC-002의 대비 표를 다시 계산한다. |
 | OD-3 | 상태 라벨 변경 | **DEFAULT (pending owner review)** | 세 개만 바꾼다(계획 중 → 계획 세우는 중, 연결 중 → 전화 거는 중, 정리 중 → 결과 정리 중). "연결 중"은 홈의 실시간 연결 표시(`home_screen.dart:71`)와 같은 말이라 헷갈린다. |
-| OD-4 | 글꼴 | **DEFAULT (pending owner review)** | 시스템 기본 글꼴. 글꼴 파일을 넣으면 앱 크기가 늘고 새 자산 관리가 필요하다. |
+| OD-4 | 글꼴 | **SPEC-DESIGN-001이 대신함** (2026-11-27, Pretendard 가변 글꼴) | (구현 당시) 시스템 기본 글꼴. 글꼴 파일을 넣으면 앱 크기가 늘고 새 자산 관리가 필요하다. |
 
 ## 6. 제외 범위 (Out of Scope)
 

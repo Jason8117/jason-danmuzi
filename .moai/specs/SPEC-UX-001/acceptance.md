@@ -40,7 +40,7 @@ git diff --stat <run_start_sha> -- server/
 
 - **Given** 밝은·어두운 테마, WCAG 2.1 대비 계산 함수
 - **When** 각 분위기(`neutral`, `attention`, `positive`, `caution`, `critical`)와 진행 중 통화 색의 (배경, 글자) 짝, (배경, 아이콘·테두리) 짝의 대비를 계산하면
-- **Then** 두 모드 모두 글자 짝 ≥ 4.5, 아이콘·테두리 짝 ≥ 3.0이다. 씨앗 색은 `0xFF1F8A70`이다. 계산 함수 자체는 `(#000000, #FFFFFF) = 21.0`, `(#D97706, #FFFFFF) ≈ 3.19`(소수 둘째 자리)를 낸다
+- **Then** 두 모드 모두 글자 짝 ≥ 4.5, 아이콘·테두리 짝 ≥ 3.0이다. 씨앗 색은 `0xFF635BFF`이다(SPEC-DESIGN-001이 대신함, 2026-11-27; 구현 당시 값 `0xFF1F8A70`). 계산 함수 자체는 `(#000000, #FFFFFF) = 21.0`, `(#D97706, #FFFFFF) ≈ 3.19`(소수 둘째 자리)를 낸다
 - 테스트: `theme_test.dart` — "status color pairs meet contrast in light and dark"
 - RED: 지금 주의 색 `0xFFD97706`은 흰 배경 대비 3.19, 12% 연한 배경 대비 2.81(`research.md` §2 계산)이라 글자 짝이 실패한다.
 
