@@ -162,4 +162,38 @@ external_services_contacted: none   # OpenAI and KAT were never called; fetch wa
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: "the docs(SPEC-INTAKE-001) sync commit that adds this section (resolve via git log)"
+sync_status: implemented
+run_commit_sha: ab029ec   # §E.3 value: last implementation commit (M6) on worktree branch worktree-agent-a5729f8126e4d139f
+run_commit_sha_on_main: e34808a   # the same M6 landed on main as e34808a (git diff --quiet ab029ec e34808a -> exit 0, identical tree); M7 evidence commit -> d161cab on main
+run_start_sha: 42e2f169ab9dea50f6ff7533979afd070417b260   # SPEC-APPROVAL-001 M6 evidence commit on main
+depends_on_note: "depends_on SPEC-APPROVAL-001 was `in-progress` when this run started; it closes at `implemented` in the sync commit just before this one (this repository's terminal value is `implemented`, see SPEC-UX-001 §E.4 sync-audit C1)"
+sync_evidence_source: orchestrator   # measured by the orchestrator on HEAD 8ad8239 on 2026-11-27, not by this agent; evidence under .moai/state/verify/coverage/ (gitignored, local only)
+app_tests_at_sync: "00:08 +84: All tests passed!"   # cd app && flutter --suppress-analytics test --coverage
+app_line_coverage_at_sync: "1497/1689 = 88.6% (app + kolbi_core + kolbi_ui, from app tests; combined.lcov)"
+server_tests_at_sync: "Tests 387 passed (387); Lines 95.42% (1085/1137), Statements 92.3%, Branches 81.49%, Functions 91.66%"   # npx vitest run --coverage (server.txt)
+server_typecheck_exit_at_sync: 0   # npm --prefix server run typecheck
+web_build_at_sync: "✓ Built build/web"   # cd app && flutter build web --debug
+browser_run_at_sync: "web build against a simulated server (CALL_PROVIDER=simulated, no .env): home -> 내 정보 -> plan card (이렇게 걸어 볼게요) -> trust notice -> live call with transcript; browser console: no errors"
+acceptance_distinct_ac_ids: 24   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' acceptance.md | sort -u | wc -l -> 24 = §E.3 ac_pass_count 24
+ac_matrix_test_names_at_sync: all-present   # every test name cited in the §E.2 AC matrix found by grep -F in server/src or app/test at HEAD 8ad8239
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated: 2026-11-22 -> 2026-11-27; spec/plan/acceptance/design bodies unchanged
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped   # --skip-mx semantics
+divergence:
+  planned_vs_changed_files: match   # git diff --name-only 42e2f16..e34808a = the 26 files of plan.md §B (14 server + 12 app) + spec.md + progress.md; no unplanned file, no planned-but-unchanged file
+  deviations: "§E.2 M4 AC-006 row 4 asserts +8229999999 (checkTargetNumber value for 02-999-9999) where design.md §3.4 lists +82299999999; M6 home draws a TextField look-alike while its route is not current so existing tests stay unmodified; CallBrain.draftIntake is optional"
+  spec_vector_defect_open: "design.md §3.4 history row 4 value; for manager-spec (spec body not edited in sync)"
+later_changes:   # history not rewritten; paths below are the current locations at 8ad8239
+  SPEC-FOLLOWUP-001: "intake_models.dart (PlanDraft.fromTask, PhoneSource.previousCall), call_models.dart (appointment), plan_card_screen.dart and call_detail_screen.dart (trust gate, follow-up actions), plan_card_test.dart (one setup line, AC-016), unit_test.dart, server prompts.ts/openaiBrain.ts/types.ts/brain tests"
+  SPEC-UX-001: "home_screen.dart, plan_card_screen.dart and call_detail_screen.dart restyled (tokens, AppCard, plain status labels)"
+  SPEC-MODULE-001: "app/lib/features/calls/domain/{call_models,intake_models,counterparties}.dart are now re-exports of packages/kolbi_core/lib/src/models/; CallsRepository moved to packages/kolbi_core/lib/src/data/calls_repository.dart (app keeps the providers in calls_repository.dart); screens and app_router.dart stay in the app"
+device_check: not-run   # §E.3 cross_platform_build not-applicable; no device run at sync (no Xcode/simulator on this Mac)
+residual_risks_carried: "over-masking of amounts like 15000000원 and 0-leading order numbers (visible and editable on the plan card, not tested); the first call on a device passes two confirmations (plan card [이대로 시작] + trust notice [확인했어요]), a small gap from owner decision 3"
+project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # domain/intake.ts, plan_card_screen.dart, /plan route, POST /v1/intake; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows the FOLLOWUP sync commit
+tech_md: unchanged   # no new dependency
+sync_audit: pending
+```
