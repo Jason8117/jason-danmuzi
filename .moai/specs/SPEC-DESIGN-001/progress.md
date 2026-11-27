@@ -245,3 +245,22 @@ status_transition: implemented -> completed (sync audit passed, owner rule 2026-
 - evaluation: direct — not selected (multi-file); fanout — not selected (coding-heavy, gated sequence); sweep — not selected (small, non-uniform); serial — selected
 - Decision: serial
 - justification: M1 must pass the contrast gate before chip and font work, and every milestone edits the same theme file, so one implementation agent working in order is the safe shape
+
+## Follow-up: variable font weight (sync-audit F1, 2026-11-27)
+
+- 질문: 가변 글꼴 하나를 `weight:` 항목과 `fontVariations` 없이 등록했을 때 `TextStyle.fontWeight`가 wght 축을 움직이는가.
+- 방법: `packages/kolbi_ui/test/font_weight_test.dart`가 실제 `PretendardVariable.ttf` 바이트를 `FontLoader('packages/kolbi_ui/Pretendard')`로 올린 뒤 `'굵기 확인 Weight 0123'`(15px)의 폭을 잰다. 축이 바뀌면 글자 전진 폭이 바뀌고, 합성 굵기나 무변화면 폭이 같다. `fontVariations: [FontVariation.weight(700)]`만 준 폭과 `fontWeight: w700` 폭이 같은지도 비교한다. 두 번째 테스트는 앱이 쓰는 경로(`AppTheme.light()` 아래 `Theme.of(context).textTheme.bodyMedium!.copyWith(fontWeight:)`)를 `tester.getSize`로 잰다.
+- 측정(Flutter 3.50.1, `flutter test`): TextPainter w400=143.474, w600=146.645, w700=148.209, wght=700 축 직접 지정=w700과 같음(오차 0.01 이내). 테마 bodyMedium w400=147.724, w700=152.459.
+- 결론: 이 엔진은 `fontWeight`를 가변 글꼴의 wght 축에 자동으로 대응시킨다. RED 없음. 운영 코드 변경 없음(no change needed). 테스트는 회귀 방지용으로 남긴다.
+- 출력(verbatim):
+
+```
+00:00 +0: FontWeight changes the rendered width of the real font
+Pretendard width w400=143.47412109375 w600=146.6450958251953 w700=148.20860290527344
+00:00 +1: bodyMedium copyWith(fontWeight: w700) under AppTheme.light renders wider than w400
+Theme bodyMedium width w400=147.72412109375 w700=152.45860290527344
+00:00 +2: All tests passed!
+```
+
+- 검증: 루트 `dart test` +2 / `packages/kolbi_ui` `flutter test` +63(기존 61 + 새 2), `flutter analyze` No issues found / `app` `flutter test` +88, `flutter analyze` 1 issue(기존 info `test/support/fakes.dart:54:5`).
+- 남은 점: 테스트 엔진(호스트 Skia/Impeller 텍스트 경로) 기준 측정이다. 실제 Android·iOS·웹 기기 렌더링은 여전히 소유자 기기 확인(`device_check: pending`) 범위다.
