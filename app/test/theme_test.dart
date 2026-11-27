@@ -26,7 +26,7 @@ void main() {
   test('status color pairs meet contrast in light and dark', () {
     expect(contrastRatio(const Color(0xFF000000), const Color(0xFFFFFFFF)), closeTo(21.0, 0.001));
     expect(contrastRatio(const Color(0xFFD97706), const Color(0xFFFFFFFF)).toStringAsFixed(2), '3.19');
-    expect(AppTheme.seed, const Color(0xFF1F8A70));
+    expect(AppTheme.seed, const Color(0xFF635BFF));
 
     for (final theme in [AppTheme.light(), AppTheme.dark()]) {
       final scheme = theme.colorScheme;

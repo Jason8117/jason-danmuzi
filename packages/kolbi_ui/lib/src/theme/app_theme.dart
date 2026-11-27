@@ -3,7 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import 'tokens.dart';
 
 abstract final class AppTheme {
-  static const seed = Color(0xFF1F8A70);
+  /// Electric Indigo: the seed, the filled-button background and live accents only, never text (SPEC-DESIGN-001).
+  static const seed = Color(0xFF635BFF);
 
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
@@ -21,7 +22,21 @@ abstract final class AppTheme {
   );
 
   static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final light = brightness == Brightness.light;
+    // SPEC-DESIGN-001 plan §A.3: fromSeed alone does not give the 06 values, so the text roles are set here.
+    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness).copyWith(
+      primary: light ? AppColors.indigoText : AppColors.periwinkle,
+      onPrimary: light ? AppColors.white : AppColors.darkBackground,
+      primaryContainer: light ? AppColors.softIndigo : AppColors.darkIndigoContainer,
+      onPrimaryContainer: light ? AppColors.indigoText : AppColors.periwinkle,
+      surface: light ? AppColors.cloudWhite : AppColors.darkBackground,
+      surfaceContainerLowest: light ? AppColors.white : AppColors.darkSurface,
+      onSurface: light ? AppColors.midnight : AppColors.darkText,
+      onSurfaceVariant: light ? AppColors.mutedText : AppColors.darkMutedText,
+      outlineVariant: light ? AppColors.line : AppColors.darkLine,
+      error: light ? AppColors.errorText : AppColors.darkErrorText,
+      onError: light ? AppColors.white : AppColors.darkBackground,
+    );
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
@@ -36,7 +51,7 @@ abstract final class AppTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
-        color: scheme.surfaceContainerLow,
+        color: scheme.surfaceContainerLowest,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -46,6 +61,8 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          backgroundColor: seed,
+          foregroundColor: AppColors.white,
           minimumSize: const Size(kMinTapTarget, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           textStyle: textTheme.labelLarge?.copyWith(fontSize: 16),
@@ -85,24 +102,27 @@ extension StatusColors on ColorScheme {
   bool get _light => brightness == Brightness.light;
 
   ToneColors tone(CardTone tone) => switch (tone) {
-    CardTone.neutral => ToneColors(background: surfaceContainerLow, foreground: onSurface, accent: primary),
+    // `caution` shares the neutral values: 06 has no colour for "partly done" (plan §A.1).
+    CardTone.neutral || CardTone.caution =>
+      _light
+          ? const ToneColors(background: Color(0xFFF1F2F8), foreground: AppColors.mutedText, accent: Color(0xFF7A7F94))
+          : const ToneColors(background: AppColors.darkSurface, foreground: AppColors.darkMutedText, accent: AppColors.darkMutedText),
     CardTone.attention =>
       _light
-          ? const ToneColors(background: Color(0xFFFFF1D6), foreground: Color(0xFF6B3A00), accent: Color(0xFFA86200))
-          : const ToneColors(background: Color(0xFF3A2700), foreground: Color(0xFFFFD593), accent: Color(0xFFE2A53C)),
+          ? const ToneColors(background: Color(0xFFFEF3E2), foreground: Color(0xFFA44A0C), accent: Color(0xFFC2650A))
+          : const ToneColors(background: Color(0xFF3A2A12), foreground: Color(0xFFFBBF24), accent: Color(0xFFFBBF24)),
     CardTone.positive =>
       _light
-          ? const ToneColors(background: Color(0xFFDDF3E6), foreground: Color(0xFF0B5130), accent: Color(0xFF23784A))
-          : const ToneColors(background: Color(0xFF0E2E1E), foreground: Color(0xFFA6E8C0), accent: Color(0xFF5CC488)),
-    CardTone.caution =>
+          ? const ToneColors(background: Color(0xFFE9F7EE), foreground: Color(0xFF157037), accent: Color(0xFF159343))
+          : const ToneColors(background: Color(0xFF13301F), foreground: Color(0xFF4ADE80), accent: Color(0xFF4ADE80)),
+    CardTone.critical =>
       _light
-          ? const ToneColors(background: Color(0xFFFFE6D5), foreground: Color(0xFF7F3300), accent: Color(0xFFB85000))
-          : const ToneColors(background: Color(0xFF3A1E05), foreground: Color(0xFFFFC6A0), accent: Color(0xFFF08A4B)),
-    CardTone.critical => ToneColors(background: errorContainer, foreground: onErrorContainer, accent: error),
+          ? const ToneColors(background: Color(0xFFFDECEC), foreground: AppColors.errorText, accent: Color(0xFFDC2626))
+          : const ToneColors(background: Color(0xFF3A1820), foreground: AppColors.darkErrorText, accent: AppColors.darkErrorText),
   };
 
   /// A call that is dialing, ringing or talking.
   ToneColors get live => _light
-      ? const ToneColors(background: Color(0xFFDCF2E4), foreground: Color(0xFF0B5A31), accent: Color(0xFF1D7F47))
-      : const ToneColors(background: Color(0xFF0D2C1C), foreground: Color(0xFF97E3B4), accent: Color(0xFF4FC07F));
+      ? const ToneColors(background: AppColors.softIndigo, foreground: AppColors.indigoText, accent: AppTheme.seed)
+      : const ToneColors(background: AppColors.darkIndigoContainer, foreground: AppColors.periwinkle, accent: AppColors.periwinkle);
 }

@@ -296,7 +296,7 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
       TaskStatus.dialing || TaskStatus.ringing || TaskStatus.inProgress => [
         Expanded(
           child: FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: danger),
+            style: FilledButton.styleFrom(backgroundColor: danger, foregroundColor: Theme.of(context).colorScheme.onError),
             onPressed: _busy ? null : () => _run('hangup', () => _calls.cancel(task.id)),
             icon: _label('hangup', const Icon(Icons.call_end)),
             label: const Text('통화 끊기'),

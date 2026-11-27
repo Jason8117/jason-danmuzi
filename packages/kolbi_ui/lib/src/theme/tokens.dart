@@ -34,6 +34,28 @@ abstract final class AppMotion {
   static const pulse = Duration(milliseconds: 1100);
 }
 
+/// Midnight Indigo colours (docs/planning/06_DESIGN_DECISIONS.md §3.1-§3.3, SPEC-DESIGN-001).
+/// Text values reach 5:1 on white, the app background and their chip background.
+abstract final class AppColors {
+  static const midnight = Color(0xFF171B2E);
+  static const indigoText = Color(0xFF4F46E5);
+  static const periwinkle = Color(0xFFA6ACFF);
+  static const softIndigo = Color(0xFFEEEDFC);
+  static const cloudWhite = Color(0xFFF7F8FC);
+  static const white = Color(0xFFFFFFFF);
+  static const mutedText = Color(0xFF5F6478);
+  static const line = Color(0xFFE6E8F0);
+  static const errorText = Color(0xFFB91C1C);
+
+  static const darkBackground = Color(0xFF11131F);
+  static const darkSurface = Color(0xFF1B1F33);
+  static const darkLine = Color(0xFF2A2E45);
+  static const darkText = Color(0xFFF2F3FA);
+  static const darkMutedText = Color(0xFFA3A8C3);
+  static const darkIndigoContainer = Color(0xFF23264A);
+  static const darkErrorText = Color(0xFFFCA5A5);
+}
+
 /// Smallest side of anything the user taps.
 const double kMinTapTarget = 48;
 
