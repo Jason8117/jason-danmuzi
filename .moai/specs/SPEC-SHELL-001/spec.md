@@ -2,7 +2,7 @@
 id: SPEC-SHELL-001
 title: "5칸 셸과 작업 종류 등록부 — 오늘·업무·기록·내 정보, 가운데 비서 버튼, 업무 실행 단계"
 version: "0.3.1"
-status: draft
+status: in-progress
 created: 2026-11-26
 updated: 2026-11-26
 author: jason

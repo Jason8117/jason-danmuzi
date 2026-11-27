@@ -21,6 +21,15 @@ export 'src/follow_up.dart'
         buildCalendarDraft;
 export 'src/format/formatters.dart'
     show formatPhone, formatDuration, formatRelative, formatClock;
+export 'src/format/korean_particle.dart' show withSubjectParticle;
+export 'src/kinds/call_kind.dart' show CallTaskKind;
+export 'src/kinds/task_kind.dart'
+    show
+        TaskKindDescriptor,
+        kCallKindId,
+        DuplicateTaskKindError,
+        UnknownTaskKind,
+        TaskKindCatalog;
 export 'src/models/call_models.dart'
     show
         CallLanguage,
@@ -45,3 +54,7 @@ export 'src/models/intake_models.dart'
 export 'src/network/api_client.dart' show ApiException, ApiClient;
 export 'src/network/live_channel.dart'
     show LiveStatus, LiveConnection, LiveChannel;
+export 'src/tasks/task_groups.dart'
+    show TaskGroups, isApprovalRequest, groupTasks, HistoryDay, groupHistory;
+export 'src/tasks/task_steps.dart'
+    show TaskStepId, TaskStepState, TaskStep, taskSteps;
