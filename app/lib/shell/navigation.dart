@@ -78,6 +78,24 @@ void openSettings(GoRouter router) => router.pushNamed(
       : RouteNames.settings,
 );
 
+/// The live call screen over the task screen (SPEC-ASSIST-001 REQ-012).
+void openLiveCall(GoRouter router, String taskId) =>
+    router.pushNamed(RouteNames.liveCall, pathParameters: {'id': taskId});
+
+/// The call ended: back to the task screen underneath (a pop, so it is not stacked twice); opened as the
+/// first route there is none, so the task opens on the tasks tab instead.
+void closeLiveCall(GoRouter router, String taskId) {
+  if (router.canPop()) {
+    router.pop();
+  } else {
+    openTask(router, taskId);
+  }
+}
+
+/// The live call location of [taskId] (the approval alert stays quiet there too).
+String liveCallLocation(GoRouter router, String taskId) =>
+    router.namedLocation(RouteNames.liveCall, pathParameters: {'id': taskId});
+
 /// The detail location of [taskId], for comparisons with the current location.
 String taskLocation(GoRouter router, String taskId) =>
     router.namedLocation(RouteNames.task, pathParameters: {'id': taskId});

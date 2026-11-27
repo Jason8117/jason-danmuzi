@@ -14,6 +14,9 @@ abstract final class RouteNames {
   static const assistantPlan = 'assistant-plan';
   static const assistantSettings = 'assistant-settings';
   static const assistantNew = 'assistant-new';
+
+  /// SPEC-ASSIST-001 REQ-011: the live call screen, outside the tab shell.
+  static const liveCall = 'live-call';
 }
 
 /// The four tabs, in branch order; the centre assistant button is not a tab (design.md D1.1).

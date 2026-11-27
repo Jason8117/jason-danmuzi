@@ -5,6 +5,7 @@ import 'package:kolbi_core/kolbi_core.dart';
 import '../features/assistant/assistant_screen.dart';
 import '../features/calls/presentation/call_templates.dart';
 import '../features/calls/presentation/home_screen.dart';
+import '../features/calls/presentation/live_call_screen.dart';
 import '../features/calls/presentation/new_call_screen.dart';
 import '../features/calls/presentation/plan_card_screen.dart';
 import '../features/history/history_screen.dart';
@@ -99,6 +100,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      // SPEC-ASSIST-001 REQ-011: the live call screen covers the tab bar; it is pushed over the task screen.
+      GoRoute(
+        path: '/calls/:id/live',
+        name: RouteNames.liveCall,
+        builder: (context, state) =>
+            LiveCallScreen(taskId: state.pathParameters['id']!),
       ),
       // SPEC-ASSIST-001 REQ-009: what the assistant opens are its child routes, never tab routes pushed over
       // it (research R1-G3); the same screen widgets as their tab routes.

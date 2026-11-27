@@ -27,7 +27,9 @@ class _ApprovalListenerState extends ConsumerState<ApprovalListener> {
       if (!_announced.add(approval.id)) continue;
 
       final router = ref.read(routerProvider);
-      if (router.state.uri.path == taskLocation(router, task.id)) continue;
+      // The task's own screens show the card already: the task screen and its live call screen (ASSIST REQ-011).
+      final path = router.state.uri.path;
+      if (path == taskLocation(router, task.id) || path == liveCallLocation(router, task.id)) continue;
 
       HapticFeedback.heavyImpact();
       scaffoldMessengerKey.currentState?.showSnackBar(
