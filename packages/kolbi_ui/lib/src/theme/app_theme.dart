@@ -9,7 +9,11 @@ abstract final class AppTheme {
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
 
-  /// REQ-003 type scale. Colors come from the theme; the font is the system default (OD-4).
+  /// Pretendard, bundled as a package font (SPEC-DESIGN-001 REQ-005); resolves to `packages/kolbi_ui/Pretendard`.
+  static const fontFamily = 'Pretendard';
+  static const fontPackage = 'kolbi_ui';
+
+  /// REQ-003 type scale. Colors come from the theme; [_build] applies [fontFamily].
   static const textTheme = TextTheme(
     titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
     titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
@@ -37,22 +41,29 @@ abstract final class AppTheme {
       error: light ? AppColors.errorText : AppColors.darkErrorText,
       onError: light ? AppColors.white : AppColors.darkBackground,
     );
+    final type = textTheme.apply(fontFamily: fontFamily, package: fontPackage);
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
+      fontFamily: fontFamily,
+      package: fontPackage,
       textTheme: textTheme,
       scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface),
+        titleTextStyle: type.titleLarge?.copyWith(color: scheme.onSurface),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
         color: scheme.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        // A 1px decorative line instead of a shadow (REQ-006); AppCard draws the attention border itself.
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: BorderSide(width: 1, color: scheme.outlineVariant),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -65,7 +76,7 @@ abstract final class AppTheme {
           foregroundColor: AppColors.white,
           minimumSize: const Size(kMinTapTarget, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          textStyle: textTheme.labelLarge?.copyWith(fontSize: 16),
+          textStyle: type.labelLarge?.copyWith(fontSize: 16),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -79,7 +90,7 @@ abstract final class AppTheme {
   }
 }
 
-/// The five card moods (REQ-004). Only [attention] draws a border.
+/// The five card moods (REQ-004). Every card has a 1px line; [attention] draws it in its accent color.
 enum CardTone { neutral, attention, positive, caution, critical }
 
 /// A background with the text and the icon/border color drawn on it.

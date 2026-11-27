@@ -5,6 +5,7 @@ export 'src/input/code_point_formatter.dart'
     show CodePointLengthLimitingFormatter;
 export 'src/theme/app_theme.dart'
     show AppTheme, CardTone, ToneColors, StatusColors;
+export 'src/theme/fonts.dart' show registerKolbiFontLicenses;
 export 'src/theme/tokens.dart'
     show
         AppSpace,

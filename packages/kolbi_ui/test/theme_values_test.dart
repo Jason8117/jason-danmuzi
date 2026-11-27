@@ -1,4 +1,6 @@
-// Theme values for SPEC-DESIGN-001 (AC-001, AC-002, AC-004a).
+// Theme values for SPEC-DESIGN-001 (AC-001, AC-002, AC-004a, AC-005, AC-006).
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
@@ -136,5 +138,82 @@ void main() {
     expect(theme.colorScheme.brightness, Brightness.dark);
     expectRoles(theme, dark: true);
     expectTones(theme, dark: true);
+  });
+
+  // AC-005
+  test('Pretendard is a package font with its licence, used by the theme', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    expect(pubspec, contains('family: Pretendard'));
+    expect(pubspec, contains('asset: assets/fonts/PretendardVariable.ttf'));
+    expect(pubspec, contains('assets/fonts/OFL.txt'));
+    expect(File('assets/fonts/PretendardVariable.ttf').existsSync(), isTrue);
+    expect(
+      File('assets/fonts/OFL.txt').readAsStringSync(),
+      contains('SIL OPEN FONT LICENSE'),
+    );
+    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+      expect(
+        theme.textTheme.bodyMedium?.fontFamily,
+        'packages/kolbi_ui/Pretendard',
+      );
+      expect(
+        theme.textTheme.titleLarge?.fontFamily,
+        'packages/kolbi_ui/Pretendard',
+      );
+      expect(
+        theme.appBarTheme.titleTextStyle?.fontFamily,
+        'packages/kolbi_ui/Pretendard',
+      );
+      expect(
+        theme.filledButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
+        'packages/kolbi_ui/Pretendard',
+      );
+    }
+  });
+
+  // AC-006
+  testWidgets('every AppCard draws a 1px border', (tester) async {
+    for (final (theme, dark) in [
+      (AppTheme.light(), false),
+      (AppTheme.dark(), true),
+    ]) {
+      final outline = dark ? const Color(0xFF2A2E45) : const Color(0xFFE6E8F0);
+      final cards = <String, (AppCard, Color)>{
+        for (final tone in CardTone.values)
+          tone.name: (
+            AppCard(tone: tone, child: const Text('본문')),
+            tone == CardTone.attention
+                ? theme.colorScheme.tone(tone).accent
+                : outline,
+          ),
+        'color: amber': (
+          const AppCard(color: Colors.amber, child: Text('본문')),
+          outline,
+        ),
+      };
+      for (final MapEntry(key: name, value: (card, sideColor))
+          in cards.entries) {
+        // A fresh tree per card: MaterialApp animates a theme change, which would show the previous theme.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: Scaffold(body: card),
+          ),
+        );
+        final widget = tester.widget<Card>(find.byType(Card));
+        final shape =
+            (widget.shape ?? theme.cardTheme.shape)! as RoundedRectangleBorder;
+        final mode = dark ? 'dark' : 'light';
+        expect(shape.side.width, 1, reason: '$mode $name width');
+        expect(shape.side.color, sideColor, reason: '$mode $name colour');
+        expect(
+          shape.borderRadius,
+          BorderRadius.circular(AppRadius.lg),
+          reason: '$mode $name radius',
+        );
+        if (name == 'color: amber') expect(widget.color, Colors.amber);
+      }
+    }
   });
 }

@@ -63,7 +63,7 @@ class AppCard extends StatelessWidget {
       shape: attention
           ? RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.lg),
-              side: BorderSide(color: colors.accent),
+              side: BorderSide(width: 1, color: colors.accent),
             )
           : null,
       child: Padding(
