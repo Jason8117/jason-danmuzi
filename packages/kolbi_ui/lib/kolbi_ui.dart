@@ -26,5 +26,5 @@ export 'src/widgets/common.dart'
         runWithFeedback,
         describeError;
 export 'src/widgets/outcome_card.dart' show outcomeTone, OutcomeCard;
-export 'src/widgets/status_chip.dart' show StatusChip;
+export 'src/widgets/status_chip.dart' show StatusChip, StatusCategory;
 export 'src/widgets/transcript_view.dart' show TranscriptView;
