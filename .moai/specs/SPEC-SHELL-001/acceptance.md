@@ -171,7 +171,7 @@ grep -rn "지난 통화\|home-intake\|최근 통화한 곳\|'CallMate'\|'기록'
 
 - **Given** 이 SPEC의 변경 뒤
 - **When** 기존 테스트 파일 `approval_flow_test.dart`, `approval_card_test.dart`, `intake_flow_test.dart`, `follow_up_test.dart`, `trust_notice_test.dart`, `outcome_card_test.dart`, `calls_controller_test.dart`, `unit_test.dart`, `theme_test.dart`를 실행하면
-- **Then** 모두 수정 없이 통과한다(`git diff --stat <run_start_sha> -- app/test/`에 이 파일들이 없음). `plan_card_test.dart`는 AC-021 표의 한 블록만 바뀐 채 통과한다
+- **Then** 모두 수정 없이 통과한다(`git diff --stat <run_start_sha> -- app/test/`에 이 파일들이 없음). `plan_card_test.dart`는 AC-021 표의 한 블록만 바뀐 채 통과한다. 단 `approval_flow_test.dart`·`approval_card_test.dart`는 AC-021 표 확장 행(소유자 결정 2026-11-27)만 바뀐 채 통과한다
 - 확인: diff 원문을 `progress.md`에 기록
 
 ## AC-020 — 접근성 (REQ-020)
@@ -219,7 +219,7 @@ grep -rn "지난 통화\|home-intake\|최근 통화한 곳\|'CallMate'\|'기록'
 ## 완료 정의 (Definition of Done)
 
 - [ ] AC-001 ~ AC-021 모두 PASS, 명령 원문과 출력이 `progress.md` §E.2에 있음
-- [ ] 기존 테스트 통과, 의도한 변경은 AC-021 표의 두 블록뿐
+- [ ] 기존 테스트 통과, 의도한 변경은 AC-021 표의 행뿐(원래 두 블록 + 소유자 결정 2026-11-27로 더한 네 행)
 - [ ] `server/` 무변경
 - [ ] 기능 간 import 허용 목록이 비어 있음
 - [ ] 서식은 변경 파일에만 적용
