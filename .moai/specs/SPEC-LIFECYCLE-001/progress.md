@@ -291,3 +291,9 @@ ac_pass_with_debt_carried: [AC-014 (c)]
 - 동작 변화: 이 경로에서 `"Shutdown step exceeded its budget"`(terminate_calls) warn은 더 이상 나오지 않고, REQ-003의 작업 ID warn(`"Shutdown hangup did not finish in time"`)은 그대로 남는다.
 - manager-spec 후속(이 에이전트는 spec.md 본문을 고칠 수 없음): spec.md OD-3 본문의 "14,371에서 `timeLimit`이 14,400에 닿고"는 한 칸 어긋난다. 실측 `katTimeLimitSec(14370) = 14400`이므로 "14,370에서"가 맞다(감사 A2, `probe-timelimit.mts`). "14,371 이상이면 여유가 줄어든다"는 표현은 맞다.
 
+
+## Sync re-audit (round 2, 2026-11-27)
+
+- sync_audit_round2: "PASS 89.9 (F2 fixed by 06759af, regression test reproduces the round-1 failure when the fix is reverted); remaining R2 docs typo in OD-3 (14,371 -> 14,370), R5 terminateCallsMs <= 250 gives a 0 ms hang-up deadline"
+- report: .moai/reports/sync-audit/FIVE-SPECS-audit-2.md
+- status: implemented -> completed (owner decision 2026-11-27: sync-audited SPECs end at `completed`)

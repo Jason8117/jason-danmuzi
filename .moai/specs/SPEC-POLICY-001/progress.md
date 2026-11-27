@@ -201,3 +201,9 @@ Source: owner decision resolving the blocker above. A `callbackNumber` that the 
 - GREEN (`b-green.log`, `final-test.log`): `Test Files 11 passed (11)` / `Tests 229 passed (229)`; typecheck exit 0; test-file compile exit 0. `"010 9999 8888"` still normalizes to `+821099998888`. The absent, `""` and `"abc"` cases are unchanged.
 - Follow-up for manager-spec: the REQ-004 / AC-004 text in spec.md and acceptance.md does not yet say that blocked callback numbers are dropped. It needs a scope-doc update. spec.md, plan.md and acceptance.md were not edited in this cycle.
 - Not changed: tasks loaded from the data file that already hold a blocked callback number (stored before this fix) keep it. `approvePlan` re-checks only the target number. The callback number is never dialed; it appears only as text in the agent prompt (`brain/prompts.ts`).
+
+## Sync re-audit (round 2, 2026-11-27)
+
+- sync_audit_round2: "PASS 87.3 (F1 fixed by f833092 and 50343ad; round-1 probes now return 400 blocked_number); remaining R1 REQ-004/AC-004 text does not yet say blocked callback numbers are dropped, R3 non-+82 numbers reach KAT as bare digits (known residual risk)"
+- report: .moai/reports/sync-audit/FIVE-SPECS-audit-2.md
+- status: implemented -> completed (owner decision 2026-11-27: sync-audited SPECs end at `completed`)

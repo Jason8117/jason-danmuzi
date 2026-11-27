@@ -2,9 +2,9 @@
 id: SPEC-POLICY-001
 title: "통화 안전 정책을 서비스 계층에서 강제"
 version: "0.3.0"
-status: implemented
+status: completed
 created: 2026-11-20
-updated: 2026-11-21
+updated: 2026-11-27
 author: jason
 priority: High
 phase: "v0.2.0 target"
