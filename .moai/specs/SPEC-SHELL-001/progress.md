@@ -185,7 +185,7 @@ external_services_contacted: none
 
 ```yaml
 sync_complete_at: 2026-11-27
-sync_commit_sha: pending-backfill   # this sync commit cannot name its own SHA; read it with `git log -1 --format=%h -- .moai/specs/SPEC-SHELL-001/progress.md`
+sync_commit_sha: 286a435
 sync_status: implemented   # orchestrator raises to completed after the sync audit passes (owner rule 2026-11-27)
 run_start_sha: 2fef928   # 2fef928b882e55ea23e379ad9674063758f5f2f2
 run_commit_sha: 5b15c79   # M6, last implementation commit (M1 d030b0b, M2 07565f5, M3 19d58ca, M4 1048911, M5 d99abac, M6 5b15c79)
@@ -238,7 +238,8 @@ plan_g_items:
   codemaps: "modules.md (core clock/trust_notice/router re-export, CallTask.kind, shell/ and inbox/history/me tables, kolbi_core kinds/tasks/particle and kolbi_ui presenter/timeline/briefing/badge, main.dart font-licence call); entry-points.md (main.dart step, ApprovalListener -> openTask, route table with branches and callers incl. /assistant); dependencies.md (go_router users, mermaid router node, core->features inversion and cross-feature exception resolved)"
   .moai/specs/EPIC-KOLBI-APP/overview.md: "SHELL-001 implemented(0.3.2, 2026-11-27)"
 project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/04_DESIGN_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
-sync_audit: pending
+sync_audit: "PASS 87.0 (harmonic mean, Tier L bar 0.85), .moai/reports/sync-audit/SPEC-SHELL-001-audit-1.md; fixed in the follow-up commit: C1 tech.md font-licence line, C2 mermaid node, C3 acceptance/research version headings. Open (non-blocking): F1 /assistant opened as the first route (web deep link) — close pop() has nothing to pop and submitFromAssistant pushes /plan over /assistant (R1-G assert) — hand to SPEC-ASSIST-001; F2 history error state and assistant no-profile path untested (history 83.3% lines); F3 possible keyboard gap since the shell is not a Scaffold; F4 day boundary read only on recompute"
+status_transition: implemented -> completed (sync audit passed, owner rule 2026-11-27)
 ```
 
 ## §F Phase 4 Mode Selection

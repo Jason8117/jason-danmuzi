@@ -97,7 +97,9 @@ flowchart TD
   appd --> router[shell/app_router, core/router는 다시 내보내기]
   appd --> listener[presentation/approval_listener]
   router --> screens[presentation 화면]
-  router --> tabs[features/inbox · history · me]
+  router --> tabs[features/inbox · history]
+  router --> me[features/me]
+  screens --> feed
   router --> settingsScreen[features/settings]
   router --> models[kolbi_core models]
   tabs --> feed[shell/task_feed · kind_registration]

@@ -1,4 +1,4 @@
-# SPEC-SHELL-001 조사 기록 (0.3.1, plan-phase)
+# SPEC-SHELL-001 조사 기록 (0.3.2, plan-phase; R2 표는 run 중 소유자 결정으로 확장)
 
 plan-audit 1차(`.moai/reports/plan-audit/SPEC-SHELL-001-review-1.md`)가 요구한 두 가지 근거를 담는다: (1) go_router 18.1.4에서 탭(갈래) 사이 이동이 실제로 어떻게 동작하는가, (2) 이 SPEC이 바꾸는 기존 테스트 전체 목록. 2026-11-26, HEAD c2e732d 기준.
 

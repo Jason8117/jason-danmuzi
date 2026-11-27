@@ -44,7 +44,7 @@
 | `OFL.txt` | 4,418 바이트 | 같은 태그의 `LICENSE`(SIL Open Font License 1.1). sha256 `d31ddd9f2bed32fd7e302a205cf2380ba0de6529152d239ef99cfb6f261bfc04` |
 
 - `packages/kolbi_ui/pubspec.yaml`에 글꼴 패밀리 `Pretendard`(가변 글꼴 파일 하나)와 자산 `assets/fonts/OFL.txt`를 등록했다. 테마는 `packages/kolbi_ui/Pretendard`로 이 글꼴을 쓴다. 새 패키지 의존성은 없다.
-- 라이선스 문구는 `registerKolbiFontLicenses()`(`packages/kolbi_ui/lib/src/theme/fonts.dart`)가 `LicenseRegistry`에 넣는다. 앱 `main.dart`에서 이 함수를 부르는 한 줄은 SPEC-SHELL-001 몫이며, 2026-11-27 기준 앱에는 아직 들어가지 않았다(`grep -rn registerKolbiFontLicenses app/lib` 결과 없음). 그 전까지 앱의 라이선스 화면에는 Pretendard가 나오지 않는다.
+- 라이선스 문구는 `registerKolbiFontLicenses()`(`packages/kolbi_ui/lib/src/theme/fonts.dart`)가 `LicenseRegistry`에 넣는다. 앱 `main.dart`가 시작할 때 이 함수를 부른다(SPEC-SHELL-001, 2026-11-27). 그래서 앱의 라이선스 화면에 Pretendard가 나온다.
 - 앱 크기: `flutter build web --debug` 결과 `build/web`이 53,288 KB에서 59,888 KB로 6,600 KB 늘었다(SPEC-DESIGN-001 run 단계 측정). 계획 때 가정한 약 2MB보다 크다. 가변 글꼴의 굵기 축이 플랫폼마다 `FontWeight`를 따르는지는 실기기에서 확인하지 않았다(`fontVariations` 미지정).
 
 ## 개발 환경 요구 사항
