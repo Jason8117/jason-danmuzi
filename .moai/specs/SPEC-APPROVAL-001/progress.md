@@ -158,4 +158,37 @@ m1_to_mN_commit_strategy: one commit per milestone M1..M5 (code + progress), M6 
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: "the docs(SPEC-APPROVAL-001) sync commit that adds this section (resolve via git log)"
+sync_status: implemented
+run_commit_sha: 594e810d105e8dff5b6a3bd9c079b5213fe78eb1   # §E.3 value: last implementation commit (M5) on worktree branch worktree-agent-af5214d1d7c64f509
+run_commit_sha_on_main: 9bc7332   # the same M5 landed on main as 9bc7332 (git diff --quiet 594e810 9bc7332 -> exit 0, identical tree); M6 evidence commit 678274e -> 42e2f16 on main
+run_start_sha: cd1f77e2f00cb78c355d40b6ff5b1d36b9a4fc51   # on main (git merge-base --is-ancestor cd1f77e 8ad8239 -> true)
+sync_evidence_source: orchestrator   # measured by the orchestrator on HEAD 8ad8239 on 2026-11-27, not by this agent; evidence under .moai/state/verify/coverage/ (gitignored, local only)
+app_tests_at_sync: "00:08 +84: All tests passed!"   # cd app && flutter --suppress-analytics test --coverage
+app_line_coverage_at_sync: "1497/1689 = 88.6% (app + kolbi_core + kolbi_ui, from app tests; combined.lcov)"
+server_tests_at_sync: "Tests 387 passed (387); Lines 95.42% (1085/1137), Statements 92.3%, Branches 81.49%, Functions 91.66%"   # npx vitest run --coverage (server.txt)
+server_typecheck_exit_at_sync: 0   # npm --prefix server run typecheck
+web_build_at_sync: "✓ Built build/web"   # cd app && flutter build web --debug
+browser_run_at_sync: "web build against a simulated server (CALL_PROVIDER=simulated, no .env): live call -> approval card (60초, quick replies, comment field, 거절/승인) -> approved -> result card; browser console: no errors"
+acceptance_distinct_ac_ids: 15   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' acceptance.md | sort -u | wc -l -> 15 = §E.3 ac_pass_count 15
+ac_matrix_test_names_at_sync: all-present   # every test name cited in the §E.2 AC matrix found by grep -F in server/src or app/test at HEAD 8ad8239
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated: 2026-11-22 -> 2026-11-27; spec/plan/acceptance bodies unchanged
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped   # --skip-mx semantics
+divergence:
+  planned_vs_changed_files: match   # git diff --name-only cd1f77e..42e2f16 = the 15 files of plan.md §B (9 server + 6 app) + spec.md + progress.md; no unplanned file, no planned-but-unchanged file
+  deviations: "§E.2 M4 chips moved to one horizontal-scroll row (card 370px -> 318px on the 800x600 test surface); M5 AC-001 400 body asserted with toMatchObject({error}) because the current body also carries message; plan-audit advisories A1-1..A1-3 recorded for manager-spec"
+later_changes:   # history not rewritten; paths below are the current locations at 8ad8239
+  SPEC-INTAKE-001: "server/src/brain/prompts.ts, server/src/services/callService.ts (+test), server/src/http/app.test.ts, app/test/support/fakes.dart, app/test/unit_test.dart: additions for intake and auto start"
+  SPEC-FOLLOWUP-001: "server/src/brain/prompts.ts (summary prompt sentence), app/test/unit_test.dart (appointment parsing)"
+  SPEC-UX-001: "app/lib/features/calls/presentation/widgets/approval_card.dart restyled (AppCard, tokens, remaining-seconds clock)"
+  SPEC-MODULE-001: "app/lib/features/calls/domain/approval_comment.dart is now a re-export; constants and pure functions live in packages/kolbi_core/lib/src/approval_comment.dart, CodePointLengthLimitingFormatter in packages/kolbi_ui/lib/src/input/code_point_formatter.dart; approval_card.dart stays in the app and imports the barrels"
+device_check: deferred   # §E.2 "검증하지 않은 것": pinned card height and chip scrolling with the keyboard up on a small real device, and Korean IME composition at the 500 code-point limit, not run; no Xcode/simulator on this Mac at sync either
+residual_risks_carried: "AI following user_comment / rule 7 in a real call is not verified automatically; A1-2 two dates joined by one space are masked; A1-3 a hyphenated phone token between card halves leaves both halves unmasked"
+project_docs_synced: [.moai/project/structure.md, .moai/project/codemaps/modules.md, .moai/specs/EPIC-ASSISTANT-UX/overview.md]   # domain/approvalComment.ts rows added; committed once for the three SPECs in the docs(SPEC-ASSISTANT-UX) commit that follows the FOLLOWUP sync commit
+tech_md: unchanged   # no new dependency
+sync_audit: pending
+```
