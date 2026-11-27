@@ -185,4 +185,40 @@ void main() {
     }
     expect(violations, isEmpty);
   });
+
+  // SPEC-ASSIST-001 AC-013: the device recognizer and the permission plugin sit behind the speech port.
+  test('speech and permission packages stay inside the assistant feature', () {
+    const speech = ['package:speech_to_text/', 'package:permission_handler/'];
+    final found = <String>[
+      for (final file in [
+        ...dartFiles('lib'),
+        ...dartFiles('../packages/kolbi_ui/lib'),
+        ...dartFiles('../packages/kolbi_core/lib'),
+      ])
+        for (final uri in directiveUris(file))
+          if (speech.any(uri.startsWith)) file,
+    ];
+    expect(found, isNotEmpty, reason: 'the speech adapter imports the packages');
+    expect(
+      found.where((f) => !f.startsWith('lib/features/assistant/speech/')),
+      isEmpty,
+    );
+  });
+
+  // SPEC-ASSIST-001 spec §4: the platform declarations the recognizer needs, and no Bluetooth.
+  test('platform files declare the microphone and speech permissions', () {
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    for (final key in [
+      'NSMicrophoneUsageDescription',
+      'NSSpeechRecognitionUsageDescription',
+    ]) {
+      expect(plist, contains('<key>$key</key>'), reason: key);
+    }
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    expect(manifest, contains('android.permission.RECORD_AUDIO'));
+    expect(manifest, contains('android.speech.RecognitionService'));
+    expect(manifest, isNot(contains('BLUETOOTH')));
+  });
 }
