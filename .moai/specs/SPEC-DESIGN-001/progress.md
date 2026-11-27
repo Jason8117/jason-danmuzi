@@ -188,7 +188,52 @@ external_services_contacted: none
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-27
+sync_commit_sha: see git log (docs(SPEC-DESIGN-001) close sync)
+sync_status: implemented   # orchestrator raises to completed after the sync audit passes (owner decision 2026-11-27)
+run_start_sha: 466c73b
+run_commit_sha: 3de1cee   # M3, last implementation commit (M1 7687615, M2 4430e31, M3 3de1cee)
+run_evidence_commit_sha: 5ee6eef   # run-phase evidence commit
+head_before_sync: 797c0da   # unrelated docs commit for other SPECs on top of 5ee6eef; tree identical for this SPEC's paths
+pushed_state: not-pushed   # this sync commit is not pushed
+measured_by: orchestrator on the 5ee6eef/797c0da tree, 2026-11-27
+root_workspace_test_at_sync: "dart test -> 00:00 +2: All tests passed!"
+app_tests_at_sync: "cd app && flutter --suppress-analytics test -> 00:08 +88: All tests passed!"
+kolbi_ui_tests_at_sync: "cd packages/kolbi_ui && flutter --suppress-analytics test -> 00:01 +61: All tests passed!"
+kolbi_core_tests_at_sync: "cd packages/kolbi_core && dart test -> 00:00 +3: All tests passed!"
+protected_paths_diff_at_sync: "git diff --stat 466c73b -- server/ packages/kolbi_core/ -> empty; app/ = call_detail_screen.dart 1 line, theme_test.dart 1 line, 2 new tests (design_contrast_test.dart, font_overflow_test.dart)"
+font_asset: "PretendardVariable.ttf 6,739,336 B + OFL.txt 4,418 B from github.com/orioncactus/pretendard v1.3.9 (sha256 in §F)"
+web_build_size: "53,288 KB -> 59,888 KB (+6,600 KB; run agent measurement, §E.2 AC-012)"
+acceptance_distinct_ac_ids: 13   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' .moai/specs/SPEC-DESIGN-001/acceptance.md | sort -u | wc -l -> 13; the pattern drops the a/b suffix, so AC-004a and AC-004b count as one; with the suffix there are 14 (AC-001..AC-013 incl. AC-004a/b), matching §E.2 14/14 PASS
+frontmatter_status_transitions:
+  spec.md: draft -> implemented   # updated: 2026-11-26 -> 2026-11-27; spec/plan/acceptance bodies unchanged (run phase did not move status to in-progress)
+changelog_entry_position: not-applicable   # repository has no CHANGELOG.md
+mx_scan: skipped
+coverage: not-measured
+divergence:
+  planned_vs_changed_files: "plan.md §B lists 16 files; git diff --name-only 466c73b..3de1cee -> the same 16 (theme/app_theme.dart, theme/tokens.dart, theme/fonts.dart new, widgets/common.dart, widgets/status_chip.dart, kolbi_ui.dart, assets/fonts/PretendardVariable.ttf + OFL.txt, kolbi_ui pubspec.yaml, 3 kolbi_ui tests, 2 app tests, app/test/theme_test.dart, call_detail_screen.dart); no unplanned file"
+  app_colors_internal: "AppColors constants live in tokens.dart and are not exported from the barrel; tests use hex literals from plan §A.1/§A.3"
+  status_chip_nullable_status: "StatusChip.status is TaskStatus? (null only for StatusChip.category); the original constructor and both app call sites unchanged"
+  public_helpers: "StatusChip.iconOf(category) and the category getter are public"
+  fixed_type_scale_font: "theme applies Pretendard to the app bar title and filled-button text with textTheme.apply, because those styles come from the static type scale"
+  no_font_variations: "no fontVariations set; whether the variable font's wght axis follows FontWeight on each platform is unverified on device"
+  font_size: "6.7MB vs the plan's ~2MB assumption (owner approved before download, §F)"
+debt_carried:
+  - "N4 dark neutral chip background equals the card colour (no pill outline)"
+  - "N5 dark container roles outside the §A.3 table keep fromSeed values"
+  - "N6 FilledButton.tonal takes the #635BFF filled-button background -> SPEC-SHELL-001"
+  - "registerKolbiFontLicenses() call in app/lib/main.dart -> SPEC-SHELL-001 (listed in SHELL plan.md:54; grep -rn registerKolbiFontLicenses app/lib -> no match on 2026-11-27)"
+device_check: pending   # owner: variable-font weight rendering and real-font overflow on a device
+plan_g_items:
+  docs/planning/06_DESIGN_DECISIONS.md: "§3 implementation note (values unchanged; neutral chip bg, caution = neutral, #635BFF never text); §7 Q-1 and Q-2 closed"
+  docs/planning/04_DESIGN_PLAN.md: "§4 revision block: caution = neutral, chip category table link (plan §A.2), seed now #635BFF"
+  .moai/project/tech.md: "font asset, OFL licence, Pretendard v1.3.9 source and sha256, build size, main.dart call pending (SHELL)"
+  SPEC-UX-001: "not done in this commit: plan §G assigns the OD-2/OD-4 supersede note and the acceptance.md AC-002 seed expectation to manager-spec (body change); manager-docs may not edit another SPEC body"
+  SPEC-SHELL-001: "checked only: the main.dart line is in SHELL plan.md:54 and not yet in app/lib; SHELL docs unchanged"
+project_docs_synced: [.moai/project/tech.md, .moai/project/structure.md, .moai/project/codemaps/modules.md, docs/planning/06_DESIGN_DECISIONS.md, docs/planning/04_DESIGN_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
+sync_audit: pending
+```
 
 ## §F Phase 4 Mode Selection
 

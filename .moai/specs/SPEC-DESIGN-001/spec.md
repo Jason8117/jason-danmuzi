@@ -2,9 +2,9 @@
 id: SPEC-DESIGN-001
 title: "Midnight Indigo 디자인 시스템 — 토큰 값 교체, Pretendard, 상태 칩 다섯 범주, 선 카드"
 version: "0.2.1"
-status: draft
+status: implemented
 created: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-27
 author: jason
 priority: High
 phase: "v0.4.0 target"
