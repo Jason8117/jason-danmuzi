@@ -8,9 +8,19 @@ import { ZodError } from "zod";
 import type { AppConfig } from "../config.js";
 import { InvalidTransitionError } from "../domain/stateMachine.js";
 import type { EventBus } from "../events/eventBus.js";
+import type { PlaceSearch } from "../places/placeSearch.js";
+import { PlaceSearchError } from "../places/types.js";
 import type { ProviderRoutes } from "../providers/types.js";
 import { type CallService, ServiceError } from "../services/callService.js";
-import { ApprovalDecisionBody, ApprovalParams, ApprovePlanBody, CreateTaskBody, IntakeBody, TaskParams } from "./schemas.js";
+import {
+  ApprovalDecisionBody,
+  ApprovalParams,
+  ApprovePlanBody,
+  CreateTaskBody,
+  IntakeBody,
+  PlaceSearchBody,
+  TaskParams,
+} from "./schemas.js";
 
 export interface AppDeps {
   config: Pick<AppConfig, "API_TOKEN" | "CORS_ORIGINS" | "provider" | "llm">;
@@ -20,7 +30,10 @@ export interface AppDeps {
   providerRoutes?: ProviderRoutes;
   /** Whether the active provider dials real phones. Decided by the wiring (container.ts); default false. */
   realCalls?: boolean;
-  logger?: boolean;
+  /** Place search wired by container.ts (SPEC-PLACE-001); absent means the route answers 503. */
+  places?: PlaceSearch | null;
+  /** `{ stream }` keeps the production log settings and only redirects the output (tests capture it). */
+  logger?: boolean | { stream: NodeJS.WritableStream };
 }
 
 type RequestWithRawBody = FastifyRequest & { rawBody?: string };
@@ -106,6 +119,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
                 url: req.url.replace(/token=[^&]*/g, "token=***"),
               }),
             },
+            ...(typeof deps.logger === "object" ? { stream: deps.logger.stream } : {}),
           },
     bodyLimit: 64 * 1024,
   });
@@ -120,6 +134,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   }
 
   app.setErrorHandler((error, request, reply) => {
+    // Before request.log.error below: only the kind and status are logged, never the search or its results.
+    if (error instanceof PlaceSearchError) {
+      request.log.warn({ kind: error.kind, status: error.status }, "Place search failed");
+      return reply
+        .status(502)
+        .header("cache-control", "no-store")
+        .send({ error: "place_search_failed", message: "Place search failed" });
+    }
     if (error instanceof ZodError) {
       return reply.status(400).send({ error: "invalid_request", message: error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") });
     }
@@ -168,6 +190,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const { text, language } = IntakeBody.parse(request.body);
     return calls.draftIntake(text, language);
   });
+
+  // Results are passed through and never kept: no store, cache, event or log (SPEC-PLACE-001 REQ-004).
+  const places = deps.places;
+  if (places) {
+    app.post("/v1/places/search", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      return places.search(PlaceSearchBody.parse(request.body));
+    });
+  }
 
   app.post("/v1/tasks/:id/approve-plan", async (request) => {
     const { id } = TaskParams.parse(request.params);

@@ -62,6 +62,31 @@
 - 반영(0.1.2): 감사 N1 AC-005 (9)를 `network`만으로(`design.md` D3과 맞춤), 감사 N2 `error.cause === undefined` 단언을 AC-004(경로 수준)에서 AC-005의 `placeSearch.test.ts` 수준(`search()`가 거절한 값)으로 옮김, 감사 N3 감사 결함 번호에 "감사" 접두(spec HISTORY, plan §D, 이 문서), 감사 N4 plan §G에 `formatPhone` 대표번호 표시가 앱 전체에 적용된다는 항목 추가.
 - 소유자 결정: OD-1·OD-4·OD-5·OD-8·OD-9·OD-10 기본값으로 확정, D-11 답변(위 run 규칙).
 
+## §E.2 Run-phase Evidence
+
+증거 파일(gitignore, 감사용으로 보관): `.moai/state/verify/SPEC-PLACE-001/{pre,red,final}/`.
+
+### 사전 점검 (run 시작 시점, 어떤 변경보다 먼저 기록)
+
+- `git -C <wt> rev-parse HEAD` → `be92194317e2bf3bd49234178ef3aa5d68daf589` (run_start_sha, 계획 커밋. 코드 기준선은 그 부모 74a87c3이며 be92194는 `.moai/specs/SPEC-PLACE-001/`만 더함)
+- `git -C <wt> status --short` → (빈 출력)
+- 서버 `npm --prefix server test` → `Test Files  14 passed (14)` / `Tests  387 passed (387)`, `npm --prefix server run typecheck` → exit 0
+- 앱 `flutter --suppress-analytics test` → `00:13 +148: All tests passed!`, `flutter analyze` → `1 issue found.` (info `test/support/fakes.dart:54:5 • use_null_aware_elements`)
+- kolbi_core `dart test` → `00:00 +27: All tests passed!`, `dart analyze` → `No issues found!`
+- kolbi_ui `flutter test` → `00:01 +72: All tests passed!`
+- 루트 `dart test` → `00:00 +2: All tests passed!`
+- `flutter --version` → `Flutter 3.50.1 • channel stable` / `Tools • Dart 3.14.0`
+- `grep -rn "최근 통화한 곳" app/test` → 9줄: 단언 7줄(`today_test.dart:44`, `assistant_test.dart:556`, `:580`, `:850`, `accessibility_test.dart:622`, `intake_flow_test.dart:130`, `:157`)과 주석 2줄(`today_test.dart:14`, `assistant_test.dart:121`). AC-022 표와 정확히 맞는다(주석 두 줄은 표의 "주석(선택)" 행).
+- D-11: 이 run은 `server/.env`를 읽지 않고 `npm run dev`·`npm start`를 쓰지 않는다. 서버를 띄우는 확인은 하지 않았다(필요한 확인은 모두 `app.inject` 시험으로 함).
+
+### M1 — 서버 계약과 저장 금지 증명
+
+- RED(시험 먼저): `placeSearch.test.ts`, `kakaoLocalPlaceSearch.test.ts`, `http/places.test.ts`, `architecture.test.ts` 끝의 규칙 셋을 먼저 쓰고 실행 → `Test Files  4 failed (4)` / `Tests  1 failed | 6 passed (7)`. 실패 원인: 모듈이 없음(`Cannot find module './placeSearch.js'` 등)과 구조 규칙 `expected [] to include 'places/kakaoLocalPlaceSearch.ts'`. 원문 `.moai/state/verify/SPEC-PLACE-001/red/m1_server_red.txt`. 새 모듈의 RED는 단언 실패가 아니라 가져오기 실패로 나타난 점을 밝혀 둔다.
+- GREEN: `server/src/places/{types,placeSearch,kakaoLocalPlaceSearch,simulatedPlaceSearch}.ts`, `http/schemas.ts`의 `PlaceSearchBody`, `http/app.ts`(`AppDeps.places`·`logger: {stream}`, 오류 처리기가 `PlaceSearchError`를 `request.log.error`보다 먼저 잡아 502·`no-store`, 경로 `POST /v1/places/search`·`Cache-Control: no-store`). M1에서는 `places`가 있을 때만 경로를 등록하고, 503은 M2에서 더한다.
+- 설계 판단: AC-003은 후보 여섯을 순서대로 기대하므로 `createPlaceSearch`는 결과를 자르지 않는다. 5곳 상한은 `limit: 5`(카카오 `size=5`)가 맡는다. 시간 제한은 `AbortController`와 함께 `Promise.race`로도 걸어, 신호를 무시하는 제공자도 `timeoutMs` 안에 끝난다(AC-005 (10)).
+- 증명 시험이 실제로 잡는지 변이 확인(되돌림 확인 `diff` 통과): (1) 어댑터가 원래 예외 문자열을 로그에 쓰게 바꾸면 `expected [ '표식예외-e1e1' ] to deeply equal []`로 실패. (2) 검색 경로에서 검색어를 담은 `TypeError`를 감싸지 않고 다시 던지면 500·표식 노출로 실패. (d)의 `TypeError`는 설계 D3대로 어댑터에서 `network`로 바뀌므로 바깥의 `unexpected` 경로만 바꾼 변이는 통과한다(정상).
+- 결과: `npm --prefix server test` → `Tests  407 passed (407)`(기준 387 + 새 20), `npm --prefix server run typecheck` → exit 0.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자

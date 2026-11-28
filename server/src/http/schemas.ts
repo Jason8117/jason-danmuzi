@@ -20,6 +20,17 @@ export const IntakeBody = z.object({
   language: z.enum(["ko", "en"]).default("ko"),
 });
 
+/** POST /v1/places/search (SPEC-PLACE-001 design.md D1). Unknown fields are dropped. */
+export const PlaceSearchBody = z.object({
+  query: text(100),
+  near: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+    })
+    .optional(),
+});
+
 export const ApprovePlanBody = z
   .object({
     plan: z
