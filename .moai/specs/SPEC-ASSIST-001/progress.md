@@ -156,8 +156,8 @@ untracked_note: "iOS 빌드가 만든 SwiftPM 상태 파일(app/ios/Runner.xcode
 
 ```yaml
 sync_complete_at: 2026-11-28
-sync_commit_sha: pending-backfill   # 이 sync 커밋은 자기 SHA를 적을 수 없음. `git log -1 --format=%h -- .moai/specs/SPEC-ASSIST-001/progress.md`로 읽음
-sync_status: implemented   # sync 감사 통과 뒤 오케스트레이터가 completed로 올림(소유자 규칙 2026-11-27)
+sync_commit_sha: 69aff3c   # 오케스트레이터가 감사 뒤 채움
+sync_status: completed   # sync 감사 1차 PASS-with-debt 84.4와 후속 수정 뒤 오케스트레이터가 올림(2026-11-28)
 run_start_sha: 7b32f44   # 7b32f44b644c587d6756be7028e27e25217bb0e5
 run_commit_sha: f5ab61b   # 마지막 구현 커밋(M1 7623909, M2 b39c48d, M3 afa4fa8, M5 013df8c, M4 dd3e451, Android 안내 f5ab61b)
 run_evidence_commit_sha: 477dac5   # run 증거 커밋(6025987 뒤 한국어로 다시 쓴 기록). 이 sync 커밋 직전 HEAD
@@ -199,7 +199,6 @@ debt_carried:
   - "OD-3·OD-4·OD-5 계획 기본값 그대로(소유자 검토 대기). OD-2 iOS 쪽 문구도 기본값이며 법률 검토(03 NFR-LAW) 대상"
   - "실기기 확인(완료 정의 항목): 실제 권한 창, 기기 안 인식 오류 코드, 한국어 로캘 ID, 말로 부탁 -> 계획 카드 한 번"
   - "Android 안내는 test-after로 썼음(RED는 기능을 끈 상태의 실패로 대신 확인)"
-  - "app/ios의 SwiftPM Package.resolved 두 개가 커밋되지 않음(아래 untracked_handling)"
 debt_closed:
   - "SHELL-001 sync-audit F1: /assistant를 첫 화면으로 열 때 닫기는 오늘로(closeAssistant), 비서가 여는 화면은 자식 경로라 /assistant 위에 탭 경로를 push하지 않음"
   - "plan-audit debt N10(navigation.dart와 자식 경로 이름), N12(SHELL AC-005 행은 무변경으로 통과), N14(실패 규칙과 대체 기억은 AssistantMemory)"
@@ -207,7 +206,7 @@ simulator_check: done   # 오케스트레이터, iPhone 18 Pro(iOS 27.2) 시뮬�
 browser_check: done   # 오케스트레이터, web 빌드와 시뮬레이션 서버(.env 없음), 2026-11-28
 browser_check_observations: "AI 비서 -> 계획 카드 -> 작업 -> 통화 중 화면까지 웹에서 걸어 봄. 콘솔 오류 없음. 웹에서는 어댑터가 받아쓰기를 쓰지 않으므로(kIsWeb -> MicPermission.unavailable, 글로 입력 모드) 마이크·음성 흐름은 이 확인에 들어가지 않음"
 device_check: pending   # 소유자: 실기기(iOS 또는 Android 한 대)에서 권한 창, 받아쓰기 -> 계획 카드, Android 안내, 기기 안 인식 불가 시 동작
-untracked_handling: "flutter build ios가 만든 app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/, app/ios/Runner.xcworkspace/xcshareddata/swiftpm/(각각 Package.resolved 하나, CwlCatchException 2.2.1 고정)은 이 sync 커밋에 넣지 않음. .gitignore·app/.gitignore(.swiftpm/만)·app/ios/.gitignore 어느 것도 이 경로를 무시하지 않고, SHELL에는 앞선 예가 없어(SHELL 때는 SwiftPM 원격 의존이 없었음) .gitignore도 고치지 않음. 처리 방식은 소유자 결정"
+untracked_handling: "flutter build ios가 만든 Package.resolved 두 개(CwlCatchException 2.2.1 고정)는 소유자 결정(2026-11-28)으로 34ad269에서 커밋함"
 pre_commit_hook_note: "이 sync 커밋은 pre-commit 훅(moai gate)을 정상 실행함"
 plan_g_items:
   .moai/project/structure.md: "features/assistant 트리(포트·어댑터 포함), shell/request_intake.dart, assistant_placeholder 삭제, 경로 표에 /assistant 자식 셋과 /calls/:id/live, 이동 규칙(자식 경로, closeAssistant, closeLiveCall), architecture_test 행, 어디를 고쳐야 하는가 2행"
@@ -217,7 +216,9 @@ plan_g_items:
   codemaps: "modules.md(features/assistant 표, shell request_intake·navigation·routes, calls의 live_call_screen·call_timer·[통화 보기], kolbi_ui KolbiOrb·KolbiTheme·TranscriptView agentName, 테스트); entry-points.md(승인 알림이 통화 중 화면에서도 조용함, 경로 표에 비서 자식 셋과 /calls/:id/live, /calls/new·/plan 진입 변경); dependencies.md(speech_to_text·permission_handler 사용 파일, shared_preferences의 안내 기록, mermaid에 assistant·request_intake·speech 노드)"
   extra_docs: "tech.md(앱 패키지 표 2행, 받아쓰기·권한·SwiftPM 제약), docs/product/11_ARCHITECTURE.md(§2.5 표·이동 규칙, SPEC-ASSIST-001 구현 문단, AD-10, 개정 이력), .moai/specs/EPIC-KOLBI-APP/overview.md(ASSIST-001 implemented 0.3.1)"
 project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/06_DESIGN_DECISIONS.md, docs/product/10_PRODUCT_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
-sync_audit: pending
+sync_audit: "1차 PASS-with-debt, 조화 평균 84.4 (Functionality 88, Security 86, Craft 80, Consistency 84). 보고서 .moai/reports/sync-audit/SPEC-ASSIST-001-audit-1.md"
+sync_audit_followup: "M1 서식 9988c91(오케스트레이터), I4 Package.resolved 커밋 34ad269(소유자 결정 2026-11-28), M2·S2 511ac32, F2 11231a5, F3 8fe6516, S4·S5·S6·I2 c31ddaa, 기록 b1a7689. 오케스트레이터가 b1a7689에서 다시 확인: app flutter test +148 통과, analyze 기존 info 1건"
+sync_audit_open: ["실기기: OD-2 안내 중 마이크가 꺼지는지(M2), 권한 창, 받아쓰기", "Info.plist 음성 인식 문구 법률 검토(S4, 03 NFR-LAW)"]
 ```
 
 ### sync 감사 1차 후속 수정 (2026-11-28)

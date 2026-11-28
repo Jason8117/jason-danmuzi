@@ -2,7 +2,7 @@
 id: SPEC-ASSIST-001
 title: "AI 비서와 받아쓰기 — 몰입형 비서 화면, Orb 상태, 음성 부탁, 통화 중 화면"
 version: "0.3.1"
-status: implemented
+status: completed
 created: 2026-11-26
 updated: 2026-11-28
 author: jason
