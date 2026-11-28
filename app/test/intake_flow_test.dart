@@ -1,6 +1,7 @@
 import 'package:callmate/app.dart';
 import 'package:callmate/core/config/app_settings.dart';
 import 'package:callmate/core/network/api_client.dart';
+import 'package:callmate/core/router/app_router.dart';
 import 'package:callmate/features/calls/data/calls_repository.dart';
 import 'package:callmate/features/calls/domain/call_models.dart';
 import 'package:callmate/features/calls/presentation/call_templates.dart';
@@ -37,6 +38,11 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
+    // SPEC-ASSIST-001 REQ-010: requests start in the AI assistant's text mode, not on today.
+    ProviderScope.containerOf(tester.element(find.byType(CallMateApp))).read(routerProvider).push('/assistant?mode=text');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
     return repo;
   }
 
@@ -135,7 +141,6 @@ void main() {
     expect(find.textContaining('세탁소 ·'), findsNothing);
     expect(find.textContaining('빵집 ·'), findsNothing);
     expect(find.textContaining('피자집 ·'), findsNothing);
-    expect(find.text('피자집'), findsOneWidget);
 
     await tapAndSettle(tester, first);
     expect(input(tester).text, '라파스타에 ');
@@ -148,7 +153,6 @@ void main() {
   testWidgets('suggests recent counterparties and templates: no tasks yet', (tester) async {
     await pumpHome(tester, []);
 
-    expect(find.text('귀찮은 전화, 대신 걸어드릴게요'), findsOneWidget);
     expect(find.text('식당 예약'), findsOneWidget);
     expect(find.text('최근 통화한 곳'), findsNothing);
 

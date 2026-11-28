@@ -6,24 +6,28 @@ import 'package:kolbi_core/kolbi_core.dart';
 
 /// Chat-style rendering of a call: the AI on the right, the other party on the left.
 class TranscriptView extends StatelessWidget {
-  const TranscriptView({super.key, required this.entries, required this.calleeName});
+  const TranscriptView({super.key, required this.entries, required this.calleeName, this.agentName = 'AI 비서'});
 
   final List<TranscriptEntry> entries;
   final String calleeName;
 
+  /// The name over the AI's bubbles; the live call screen says "콜비" (SPEC-ASSIST-001 REQ-011).
+  final String agentName;
+
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: [for (final entry in entries) _Bubble(entry: entry, calleeName: calleeName)],
+      children: [for (final entry in entries) _Bubble(entry: entry, calleeName: calleeName, agentName: agentName)],
     );
   }
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.entry, required this.calleeName});
+  const _Bubble({required this.entry, required this.calleeName, required this.agentName});
 
   final TranscriptEntry entry;
   final String calleeName;
+  final String agentName;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +76,7 @@ class _Bubble extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.xs),
             child: Text(
-              isAgent ? 'AI 비서' : calleeName,
+              isAgent ? agentName : calleeName,
               style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),

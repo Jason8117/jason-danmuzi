@@ -1,4 +1,4 @@
-# SPEC-ASSIST-001 인수 기준 (0.3.0)
+# SPEC-ASSIST-001 인수 기준 (0.3.1)
 
 ## 공통 검증 명령
 
@@ -70,6 +70,7 @@ git diff <run_start_sha> -- app/test/
 - **When** 비서 화면을 열면
 - **Then** (1)~(3) "잘 못 들었어요. 다시 말하거나 글로 적어 주세요"가 보이고, 칩이 "기다리고 있어요"로 돌아가며, `intake` 호출 수가 0이다 (4) OD-2 안내("이 기기에서는 … 음성 인식 서비스가 말을 글로 바꿔요. 콜비는 음성을 저장하지 않아요.")와 [계속]이 보이고, [계속] 뒤 `listen`이 `onDevice: false`로 한 번 더 불리며, 최종 문장으로 `intake`가 한 번 불린다 (5) 실패 문구와 함께 글로 입력 모드가 되고, `listen` 호출 수는 정확히 2다(되풀이 없음). 화면을 닫았다 다시 열면 자동으로 듣기 시작하지 않는다(`listen` 호출 수 그대로) (6) (4)에서 OD-2 안내의 [글로 입력]을 누르면 `listen`이 더 불리지 않고 글로 입력 모드가 된다. (4)를 한 번 지난 뒤 화면을 닫았다 다시 열고 Orb를 누르면, 기기 안 인식을 다시 시도하지 않고 OD-2 안내도 다시 보이지 않은 채 `onDevice: false`로 듣는다(앱 실행 동안 기억)
 - 테스트: `assistant_test.dart` — "recognition failures never loop or send an empty request"
+- 편차(OD-2 Android, 소유자 결정 2026-11-28): speech_to_text 7.5.0은 Android에서 기기 안 인식을 쓸 수 없으면 알리지 않고 기본(네트워크) 인식기를 쓰므로(`SpeechToTextPlugin.kt` 620-640) (4)의 이벤트가 Android에서는 오지 않을 수 있다. 그래서 Android는 첫 받아쓰기 전에 "Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요."를 한 번 보이고(권한을 묻기 전이면 AC-005 목적 안내 안에, 권한이 이미 있으면 [글로 입력]/[계속] 카드로) SharedPreferences `androidSpeechServiceNoticeAcknowledged`에 본 것을 기록한다. 받아쓰기를 막지는 않는다. (1)~(6)은 이벤트가 오는 경우(iOS, 그리고 Android에서 언어 팩 오류가 오는 경우)의 기준으로 그대로 둔다. 테스트: `assistant_test.dart` — "Android shows the speech-service notice once before the first dictation", "iOS does not show the Android notice up front"(flutter_test는 Android로 돌기 때문에 다른 테스트의 기본 `profile`은 이 안내를 본 상태로 둔다)
 
 ## AC-007 — 멈춤, 닫기, 배경 전환 (REQ-007)
 
@@ -131,7 +132,7 @@ git diff <run_start_sha> -- app/test/
 
 - **Given** 이 SPEC의 변경 뒤
 - **When** 기존 테스트 파일 `approval_card_test.dart`, `plan_card_test.dart`, `follow_up_test.dart`, `trust_notice_test.dart`, `outcome_card_test.dart`, `calls_controller_test.dart`, `unit_test.dart`, `theme_test.dart`, 그리고 SPEC-SHELL-001이 만든 `history_test.dart`, SPEC-DESIGN-001이 만든 `font_overflow_test.dart`를 실행하면
-- **Then** 모두 수정 없이 통과한다(`git diff --stat <run_start_sha> -- app/test/`에 이 파일들이 없음). AC-016의 파일들은 이름 적은 블록만 바뀐 채 통과한다
+- **Then** 모두 수정 없이 통과한다(`git diff --stat <run_start_sha> -- app/test/`에 이 파일들이 없음). AC-016의 파일들은 이름 적은 블록만 바뀐 채 통과한다. 단 `font_overflow_test.dart`는 AC-016 표 확장 행(소유자 결정 2026-11-28)의 표식 한 줄만 바뀐 채 통과한다
 - 확인: 위 diff 원문을 `progress.md`에 기록
 
 ## AC-016 — 서버 불변과 의도한 테스트 변경 (REQ-016)
@@ -160,6 +161,9 @@ git diff <run_start_sha> -- app/test/
   | `today_test.dart`(SHELL-001 0.3.0) | "today follows the dashboard order"(SHELL AC-015) | 입력칸·예시 칩·"보내기"·"귀찮은 전화…" 단언 제거, 브리핑 빈 문구 |
   | `today_test.dart`(SHELL-001 0.3.0) | "today shortcuts"(SHELL AC-016) | 바로가기가 임시 화면이 아니라 AI 비서를 엶 |
   | `inbox_test.dart`(SHELL-001 0.3.0) | "empty and error states"(SHELL AC-012) (1) | [비서에게 맡기기]가 AI 비서를 엶 |
+  | `font_overflow_test.dart`(SPEC-DESIGN-001) | "home fits a 360x640 phone at 2x text with the real font"(`:73`) | 홈 글꼴 확인 표식 `find.text('직접 입력하기')` → `find.text('전화 대신하기')`(REQ-010 뒤에도 오늘에 남는 바로가기)와 이유 주석 한 줄. 원인: REQ-010 — 오늘 화면에서 [직접 입력하기]가 빠져 `scrollUntilVisible`이 `Bad state: No element`. 검사 의도(홈, 360×640, 2배 글자, 실제 Pretendard)는 그대로. 소유자 결정 2026-11-28 |
+
+  표 확장(소유자 결정 2026-11-28): 위 표의 마지막 행(`font_overflow_test.dart`)은 run M4에서 REQ-010을 구현하자 원래 표 밖의 이 블록이 깨져, 아래 문단의 절차대로 소유자 확인을 받아 더한 것이다. 이 확장에 따라 AC-015의 "수정 없이" 목록 가운데 `font_overflow_test.dart`는 이 행만 바뀐 채 통과하면 된다. 깨짐 기록과 결과(`+130` 통과)는 `progress.md` §E.2 "실행 상태 — M4 커밋 전에 멈춤"에 있다.
 
   줄 번호는 plan-phase(HEAD c2e732d) 기준이며 SHELL-001 run 뒤 달라질 수 있다. run 시작 시 공통 검증의 grep 결과와 이 표를 대조하고, 표 밖에서 깨지는 블록이 있으면 고치기 전에 소유자 확인을 받아 이 표에 더한다. `flutter test` 전체가 통과하고 테스트 수가 SPEC-SHELL-001 완료 시점보다 줄지 않는다
 - 확인: `git diff` 원문을 `progress.md`에 기록
@@ -181,7 +185,7 @@ git diff <run_start_sha> -- app/test/
 ## 완료 정의 (Definition of Done)
 
 - [ ] AC-001 ~ AC-016 모두 PASS, 명령 원문과 출력이 `progress.md` §E.2에 있음
-- [ ] 의도한 기존 테스트 변경은 AC-016 표뿐
+- [ ] 의도한 기존 테스트 변경은 AC-016 표의 행뿐(소유자 결정 2026-11-28로 더한 `font_overflow_test.dart` 한 행 포함)
 - [ ] `server/` 무변경
 - [ ] M1 패키지 확인 기록(버전, 라이선스, 로케일 ID, 기기 안 한국어 지원, 권한 패키지)과 권한 선언 diff가 `progress.md`에 있음
 - [ ] 소유자 실제 기기(iOS 또는 Android 한 대)에서 말로 부탁 → 계획 카드까지 한 번 확인한 기록

@@ -99,13 +99,13 @@
 lib/
 ├── main.dart, app.dart              main.dart가 registerKolbiFontLicenses()로 Pretendard 라이선스를 등록(SPEC-SHELL-001)
 ├── shell/                           SPEC-SHELL-001. 기능 화면을 모으는 유일한 곳
-│   ├── app_router.dart              유일한 GoRouter: StatefulShellRoute 4갈래 + 셸 밖 /assistant
+│   ├── app_router.dart              유일한 GoRouter: StatefulShellRoute 4갈래 + 셸 밖 /assistant(자식 plan·settings·new)와 /calls/:id/live
 │   ├── routes.dart                  경로 이름 RouteNames, 탭 AppTab(today·tasks·history·me)
-│   ├── navigation.dart              탭 사이 이동 함수 네 개(openTask, openTab, openAssistant, submitFromAssistant)와 taskLocation
+│   ├── navigation.dart              이동 함수(openTask, openTab, openAssistant·closeAssistant, 비서 자식 경로 openAssistantPlan·Settings·Manual, openSettings, openLiveCall·closeLiveCall)와 taskLocation·liveCallLocation
 │   ├── tab_scaffold.dart            다섯 칸 탭 바(가운데 비서 버튼, 업무 배지, 다시 누름, 라벨 배율 상한 1.3), BranchStack, TabScrollScope
-│   ├── assistant_placeholder.dart   임시 비서 화면(부탁 입력·보내기·예시 칩, OD-6; SPEC-ASSIST-001이 바꿈)
 │   ├── kind_registration.dart       작업 종류 등록부·표시자 공급자, call 종류 표시자, TaskDetailRoute
-│   └── task_feed.dart               기능들이 함께 읽는 작업 목록·묶음·기록 날짜 공급자, 다시 불러오기
+│   ├── task_feed.dart               기능들이 함께 읽는 작업 목록·묶음·기록 날짜 공급자, 다시 불러오기
+│   └── request_intake.dart          비서가 쓰는 부탁 접수(requestPlanDraft → /v1/intake)·템플릿·최근 통화한 곳 공급자(SPEC-ASSIST-001, 기능 간 import 대신)
 ├── core/
 │   ├── clock.dart                   주입 가능한 시계 clockProvider(오늘 인사·날짜, 묶음 기준 시각)
 │   ├── config/app_settings.dart     서버 URL·토큰·요청자 설정, 신뢰 안내 확인 기록(shared_preferences + 빌드 정의)
@@ -118,11 +118,19 @@ lib/
 │   ├── widgets/trust_notice.dart    신뢰 안내 문구·첫 통화 전 시트(SPEC-SHELL-001에서 features/calls/presentation/에서 옮김)
 │   ├── utils/formatters.dart        포매터 (다시 내보내기 → kolbi_core src/format/formatters.dart)
 └── features/
+    ├── assistant/                         SPEC-ASSIST-001. AI 비서(SCR-A01, 늘 몰입형 다크)
+    │   ├── assistant_screen.dart            Orb·상태 칩·받아쓰기 문장·조작 줄, 글로 입력 모드, 접근성 상태 알림
+    │   ├── assistant_controller.dart        비서 상태(대기·듣는 중·처리 중, 실패 규칙, 앱 실행 동안의 대체 인식 기억)
+    │   ├── mic_consent_sheet.dart           마이크 목적 안내, OD-2 안내, Android 음성 인식 서비스 안내, 설정 열기 안내
+    │   ├── request_box.dart                 글로 입력 모드의 부탁 입력 상자(옛 오늘 _IntakeBox)
+    │   └── speech/
+    │       ├── speech_recognizer.dart       받아쓰기 포트(SpeechRecognizer, SpeechEvent, speechRecognizerProvider)
+    │       └── platform_speech_recognizer.dart  speech_to_text·permission_handler 어댑터(두 패키지를 가져오는 유일한 파일)
     ├── calls/
     │   ├── domain/                          call_models·intake_models·counterparties·follow_up·approval_comment 모두 다시 내보내기(→ kolbi_core src/; approval_comment는 kolbi_ui의 CodePointLengthLimitingFormatter도 함께)
     │   ├── data/calls_repository.dart       Riverpod 공급자 3개(apiClientProvider 등) + kolbi_core CallsRepository·이벤트 다시 내보내기
     │   ├── application/calls_controller.dart  Riverpod 상태 관리, 버전 병합
-    │   └── presentation/                    화면(home = 오늘 탭, plan_card, new_call, call_detail = 맨 위 단계 타임라인), trust_notice(다시 내보내기 → core/widgets/trust_notice.dart), approval_listener, call_templates, widgets/(approval_card·follow_up_actions·call_task_tile(작업 행, 옛 홈 _TaskTile)은 앱에 남음; status_chip·outcome_card·transcript_view는 다시 내보내기 → kolbi_ui src/widgets/)
+    │   └── presentation/                    화면(home = 오늘 탭(SPEC-ASSIST-001부터 부탁 입력 상자 없음), plan_card, new_call, call_detail = 맨 위 단계 타임라인·[통화 보기], live_call = 통화 중 몰입형 화면), trust_notice(다시 내보내기 → core/widgets/trust_notice.dart), approval_listener, call_templates, widgets/(approval_card·follow_up_actions·call_task_tile(작업 행, 옛 홈 _TaskTile)·call_timer(통화 시간, 상세와 통화 중 화면이 함께 씀)은 앱에 남음; status_chip·outcome_card·transcript_view는 다시 내보내기 → kolbi_ui src/widgets/)
     ├── inbox/inbox_screen.dart              업무 탭(SCR-T01): 개수 세 칸, 승인 요청·진행 중·반복 묶음, 기록 링크, 빈 상태·오류
     ├── history/history_screen.dart          기록 탭(SCR-R01): 서울 날짜 묶음, 결과 칩·결과 한 줄
     ├── me/me_screen.dart                    내 정보 탭(SCR-M01): 프로필 카드, 비서·권한과 안전·앱 항목, 설정 연결
@@ -137,11 +145,11 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 |---|---|
 | `packages/kolbi_core/test/dependency_rules_test.dart` | `lib/`가 `package:flutter/`, `dart:ui`, `package:flutter_riverpod/`, `package:riverpod/`, `package:shared_preferences/`, `package:kolbi_ui/`, `package:callmate/`를 가져오지 않음 |
 | `packages/kolbi_ui/test/dependency_rules_test.dart` | `lib/`가 `package:callmate/`, `package:go_router/`, `package:flutter_riverpod/`, `package:shared_preferences/`, `package:share_plus/`, `package:kolbi_core/src/`를 가져오지 않음 |
-| `app/test/architecture_test.dart` | 앱이 패키지 `src/`를 직접 가져오지 않음, 기능 간 import 허용 목록이 비어 있음(SPEC-SHELL-001), 옛 경로는 다시 내보내기만 함, 테스트의 `package:callmate` import가 모두 실제 파일을 가리킴, `core/`는 기능·셸을 가져오지 않음(고정된 다시 내보내기 파일 `core/router/app_router.dart` 제외), `GoRouter(`는 `lib/shell/app_router.dart`에만 있고 `lib/features/`에는 `.go(`·`goNamed(`·`goBranch(`와 경로 글자(`'/calls` 등)가 없음 |
+| `app/test/architecture_test.dart` | 앱이 패키지 `src/`를 직접 가져오지 않음, 기능 간 import 허용 목록이 비어 있음(SPEC-SHELL-001), 옛 경로는 다시 내보내기만 함, 테스트의 `package:callmate` import가 모두 실제 파일을 가리킴, `core/`는 기능·셸을 가져오지 않음(고정된 다시 내보내기 파일 `core/router/app_router.dart` 제외), `GoRouter(`는 `lib/shell/app_router.dart`에만 있고 `lib/features/`에는 `.go(`·`goNamed(`·`goBranch(`와 경로 글자(`'/calls` 등)가 없음, `speech_to_text`·`permission_handler`는 `features/assistant/speech/platform_speech_recognizer.dart`에서만 가져옴, `Info.plist`·`AndroidManifest.xml`에 마이크·음성 인식 권한 선언이 있음(SPEC-ASSIST-001) |
 
 ### 라우트 (`shell/app_router.dart`, SPEC-SHELL-001)
 
-`StatefulShellRoute` 4갈래(탭)와 셸 밖 최상위 경로 `/assistant`로 이루어진다. 옛 경로 다섯 개는 그대로 두고 갈래에 나누어 넣었다.
+`StatefulShellRoute` 4갈래(탭)와 셸 밖 최상위 경로 `/assistant`(SPEC-ASSIST-001부터 자식 경로 셋)·`/calls/:id/live`로 이루어진다. 옛 경로 다섯 개는 그대로 두고 갈래에 나누어 넣었다.
 
 | 경로 | 이름(`RouteNames`) | 갈래(탭) | 화면 |
 |---|---|---|---|
@@ -153,9 +161,13 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 | `/history` | `history` | 기록 | `HistoryScreen` |
 | `/me` | `me` | 내 정보 | `MeScreen` |
 | `/settings` | `settings` | 내 정보 | `SettingsScreen` |
-| `/assistant` | `assistant` | 셸 밖(탭 바 없음) | `AssistantPlaceholderScreen` |
+| `/assistant` | `assistant` | 셸 밖(탭 바 없음) | `AssistantScreen`(SCR-A01; `?mode=text`면 글로 입력 모드, `extra` 문자열은 입력칸에 채움) |
+| `/assistant/plan` | `assistant-plan` | 셸 밖 | `PlanCardScreen`(비서 위, `extra`가 `PlanDraft`가 아니면 `/assistant`로) |
+| `/assistant/settings` | `assistant-settings` | 셸 밖 | `SettingsScreen`(비서 위) |
+| `/assistant/new` | `assistant-new` | 셸 밖 | 직접 입력 양식(비서 위) |
+| `/calls/:id/live` | `live-call` | 셸 밖 | `LiveCallScreen`(SCR-T08, 몰입형 다크; 자막·끊기·승인 카드, 통화가 끝나면 닫힘) |
 
-탭 사이 이동은 `shell/navigation.dart`의 함수로만 한다. 작업 열기(`openTask`)는 쌓인 화면을 모두 닫고 업무 탭을 고른 뒤 상세를 올리므로 뒤로 가면 업무 첫 화면이다. 비서에서 계획 카드로 갈 때(`submitFromAssistant`)는 비서를 먼저 닫는다. go_router 18에서 셸 밖 경로 위에 탭 경로를 올리면 assert가 나기 때문이다(SPEC-SHELL-001 research R1).
+탭 사이 이동은 `shell/navigation.dart`의 함수로만 한다. 작업 열기(`openTask`)는 쌓인 화면을 모두 닫고 업무 탭을 고른 뒤 상세를 올리므로 뒤로 가면 업무 첫 화면이다. go_router 18에서 셸 밖 경로 위에 탭 경로를 올리면 assert가 나므로(SPEC-SHELL-001 research R1-G), 비서가 여는 화면(계획 카드·설정·직접 입력)은 모두 `/assistant`의 자식 경로다(SPEC-ASSIST-001 REQ-009, R1-G3). SHELL의 `submitFromAssistant`(비서를 닫은 뒤 `/plan`)는 지웠다. 계획 카드의 프로필 링크는 `openSettings`가 지금 경로를 보고 `/assistant/settings`와 `/settings` 가운데 고른다. 비서를 첫 화면으로 열었을 때(웹 주소 직접 입력) 닫기는 `pop` 대신 오늘로 간다(`closeAssistant`, SHELL sync-audit F1). 통화 중 화면은 업무 상세 위에 `push`하고, 통화가 끝나면 `pop`으로 상세에 돌아간다(`closeLiveCall`).
 
 ## 클라이언트–서버 계약
 
@@ -198,11 +210,13 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 | 상한·제한 시간 | `server/src/config.ts` 기본값, `CallService` 옵션 |
 | API 라우트·요청 검증 | `server/src/http/app.ts`, `http/schemas.ts` (+ `packages/kolbi_core/lib/src/network/api_client.dart`, `packages/kolbi_core/lib/src/data/calls_repository.dart`) |
 | 저장 방식 | `server/src/store/taskStore.ts` |
-| 화면·UI | `app/lib/features/calls/presentation/`(오늘·계획·상세), `app/lib/features/{inbox,history,me}/` (공용 토큰·테마·위젯은 `packages/kolbi_ui/lib/src/`) |
+| 화면·UI | `app/lib/features/calls/presentation/`(오늘·계획·상세·통화 중), `app/lib/features/{assistant,inbox,history,me}/` (공용 토큰·테마·위젯은 `packages/kolbi_ui/lib/src/`) |
 | 탭·경로·탭 사이 이동 | `app/lib/shell/`(`app_router.dart`, `routes.dart`, `navigation.dart`, `tab_scaffold.dart`) |
 | 새 작업 종류 | `packages/kolbi_core/lib/src/kinds/`(서술자)와 `packages/kolbi_ui/lib/src/kinds/task_kind_presenter.dart`(표시자)를 구현해 `app/lib/shell/kind_registration.dart`에 등록 |
 | 업무 묶음·배지·기록 날짜·단계 계산 | `packages/kolbi_core/lib/src/tasks/task_groups.dart`, `task_steps.dart` |
 | 서버 주소·토큰 설정 | `app/lib/core/config/app_settings.dart` |
+| 받아쓰기(음성 인식 패키지·권한) | `app/lib/features/assistant/speech/`(포트 `speech_recognizer.dart`, 어댑터 `platform_speech_recognizer.dart`), 권한 문구는 `app/ios/Runner/Info.plist`(`NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`)와 `app/android/app/src/main/AndroidManifest.xml`(`RECORD_AUDIO`, `RecognitionService` 조회) |
+| Orb·몰입형 다크 | `packages/kolbi_ui/lib/src/widgets/orb.dart`(`KolbiOrb`), `src/theme/immersive_theme.dart`(`KolbiTheme.immersive()`) |
 
 ## 목표 방향 (미구현, 소유자 진술 기준)
 
@@ -215,4 +229,4 @@ SPEC-MODULE-001 이후 앱 소스는 옛 경로 대신 배럴 `package:kolbi_cor
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-21 for SPEC-STORE/LIFECYCLE/POLICY/OUTCOME/ARCH-001 (state at facb660). Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452). Updated by /moai sync on 2026-11-28 for SPEC-ASSIST-001 (state at 477dac5).

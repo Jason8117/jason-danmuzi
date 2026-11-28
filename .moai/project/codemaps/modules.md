@@ -104,11 +104,24 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 | domain | `call_models.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/models/call_models.dart`; 같은 방식으로 `intake_models`·`counterparties` → `src/models/`, `follow_up` → `src/follow_up.dart`, `approval_comment` → `src/approval_comment.dart` + kolbi_ui `src/input/code_point_formatter.dart`) | `CallLanguage`, `TaskStatus`, `Speaker`, `ApprovalStatus`, `OutcomeResult`, `TranscriptEntry`, `CallPlan`, `ApprovalRequest`, `CallOutcome`, `CallTask`(SPEC-SHELL-001에서 `kind`(`String?`, 없거나 문자열이 아니면 `null` = `call`) 추가), `NewCallRequest`, `ServerInfo` | 거의 모든 calls 파일, `settings_screen.dart`, `app_router.dart` |
 | data | `calls_repository.dart` (공급자는 앱에 남고, 클래스·이벤트는 `packages/kolbi_core/lib/src/data/calls_repository.dart`에서 다시 내보냄) | `CallsEvent`(`TasksSnapshot`, `TaskUpdated`, `TaskDeleted`), `CallsRepository`(`serverInfo`, `list`, `create`, `approvePlan`, `cancel`, `decide`, `delete`, `openLiveChannel`, `parseEvent`) — kolbi_core; `apiClientProvider`, `callsRepositoryProvider`, `serverInfoProvider` — 앱 | `calls_controller.dart`, `home_screen.dart` |
 | application | `calls_controller.dart` | `LiveStatusController`, `liveStatusProvider`, `CallsController`, `callsControllerProvider`, `sortedTasksProvider`, `taskProvider`(family), `PendingApproval`, `pendingApprovalsProvider` | 화면, `approval_listener.dart`, `approval_card.dart` |
-| presentation | `home_screen.dart`(오늘 탭: 날짜·인사·브리핑·바로가기·확인이 필요해요·진행 중), `plan_card_screen.dart`(`PlanCardScreen`, [이대로 시작] 뒤 `openTask`), `new_call_screen.dart`, `call_detail_screen.dart`(맨 위 `KolbiStepTimeline`), `trust_notice.dart`(다시 내보내기 → `core/widgets/trust_notice.dart`), `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`·`follow_up_actions`(`FollowUpService`, `DeviceFollowUpService`, `followUpServiceProvider`, `followUpClockProvider`, `FollowUpActions`)·`call_task_tile`(`CallTaskTile`, 옛 홈 `_TaskTile`, 칩 열은 화면 폭의 40 % 이하)는 앱에 남음; `outcome_card`·`status_chip`·`transcript_view`는 다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/`) | `app_router.dart`, `app.dart` |
+| presentation | `home_screen.dart`(오늘 탭: 날짜·인사·브리핑·바로가기·최근 통화한 곳·확인이 필요해요·진행 중; SPEC-ASSIST-001부터 부탁 입력 상자와 첫 사용 빈 상태가 없고, 바로가기·최근 통화한 곳은 `openAssistant`로 비서를 엶), `live_call_screen.dart`(`LiveCallScreen(taskId)`: SCR-T08 몰입형 다크, 상태·통화 시간, 실시간 자막(`TranscriptView`), [통화 끊기], 대기 승인이면 `ApprovalCard`; 통화가 요약 단계 이상이 되면 `closeLiveCall`로 한 번 닫힘, SPEC-ASSIST-001), `plan_card_screen.dart`(`PlanCardScreen`, [이대로 시작] 뒤 `openTask`), `new_call_screen.dart`, `call_detail_screen.dart`(맨 위 `KolbiStepTimeline`, 통화 중이면 앱 바 [통화 보기] `Key('open-live-call')` → `openLiveCall`), `trust_notice.dart`(다시 내보내기 → `core/widgets/trust_notice.dart`), `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`·`follow_up_actions`(`FollowUpService`, `DeviceFollowUpService`, `followUpServiceProvider`, `followUpClockProvider`, `FollowUpActions`)·`call_task_tile`(`CallTaskTile`, 옛 홈 `_TaskTile`, 칩 열은 화면 폭의 40 % 이하)·`call_timer`(`CallTimer(since:)`, 옛 상세 `_CallTimer`)는 앱에 남음; `outcome_card`·`status_chip`·`transcript_view`는 다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/`) | `app_router.dart`, `app.dart` |
 
 ### `features/settings/settings_screen.dart`
 
 `SettingsScreen`. 설정 저장(`settingsProvider`)과 서버 정보 조회에 `ApiClient`를 직접 쓴다(`kolbi_core` 배럴로). 신뢰 안내는 `core/widgets/trust_notice.dart`에서 가져온다. 사용처는 `shell/app_router.dart`.
+
+### `features/assistant/` (SPEC-ASSIST-001)
+
+AI 비서 화면(SCR-A01)과 받아쓰기. `features/calls`를 가져오지 않고 부탁 접수·템플릿·최근 통화한 곳은 `shell/request_intake.dart`, 이동은 `shell/navigation.dart`로 한다. 음성 인식 패키지 `speech_to_text`·`permission_handler`는 `speech/platform_speech_recognizer.dart` 한 파일만 가져온다(`architecture_test.dart` "speech and permission packages stay inside the assistant feature"). 앱은 음성 데이터를 다루지 않고, 서버로는 최종 문장만 `/v1/intake`로 보낸다.
+
+| 파일 | 공개 인터페이스 | 사용처 |
+|---|---|---|
+| `speech/speech_recognizer.dart` | 포트 `SpeechRecognizer`(`permission`, `requestPermission`(마이크·음성 인식을 한 흐름에서), `openAppSettings`, `koreanLocaleId`, `listen(localeId:, onDevice:, partialResults:)` → `Stream<SpeechEvent>`, `stop`, `cancel`), `MicPermission`, 이벤트 `SpeechPartial`·`SpeechFinal`·`SpeechNoSpeech`·`SpeechError`·`SpeechOnDeviceUnavailable`, `speechRecognizerProvider`(테스트는 가짜로 바꿈) | `assistant_controller.dart`, `assistant_screen.dart` |
+| `speech/platform_speech_recognizer.dart` | `PlatformSpeechRecognizer`(speech_to_text 7.5.0 · permission_handler 13.0.2 어댑터; 한국어 로캘은 `locales()`에서 `^ko([-_]|$)`, 기기 안 인식 불가 오류를 `SpeechOnDeviceUnavailable`로, 두 권한을 받은 뒤에만 `initialize`) | `speech_recognizer.dart`(공급자) |
+| `assistant_controller.dart` | `AssistantState`(단계·상태 칩 문구 "기다리고 있어요"/"듣고 있어요"/"처리하고 있어요"·문장·안내), `AssistantMemory`·`assistantMemoryProvider`(앱 실행 동안 기기 안 인식 대체·연속 실패 기억), `AssistantController`(듣기·멈춤·취소, 실패 규칙, OD-2 대체 한 번, Android 안내 단계 `speechServiceNotice`·`acceptSpeechServiceNotice`; 안내 필요 여부·확인 콜백은 화면이 주입) | `assistant_screen.dart` |
+| `assistant_screen.dart` | `AssistantScreen(textMode:, fill:)`(늘 `KolbiTheme.immersive()`; `KolbiOrb`, 상태 칩, 받아쓰기 문장, 조작 줄 [글로 입력]·[말하기 끝]·[그만하기], 상태 변화 `SemanticsService.sendAnnouncement`; 닫기 `Key('assistant-close')` → `closeAssistant`; Android 안내 본 여부는 SharedPreferences `androidSpeechServiceNoticeAcknowledged`) | `shell/app_router.dart` |
+| `mic_consent_sheet.dart` | `MicConsentSheet`(목적 안내, Android 첫 안내면 `withSpeechService`), `GeneralRecognizerNotice`(OD-2), `SpeechServiceNotice`(Android 음성 인식 서비스 안내, 소유자 결정 2026-11-28), `MicSettingsNotice`(다시 묻지 않음 → [설정 열기]), 문구 상수 `androidSpeechServiceNotice`·`androidSpeechServiceNoticeKey` | `assistant_screen.dart` |
+| `request_box.dart` | `RequestBox`(글로 입력 모드의 부탁 입력 상자: 입력칸 `Key('assistant-intake-field')`, 보내기 `Key('assistant-intake-send')`, [직접 입력하기], 최근 통화한 곳, 예시 템플릿 — 옛 오늘 `_IntakeBox`) | `assistant_screen.dart` |
 
 ### `features/inbox`, `features/history`, `features/me` (SPEC-SHELL-001)
 
@@ -126,20 +139,20 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
-| `app_router.dart` | `routerProvider`(유일한 `GoRouter`: `StatefulShellRoute` 4갈래 + 셸 밖 `/assistant`) | `core/router/app_router.dart`(다시 내보내기) |
-| `routes.dart` | `RouteNames`(today, new-call, plan, inbox, task, history, me, settings, assistant), `AppTab`(today `/`, tasks `/inbox`, history `/history`, me `/me`) | 셸, 기능 화면 |
-| `navigation.dart` | `registerTabShell`, `openTask(router, id)`(쌓인 화면을 최대 32번 닫고 `goNamed(inbox)` + `pushNamed(task)`), `openTab(router, tab)`(등록된 셸의 `goBranch`, 없으면 `go`), `openAssistant`, `submitFromAssistant(router, draft)`(비서를 닫고 계획 카드), `taskLocation` | 오늘·업무·기록, 계획 카드, 직접 입력, 승인 스낵바, 임시 비서 |
+| `app_router.dart` | `routerProvider`(유일한 `GoRouter`: `StatefulShellRoute` 4갈래 + 셸 밖 `/assistant`(자식 `plan`·`settings`·`new`)·`/calls/:id/live`) | `core/router/app_router.dart`(다시 내보내기) |
+| `routes.dart` | `RouteNames`(today, new-call, plan, inbox, task, history, me, settings, assistant, assistant-plan, assistant-settings, assistant-new, live-call), `AppTab`(today `/`, tasks `/inbox`, history `/history`, me `/me`) | 셸, 기능 화면 |
+| `navigation.dart` | `registerTabShell`, `openTask(router, id)`(쌓인 화면을 최대 32번 닫고 `goNamed(inbox)` + `pushNamed(task)`), `openTab(router, tab)`(등록된 셸의 `goBranch`, 없으면 `go`), `openAssistant(router, text:, fill:)`, `closeAssistant`(첫 화면이면 오늘로), `openAssistantPlan`·`openAssistantSettings`·`openAssistantManual`(비서의 자식 경로), `openSettings`(비서 아래면 `/assistant/settings`, 아니면 `/settings`), `openLiveCall`·`closeLiveCall`(첫 화면이면 `openTask`), `taskLocation`, `liveCallLocation`. SHELL의 `submitFromAssistant`는 SPEC-ASSIST-001에서 지움 | 오늘·업무·기록, 계획 카드, 직접 입력, 승인 스낵바, 비서, 통화 상세·통화 중 화면 |
 | `tab_scaffold.dart` | `TabScaffold`(`Scaffold`가 아닌 `Material` + `Column`, 탭 화면에는 탭 바 위 높이의 `MediaQuery`), `BranchStack`(`IndexedStack` + 숨은 갈래 `HeroMode` 끔), `TabScrollScope`(탭 첫 화면 스크롤, 다시 누르면 맨 위로) | `app_router.dart`, 탭 첫 화면 |
-| `assistant_placeholder.dart` | `AssistantPlaceholderScreen`(부탁 입력·보내기·예시 칩; 보낼 때 프로필이 없으면 비서를 닫고 설정을 엶) | `app_router.dart` |
 | `kind_registration.dart` | `taskKindCatalogProvider`(`call` 등록), `taskKindPresentersProvider`, `presenterForTask(ref, task)`, `CallKindPresenter`, `TaskDetailRoute` | 업무·기록·오늘, `app_router.dart` |
 | `task_feed.dart` | `taskListProvider`, `taskGroupsProvider`, `historyDaysProvider`, `reloadTasks`, `refreshTasks` | 오늘·업무·기록, 탭 바 배지 |
+| `request_intake.dart` | `requestTemplatesProvider`(예시 템플릿), `recentPlacesProvider`(최근 통화한 곳, 불러오는 중·실패면 `null`), `requestPlanDraft(ref, messenger, text)`(`/v1/intake`, 404면 빈 초안, 그 밖의 실패는 스낵바 뒤 `null`). 비서가 `features/calls`를 가져오지 않게 하려고 둔 파일(SPEC-ASSIST-001, plan §B 밖) | `features/assistant` |
 
 ## 공용 패키지 (`packages/`, SPEC-MODULE-001)
 
 | 패키지 | 파일(`lib/src/`) | 배럴 |
 |---|---|---|
 | `kolbi_core`(순수 Dart) | `models/call_models.dart`, `models/intake_models.dart`, `models/counterparties.dart`, `follow_up.dart`, `approval_comment.dart`(상수·`codePointLength`·`truncateToCodePoints`·`withQuickReply`·`hasSensitiveDigits`), `network/api_client.dart`, `network/live_channel.dart`, `format/formatters.dart`, `format/korean_particle.dart`, `data/calls_repository.dart`(이벤트·`CallsRepository`), `kinds/task_kind.dart`, `kinds/call_kind.dart`, `tasks/task_groups.dart`, `tasks/task_steps.dart` | `lib/kolbi_core.dart` |
-| `kolbi_ui`(Flutter) | `theme/tokens.dart`, `theme/app_theme.dart`, `theme/fonts.dart`(`registerKolbiFontLicenses`), `widgets/common.dart`, `widgets/status_chip.dart`(`StatusChip`, `StatusCategory`), `widgets/outcome_card.dart`, `widgets/transcript_view.dart`, `widgets/step_timeline.dart`, `widgets/briefing_card.dart`, `widgets/tab_badge.dart`, `kinds/task_kind_presenter.dart`, `input/code_point_formatter.dart`(`CodePointLengthLimitingFormatter`) | `lib/kolbi_ui.dart` |
+| `kolbi_ui`(Flutter) | `theme/tokens.dart`, `theme/app_theme.dart`, `theme/fonts.dart`(`registerKolbiFontLicenses`), `theme/immersive_theme.dart`(`KolbiTheme`), `widgets/orb.dart`(`KolbiOrb`, `KolbiOrbState`), `widgets/common.dart`, `widgets/status_chip.dart`(`StatusChip`, `StatusCategory`), `widgets/outcome_card.dart`, `widgets/transcript_view.dart`, `widgets/step_timeline.dart`, `widgets/briefing_card.dart`, `widgets/tab_badge.dart`, `kinds/task_kind_presenter.dart`, `input/code_point_formatter.dart`(`CodePointLengthLimitingFormatter`) | `lib/kolbi_ui.dart` |
 
 `kolbi_ui`의 SPEC-DESIGN-001 추가분:
 
@@ -168,8 +181,18 @@ SPEC-SHELL-001 추가분(작업 종류·단계·묶음):
 
 테스트: kolbi_core `test/task_kind_test.dart`, `task_steps_test.dart`(design.md D2.2 표를 행마다), `task_groups_test.dart`, `test/support/tasks.dart`; kolbi_ui `test/step_timeline_test.dart`(배지·브리핑 카드·표시자 등록부 포함); 앱 `shell_test.dart`, `inbox_test.dart`, `history_test.dart`, `today_test.dart`, `test/support/shell_support.dart`, `accessibility_test.dart`의 "shell screens meet the accessibility guidelines".
 
+SPEC-ASSIST-001 추가분:
+
+| 이름 | 위치 | 내용 |
+|---|---|---|
+| `KolbiOrb`, `KolbiOrbState` | kolbi_ui `widgets/orb.dart` | Iridescent AI Orb(06 §3.1). 상태 넷 `idle`·`listening`·`processing`·`responding`. 대기는 멈춤, 듣는 중은 숨쉬기, 처리 중은 빛 돌기, 응답 중은 물결. 움직임 줄이기면 `AnimationController`를 만들지 않는다. 마이크·음성을 다루지 않는 장식이며 같은 내용을 화면이 글자로 보인다 |
+| `KolbiTheme.immersive()` | kolbi_ui `theme/immersive_theme.dart` | 비서와 통화 중 화면이 기기 모드와 무관하게 쓰는 몰입형 다크. SPEC-DESIGN-001 다크 테마(`AppTheme.dark()`) 그대로이며 값을 따로 두지 않는다 |
+| `TranscriptView(agentName:)` | kolbi_ui `widgets/transcript_view.dart` | AI 말풍선 위 이름을 바꾸는 선택 인자(기본 "AI 비서"). 통화 중 화면은 "콜비"를 넘긴다(REQ-011) |
+
+테스트(SPEC-ASSIST-001): kolbi_ui `test/orb_test.dart`; 앱 `assistant_test.dart`(받아쓰기 포트, 권한·실패·취소·글로 입력, Android 안내 2건, 접근성), `live_call_test.dart`, `test/support/fake_speech_recognizer.dart`, `architecture_test.dart`의 "speech and permission packages stay inside the assistant feature"·"platform files declare the microphone and speech permissions".
+
 테스트(SPEC-DESIGN-001): `packages/kolbi_ui/test/`에 `theme_values_test.dart`(역할·분위기 짝·카드 선·글꼴 값), `tokens_contrast_test.dart`(대비 48쌍 + `#635BFF` 글자 금지), `status_chip_test.dart`(18칸 × 밝은·어두운)가 더해졌고, 앱에는 `app/test/design_contrast_test.dart`(디자인 화면 대비·기기 다크 모드), `app/test/font_overflow_test.dart`(실제 Pretendard로 360x640·글자 2배 넘침 검사)가 더해졌다.
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452). Updated by /moai sync on 2026-11-28 for SPEC-ASSIST-001 (state at 477dac5).

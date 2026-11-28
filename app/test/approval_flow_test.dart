@@ -36,8 +36,9 @@ void main() {
 
   testWidgets('shows the empty state with quick-start templates', (tester) async {
     await pumpApp(tester, []);
-    expect(find.text('귀찮은 전화, 대신 걸어드릴게요'), findsOneWidget);
-    expect(find.text('식당 예약'), findsOneWidget);
+    // SPEC-ASSIST-001 REQ-010: the briefing's empty wording replaces the first-use empty state.
+    expect(find.text('오늘은 맡긴 일이 없어요.'), findsOneWidget);
+    expect(find.text('가운데 버튼으로 부탁해 보세요.'), findsOneWidget);
     expect(find.textContaining('시뮬레이션 모드'), findsOneWidget);
   });
 

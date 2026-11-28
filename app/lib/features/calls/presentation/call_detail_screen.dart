@@ -1,14 +1,14 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kolbi_core/kolbi_core.dart';
 import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../shell/navigation.dart';
 import '../application/calls_controller.dart';
 import 'trust_notice.dart';
 import 'widgets/approval_card.dart';
+import 'widgets/call_timer.dart';
 import 'widgets/follow_up_actions.dart';
 
 class CallDetailScreen extends ConsumerStatefulWidget {
@@ -143,6 +143,14 @@ class _CallDetailScreenState extends ConsumerState<CallDetailScreen> {
       appBar: AppBar(
         title: Text(task.targetName),
         actions: [
+          // SPEC-ASSIST-001 REQ-012: the immersive live call screen; everything below stays as it was.
+          if (task.status.isLiveCall)
+            TextButton.icon(
+              key: const Key('open-live-call'),
+              onPressed: () => openLiveCall(GoRouter.of(context), task.id),
+              icon: const Icon(Icons.closed_caption_outlined),
+              label: const Text('통화 보기'),
+            ),
           if (task.status.isTerminal || task.status == TaskStatus.awaitingApproval)
             IconButton(tooltip: '삭제', icon: const Icon(Icons.delete_outline), onPressed: _confirmDelete),
         ],
@@ -394,7 +402,7 @@ class _CallHeader extends StatelessWidget {
                     children: [
                       StatusChip(task.status, needsApproval: task.pendingApproval != null),
                       if (task.status == TaskStatus.inProgress && task.connectedAt != null)
-                        _CallTimer(since: task.connectedAt!),
+                        CallTimer(since: task.connectedAt!),
                       if (task.isSimulated)
                         Text(
                           '시뮬레이션',
@@ -410,33 +418,6 @@ class _CallHeader extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _CallTimer extends StatefulWidget {
-  const _CallTimer({required this.since});
-  final DateTime since;
-
-  @override
-  State<_CallTimer> createState() => _CallTimerState();
-}
-
-class _CallTimerState extends State<_CallTimer> {
-  late final Timer _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final elapsed = DateTime.now().difference(widget.since);
-    return Text(
-      formatDuration(elapsed.isNegative ? Duration.zero : elapsed),
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
     );
   }
 }

@@ -340,9 +340,10 @@ void main() {
 
     // (1) no tasks
     await pumpAt(tester);
-    expectEmpty('귀찮은 전화, 대신 걸어드릴게요', '예약, 문의, 요금 할인, 환불 요청까지.\n목적만 알려주시면 AI 비서가 통화하고 결과를 정리해 드려요.');
-    expect(find.descendant(of: find.byType(MessageView), matching: find.byType(ActionChip)), findsNothing);
-    expect(find.text('식당 예약'), findsOneWidget);
+    // SPEC-ASSIST-001 REQ-010: the briefing's empty wording replaces the first-use empty state.
+    expect(find.byType(MessageView), findsNothing);
+    expect(find.text('오늘은 맡긴 일이 없어요.'), findsOneWidget);
+    expect(find.text('가운데 버튼으로 부탁해 보세요.'), findsOneWidget);
 
     // (2) ringing, (3) in progress, both without transcript
     for (final (status, message) in [
@@ -563,6 +564,8 @@ void main() {
     expect(find.bySemanticsLabel('상태: 통화 중'), findsOneWidget);
     await pumpAt(tester, tasks: homeTasks());
     expect(find.byTooltip('설정'), findsOneWidget);
+    // SPEC-ASSIST-001 REQ-010: the send button lives in the assistant's text mode.
+    await pumpAt(tester, location: '/assistant?mode=text', tasks: homeTasks());
     expect(find.byTooltip('보내기'), findsOneWidget);
     await pumpAt(tester, location: '/plan', extra: draft());
     expect(find.byTooltip('수정'), findsWidgets);
@@ -615,7 +618,6 @@ void main() {
 
     await pumpAt(tester, tasks: homeTasks(), size: const Size(800, 2400));
     expectOrder([
-      find.byKey(const Key('home-intake-field')),
       find.text('진행 중'),
       find.text('최근 통화한 곳'),
     ]);

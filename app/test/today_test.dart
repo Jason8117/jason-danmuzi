@@ -38,8 +38,6 @@ void main() {
       find.text('오늘도 제가 함께할게요.'),
       find.text('오늘 중요한 일이 3개 있어요.'),
       find.text('라 파스타가 답을 기다려요.'),
-      find.byKey(const Key('home-intake-field')),
-      find.text('식당 예약'),
       find.text('전화 대신하기'),
       find.text('확인이 필요해요'),
       find.text('진행 중'),
@@ -60,18 +58,15 @@ void main() {
     // First two of each list only: a and b need a decision, c is on a call; d, e and f are finished.
     expect(inToday(find.text('관리사무소')), findsNothing);
     expect(find.byTooltip('설정'), findsOneWidget);
-    expect(find.byTooltip('보내기'), findsOneWidget);
 
-    // (2) no tasks
+    // (2) no tasks: the briefing's empty wording (SPEC-ASSIST-001 REQ-010)
     await pumpShell(tester, prefs: profile);
-    expect(find.text('귀찮은 전화, 대신 걸어드릴게요'), findsOneWidget);
-    expect(find.text('식당 예약'), findsOneWidget);
+    expect(find.text('오늘은 맡긴 일이 없어요.'), findsOneWidget);
+    expect(find.text('가운데 버튼으로 부탁해 보세요.'), findsOneWidget);
     for (final text in ['확인이 필요해요', '진행 중']) {
       expect(inToday(find.text(text)), findsNothing, reason: text);
     }
-    expect(find.byKey(const Key('today-briefing')), findsNothing);
     expect(find.byTooltip('설정'), findsOneWidget);
-    expect(find.byTooltip('보내기'), findsOneWidget);
   });
 
   testWidgets('greeting follows the time of day', (tester) async {

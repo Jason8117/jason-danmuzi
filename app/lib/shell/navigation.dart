@@ -3,7 +3,7 @@ import 'package:kolbi_core/kolbi_core.dart';
 
 import 'routes.dart';
 
-// SPEC-SHELL-001 design.md D1.2: the only place moves between tabs are written. Features call these four
+// SPEC-SHELL-001 design.md D1.2: the only place moves between tabs are written. Features call these
 // functions and named routes; they never call `go`, `goNamed` or `goBranch` themselves (AC-018).
 
 final _shells = Expando<StatefulNavigationShell>('tab shell');
@@ -36,15 +36,65 @@ void openTab(GoRouter router, AppTab tab) {
   }
 }
 
-/// Opens the assistant over the current tab; closing it returns to the same tab and screen.
-void openAssistant(GoRouter router) => router.pushNamed(RouteNames.assistant);
+/// Opens the assistant over the current tab; closing it returns to the same tab and screen. [text] opens it
+/// in text mode, [fill] puts a request start in its input (SPEC-ASSIST-001 REQ-008, REQ-010).
+void openAssistant(GoRouter router, {bool text = false, String? fill}) =>
+    router.pushNamed(
+      RouteNames.assistant,
+      queryParameters: text || fill != null ? const {'mode': 'text'} : const {},
+      extra: fill,
+    );
 
-/// From the assistant to the plan card: close the assistant first, because pushing a tab screen over a
-/// route outside the shell asserts in go_router 18 (research R1-G, G2).
-void submitFromAssistant(GoRouter router, PlanDraft draft) {
-  if (router.canPop()) router.pop();
-  router.pushNamed(RouteNames.plan, extra: draft);
+/// Closes the assistant. Opened as the first route (a web deep link) there is nothing underneath, so it goes
+/// to today instead of popping (SHELL-001 sync-audit F1).
+void closeAssistant(GoRouter router) {
+  if (router.canPop()) {
+    router.pop();
+  } else {
+    router.goNamed(RouteNames.today);
+  }
 }
+
+// The assistant sits outside the tab shell, and a tab screen pushed over it asserts in go_router 18
+// (research R1-G). Everything the assistant opens is therefore one of its child routes (R1-G3).
+
+/// The plan card over the assistant; back returns to the assistant with its input.
+void openAssistantPlan(GoRouter router, PlanDraft draft) =>
+    router.pushNamed(RouteNames.assistantPlan, extra: draft);
+
+/// Settings over the assistant (the request needs the requester's name).
+void openAssistantSettings(GoRouter router) =>
+    router.pushNamed(RouteNames.assistantSettings);
+
+/// The manual form over the assistant.
+void openAssistantManual(GoRouter router) =>
+    router.pushNamed(RouteNames.assistantNew);
+
+/// Settings from a screen that may sit over the assistant (the plan card): the assistant's child route there,
+/// the tab route elsewhere.
+void openSettings(GoRouter router) => router.pushNamed(
+  router.state.uri.path.startsWith(router.namedLocation(RouteNames.assistant))
+      ? RouteNames.assistantSettings
+      : RouteNames.settings,
+);
+
+/// The live call screen over the task screen (SPEC-ASSIST-001 REQ-012).
+void openLiveCall(GoRouter router, String taskId) =>
+    router.pushNamed(RouteNames.liveCall, pathParameters: {'id': taskId});
+
+/// The call ended: back to the task screen underneath (a pop, so it is not stacked twice); opened as the
+/// first route there is none, so the task opens on the tasks tab instead.
+void closeLiveCall(GoRouter router, String taskId) {
+  if (router.canPop()) {
+    router.pop();
+  } else {
+    openTask(router, taskId);
+  }
+}
+
+/// The live call location of [taskId] (the approval alert stays quiet there too).
+String liveCallLocation(GoRouter router, String taskId) =>
+    router.namedLocation(RouteNames.liveCall, pathParameters: {'id': taskId});
 
 /// The detail location of [taskId], for comparisons with the current location.
 String taskLocation(GoRouter router, String taskId) =>

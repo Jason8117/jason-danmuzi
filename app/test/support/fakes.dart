@@ -93,6 +93,7 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   Future<CallTask> create(NewCallRequest request) async {
+    callLog.add('create');
     createRequests.add(request);
     if (createError case final error?) throw error;
     await hold?.future;
@@ -110,8 +111,10 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   Future<IntakeResult> intake(String text, CallLanguage language) async {
+    callLog.add('intake');
     intakeCalls.add(text);
     if (intakeError case final error?) throw error;
+    await intakeHold?.future;
     return intakeResult ?? IntakeResult(draft: PlanDraft.blank(text));
   }
 
@@ -126,12 +129,14 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   Future<List<CallTask>> list() async {
+    callLog.add('list');
     if (listError case final error?) throw error;
     return tasks;
   }
 
   @override
   Future<CallTask> approvePlan(String id, {String? openingLine}) async {
+    callLog.add('approvePlan');
     approvePlanCalls.add(id);
     await hold?.future;
     return CallTask.fromJson(taskJson(id: id, version: 9, status: 'dialing'));
@@ -142,6 +147,7 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   Future<CallTask> decide(String taskId, String approvalId, {required bool approve, String? comment}) async {
+    callLog.add('decide');
     if (decideError case final error?) throw error;
     await hold?.future;
     decisions.add((approvalId: approvalId, approve: approve, comment: comment));
@@ -156,4 +162,28 @@ class FakeCallsRepository extends CallsRepository {
 
   @override
   LiveConnection openLiveChannel() => live;
+
+  // SPEC-ASSIST-001 (AC-016): additions only.
+
+  /// Names of the repository calls with a block body, in order (AC-004: only `intake` after the assistant
+  /// opens). `serverInfo` and `openLiveChannel` are one-line expression bodies and stay unchanged (AC-016).
+  final callLog = <String>[];
+
+  /// When set, `intake` waits for it after recording the text (AC-002: the "처리하고 있어요" state).
+  Completer<void>? intakeHold;
+
+  /// Every task id `cancel` received (hang-up included).
+  final cancelCalls = <String>[];
+
+  @override
+  Future<CallTask> cancel(String id) async {
+    callLog.add('cancel');
+    cancelCalls.add(id);
+    return CallTask.fromJson(taskJson(id: id, version: 99, status: 'canceled'));
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    callLog.add('delete');
+  }
 }
