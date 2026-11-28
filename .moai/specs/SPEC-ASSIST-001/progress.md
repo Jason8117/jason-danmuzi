@@ -220,6 +220,44 @@ project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.
 sync_audit: pending
 ```
 
+### sync 감사 1차 후속 수정 (2026-11-28)
+
+소유자가 감사 보고서 `.moai/reports/sync-audit/SPEC-ASSIST-001-audit-1.md`의 발견 사항을 모두 고치기로 승인함(2026-11-28). 시작 HEAD `34ad269`(M1 서식은 이미 `9988c91`에서 처리됨). RED/GREEN 출력은 `.moai/state/verify/SPEC-ASSIST-001/audit1/`에 있음(`.gitignore`로 커밋되지 않음, I3와 같음).
+
+| 발견 | 바꾼 것 | 테스트 | RED 증거 | 커밋 |
+|---|---|---|---|---|
+| M2 | `pub-cache/.../SpeechToTextPlugin.swift` 507-514에서 `onDeviceError`를 돌려준 뒤 `return`이 없음을 직접 확인함. 어댑터가 실패한 `listen`(`ListenFailedException`·`PlatformException`)과 모든 `_onError` 뒤에 `_speech.cancel()`을 부름(`_release`) | `platform_speech_recognizer_test.dart` "iOS without on-device recognition: the OD-2 event and the microphone off", "Android without the on-device language pack: the microphone off too" | `m2_s2_red.txt`: `Expected: <1> Actual: <0>`, `Expected: a value greater than <0> Actual: <0>` | `511ac32` |
+| S2 | 생성자의 `SpeechToText`를 상속한 가짜(`ScriptedSpeech`)로 어댑터 단위 테스트 12개: 중간·최종 결과, done만 오면 말 없음, 초기화 실패, 한국어 로캘 찾기, 오류 코드 변환 6가지, 기기 안 판별, 늦은 이벤트 무시, 권한 합치기(권한 플러그인 채널은 모의 처리기로 응답). 실패한 `listen`의 오류 코드에 `details`가 없으면 `null` 글자가 붙던 것도 고침 | 같은 파일 | `m2_s2_red.txt`: `Expected: 'failed to create speech recognizer' Actual: 'failed to create speech recognizer null'` | `511ac32` |
+| F2 | `AssistantController`에 세대 번호 `_generation`을 두고 멈출 때(`cancel`·`switchToText`·`dispose`)마다 올림. `_begin`·`acceptConsent`·`_listen`이 await 뒤 같은 세대인지 확인하고, 아니면 듣지 않고 기다림 상태로(글로 입력으로 멈췄으면 글로 입력 유지). 가짜 인식기에 `localeHold` 완료자만 더함 | `assistant_test.dart` "going to the background during the first start does not listen afterwards" | `f2_f3_red.txt`: `Expected: empty Actual: [` (`listenCalls`에 기록이 남음) | `11231a5` |
+| F3 | 테스트만 더함. 이미 맞게 동작하는 경로라 처음부터 통과함(RED 없음, 덮이지 않던 경로를 덮는 테스트) | "[말하기 끝] sends the words heard so far", "without a Korean recognizer the assistant opens in text mode", "refused for good in the OS dialog: the settings line" | 해당 없음(`f2_f3_red.txt`에서 세 테스트 통과) | `8fe6516` |
+| S4 | `Info.plist` `NSSpeechRecognitionUsageDescription` → "말한 내용을 글로 바꿔 부탁으로 보내요. 기기에서 안 되면 애플 음성 인식 서비스를 써요. 콜비는 음성을 저장하지 않아요." `plutil -lint` OK. 옛 문구를 단언하는 테스트는 없음. 법률 검토(03 NFR-LAW)는 아직 대기 | architecture_test "platform files declare..."(키 존재만 확인) | 해당 없음(문구) | `c31ddaa` |
+| S5 | README "말로 부탁하기": 권한이 있으면 화면을 열자마자 듣고, 말이 끝나거나 [말하기 끝]을 누르면 보냄, 기다리는 중에는 Orb로 다시 듣기. 소제목 "음성은 콜비 서버로 보내지 않습니다" | 해당 없음 | 해당 없음 | `c31ddaa` |
+| S6 | `acceptance.md` 제목 (0.3.0) → (0.3.1) | 해당 없음 | 해당 없음 | `c31ddaa` |
+| I2 | `shell/navigation.dart:6` "these four functions" → "these functions" | 해당 없음 | 해당 없음 | `c31ddaa` |
+
+최종 확인(HEAD `c31ddaa`, 출력은 `audit1/final_*.txt`):
+
+```
+$ cd app && flutter --suppress-analytics test
+00:13 +148: All tests passed!
+$ cd app && flutter --suppress-analytics analyze
+   info • ... • test/support/fakes.dart:54:5 • use_null_aware_elements
+1 issue found.
+$ dart test
+00:00 +2: All tests passed!
+$ cd packages/kolbi_ui && flutter --suppress-analytics test
+00:01 +72: All tests passed!
+$ git diff --stat 7b32f44 -- server/
+(출력 없음)
+$ cd app && flutter --suppress-analytics build ios --simulator --debug
+✓ Built build/ios/iphonesimulator/Runner.app
+$ cd app && flutter test --coverage  (lcov에서 줄 수 계산)
+platform_speech_recognizer.dart 93/102 91.2%   (전: 46/93 49.5%, HEAD 34ad269)
+assistant_controller.dart 120/123 97.6%
+```
+
+남은 것: 실기기에서 OD-2 안내 중 마이크 표시등이 꺼지는지 확인(M2는 플러그인 소스 읽기와 단위 테스트로만 확인), `Info.plist` 문구 법률 검토, I4(SwiftPM `Package.resolved` 처리)는 소유자 결정 대기. `fake_speech_recognizer.dart`의 `koreanLocaleId`는 한 줄 화살표 함수가 본문으로 바뀌었지만 `localeHold`가 없으면 동작이 같음.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작 승인(2026-11-27, "기본값으로 시작" — OD-2~OD-5는 계획 기본값, 반영은 브랜치 + PR, 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·병합). 소유자가 Xcode 27.2(macOS 27.2.1)를 설치한 뒤 시작했고, iOS 27.2 시뮬레이터 런타임은 소유자가 함께 설치함
