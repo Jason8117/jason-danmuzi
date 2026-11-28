@@ -1,7 +1,15 @@
 import 'package:intl/intl.dart';
 
+final _representative = RegExp(r'^\+1([568]\d{6})$');
+
 /// Shows Korean E.164 numbers in the familiar local form (+821012345678 → 010-1234-5678).
+/// The server reads representative numbers (1588-0000) as `+1` plus seven digits; they are shown as dialed
+/// (SPEC-PLACE-001 design.md D9). North American numbers have ten digits after `+1` and stay as they are.
 String formatPhone(String e164) {
+  final representative = _representative.firstMatch(e164)?.group(1);
+  if (representative != null) {
+    return '1${representative.substring(0, 3)}-${representative.substring(3)}';
+  }
   if (!e164.startsWith('+82')) return e164;
   final national = '0${e164.substring(3)}';
   if (national.startsWith('02') && national.length >= 9) {

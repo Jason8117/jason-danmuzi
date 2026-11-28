@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:kolbi_core/kolbi_core.dart' show placeSearchStartFor;
 import 'package:kolbi_ui/kolbi_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -131,12 +132,19 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
     }
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _sending = true);
-    final draft = await requestPlanDraft(ref, messenger, text);
+    final result = await requestIntake(ref, messenger, text);
     if (!mounted) return;
     setState(() => _sending = false);
-    // Back from the plan card (or after an error) the sentence is still there to edit.
+    // Back from the plan card or place selection (or after an error) the sentence is still there to edit.
     if (spoken) _controller.keepAsText(text);
-    if (draft != null) openAssistantPlan(router, draft);
+    if (result == null) return;
+    // SPEC-PLACE-001 REQ-009: no number and not blocked → choose a place first.
+    final start = placeSearchStartFor(text, result);
+    if (start != null) {
+      openAssistantPlaces(router, start);
+    } else {
+      openAssistantPlan(router, result.draft);
+    }
   }
 
   void _sendTyped() {

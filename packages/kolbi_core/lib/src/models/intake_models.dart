@@ -8,7 +8,10 @@ enum PhoneSource {
   history('지난번 통화한 번호'),
 
   /// "다시 걸기": the number of the task being redialed. App-side only; the server never sends it (SPEC-FOLLOWUP-001).
-  previousCall('지난번과 같은 번호');
+  previousCall('지난번과 같은 번호'),
+
+  /// Chosen on place selection. App-side only; the server never sends it (SPEC-PLACE-001 REQ-019).
+  search('검색 결과');
 
   const PhoneSource(this.label);
   final String label;

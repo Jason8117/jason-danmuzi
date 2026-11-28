@@ -93,6 +93,14 @@
 - GREEN: `config.ts`에 `KAKAO_REST_API_KEY`(optional, 공백은 없음), `KAKAO_LOCAL_BASE_URL`(기본 `https://dapi.kakao.com`). `container.ts`가 D2 표대로 고름(판정은 `config.provider`, `CALL_PROVIDER=auto`에 KAT 설정이 모자란 경우도 시험에 넣음). `index.ts`는 `places`를 `buildApp`에 넘기고 기동 로그에 `placeSearch: places?.source ?? "off"`만 남김(키 없음). 경로는 `places`가 없으면 제공자를 부르지 않고 503 `place_search_unavailable`·`no-store`. `.env.example`에 값 없는 `KAKAO_REST_API_KEY=`와 설명.
 - 결과: `npm --prefix server test` → `Tests  409 passed (409)`, typecheck exit 0.
 
+### M3 — `kolbi_core`와 비서 분기
+
+- RED(kolbi_core): `packages/kolbi_core/test/places_test.dart`(D6 예시 여섯 줄과 이름 있는 줄, D9 표, JSON 해석, 저장소 요청 모양, `PhoneSource.search`)를 먼저 씀 → 컴파일 실패 `Error: Method not found: 'placeSearchStartFor'.` 등. 원문 `red/m3_core_red.txt`.
+- RED(앱): `app/test/places_test.dart` AC-009 블록과 `test/support/fake_places_repository.dart` → `Error when reading 'lib/features/places/place_search_screen.dart': No such file or directory`, `Undefined name 'placesRepositoryProvider'`. 원문 `red/m3_app_red.txt`.
+- GREEN: `kolbi_core`에 `models/place_models.dart`(`Place`, `PlacePhoneCheck`(모르는 값은 `invalid`), `PlaceSearchSource`(모르는 값은 `unknown`), `PlaceSearchResult`, `PlaceSearchStart`), `data/places_repository.dart`, `places/place_intent.dart`(`placeSearchStartFor`), `PhoneSource.search('검색 결과')`, `formatPhone`의 대표번호 규칙(`^\+1([568]\d{6})$`). 앱에 `shell/place_search.dart`(`placesRepositoryProvider`), `RouteNames.assistantPlaces`, `/assistant/places` 자식 경로(`extra`가 `PlaceSearchStart`가 아니면 `/assistant`로), `openAssistantPlaces`, `requestPlanDraft` → `requestIntake`(404는 빈 `missing`의 `IntakeResult`), 비서 `_submit` 분기. 장소 선택 화면은 M3에서 제목만 있는 뼈대로 두고 M4에서 채운다.
+- 결과: kolbi_core `dart test` → `00:00 +32: All tests passed!`, `dart analyze` → `No issues found!`; 앱 `flutter test` → `00:13 +149: All tests passed!`, analyze → 기존 info 1건만; 루트 `dart test` → `+2`.
+- 계획과 다른 점: AC-010의 앱 부분(검색칸 채움, 빈 검색어면 초점, `searchCalls`)은 화면이 있어야 해서 M4에서 시험한다. 서식: 새 파일과 HEAD에서 이미 서식이 맞던 수정 파일에만 `dart format` 적용. `intake_models.dart`, `formatters.dart`는 HEAD에서도 `dart format` 기준과 달라(줄 길이 120 관례) 전체 재배치를 피하려고 서식을 돌리지 않았다.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자
