@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -56,10 +57,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
   // without telling the app, so the speech-service sentence is shown once, up front.
   bool _needsSpeechServiceNotice() =>
       defaultTargetPlatform == TargetPlatform.android &&
-      !(ref.read(sharedPreferencesProvider).getBool(androidSpeechServiceNoticeKey) ?? false);
+      !(ref
+              .read(sharedPreferencesProvider)
+              .getBool(androidSpeechServiceNoticeKey) ??
+          false);
 
-  void _acknowledgeSpeechServiceNotice() =>
-      ref.read(sharedPreferencesProvider).setBool(androidSpeechServiceNoticeKey, true);
+  void _acknowledgeSpeechServiceNotice() => ref
+      .read(sharedPreferencesProvider)
+      .setBool(androidSpeechServiceNoticeKey, true);
 
   @override
   void dispose() {

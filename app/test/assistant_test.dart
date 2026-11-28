@@ -3,7 +3,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show TargetPlatform, debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
 
 import 'package:callmate/app.dart';
 import 'package:callmate/core/clock.dart';
@@ -41,7 +42,10 @@ const profile = {
   'trustNoticeAcknowledged': true,
   'androidSpeechServiceNoticeAcknowledged': true,
 };
-const profileBeforeNotice = {'requesterName': '김민수', 'trustNoticeAcknowledged': true};
+const profileBeforeNotice = {
+  'requesterName': '김민수',
+  'trustNoticeAcknowledged': true,
+};
 
 /// The whole app with the fake recognizer (or, with [speech] null, the real one, which finds no plugin).
 Future<CountingCallsRepository> pumpAssistantApp(
@@ -878,42 +882,57 @@ void main() {
     expect(find.byTooltip('설정'), findsOneWidget);
   });
 
-  testWidgets('Android shows the speech-service notice once before the first dictation', (tester) async {
-    const sentence = 'Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요.';
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+  testWidgets(
+    'Android shows the speech-service notice once before the first dictation',
+    (tester) async {
+      const sentence =
+          'Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요.';
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
-    // (1) permission already granted: the notice on its own, nothing heard until [계속]
-    var speech = FakeSpeechRecognizer();
-    await pumpAssistantApp(tester, speech: speech, prefs: profileBeforeNotice);
-    await openFromButton(tester);
-    await settle(tester);
-    expect(find.text(sentence), findsOneWidget);
-    expect(speech.listenCalls, isEmpty);
-    await tapAndSettle(tester, find.byKey(const Key('speech-service-continue')));
-    expect(speech.listenCalls, hasLength(1));
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('androidSpeechServiceNoticeAcknowledged'), isTrue);
+      // (1) permission already granted: the notice on its own, nothing heard until [계속]
+      var speech = FakeSpeechRecognizer();
+      await pumpAssistantApp(
+        tester,
+        speech: speech,
+        prefs: profileBeforeNotice,
+      );
+      await openFromButton(tester);
+      await settle(tester);
+      expect(find.text(sentence), findsOneWidget);
+      expect(speech.listenCalls, isEmpty);
+      await tapAndSettle(
+        tester,
+        find.byKey(const Key('speech-service-continue')),
+      );
+      expect(speech.listenCalls, hasLength(1));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('androidSpeechServiceNoticeAcknowledged'), isTrue);
 
-    // (2) seen before: listening starts at once, no notice
-    speech = FakeSpeechRecognizer();
-    await pumpAssistantApp(tester, speech: speech);
-    await openFromButton(tester);
-    await settle(tester);
-    expect(find.text(sentence), findsNothing);
-    expect(speech.listenCalls, hasLength(1));
+      // (2) seen before: listening starts at once, no notice
+      speech = FakeSpeechRecognizer();
+      await pumpAssistantApp(tester, speech: speech);
+      await openFromButton(tester);
+      await settle(tester);
+      expect(find.text(sentence), findsNothing);
+      expect(speech.listenCalls, hasLength(1));
 
-    // (3) permission not asked yet: one sheet carries both sentences, [계속] acknowledges both
-    speech = FakeSpeechRecognizer(status: MicPermission.notDetermined);
-    await pumpAssistantApp(tester, speech: speech, prefs: profileBeforeNotice);
-    await openFromButton(tester);
-    await settle(tester);
-    expect(find.textContaining(sentence), findsOneWidget);
-    await tapAndSettle(tester, find.byKey(const Key('mic-consent-continue')));
-    expect(speech.requestCalls, 1);
-    expect(speech.listenCalls, hasLength(1));
-    expect(find.byKey(const Key('speech-service-continue')), findsNothing);
-  });
+      // (3) permission not asked yet: one sheet carries both sentences, [계속] acknowledges both
+      speech = FakeSpeechRecognizer(status: MicPermission.notDetermined);
+      await pumpAssistantApp(
+        tester,
+        speech: speech,
+        prefs: profileBeforeNotice,
+      );
+      await openFromButton(tester);
+      await settle(tester);
+      expect(find.textContaining(sentence), findsOneWidget);
+      await tapAndSettle(tester, find.byKey(const Key('mic-consent-continue')));
+      expect(speech.requestCalls, 1);
+      expect(speech.listenCalls, hasLength(1));
+      expect(find.byKey(const Key('speech-service-continue')), findsNothing);
+    },
+  );
 
   testWidgets('iOS does not show the Android notice up front', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;

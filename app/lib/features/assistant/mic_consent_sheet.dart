@@ -7,7 +7,8 @@ import 'package:material_ui/material_ui.dart';
 const micPurpose = '말로 부탁하면 제가 글로 받아 적어요. 콜비는 음성을 저장하지 않아요.';
 
 /// Android only, shown once before the first dictation (OD-2 deviation, owner decision 2026-11-28).
-const androidSpeechServiceNotice = 'Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요.';
+const androidSpeechServiceNotice =
+    'Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요.';
 
 /// The device flag that the Android notice was seen; stored like the trust notice, never sent anywhere.
 const androidSpeechServiceNoticeKey = 'androidSpeechServiceNoticeAcknowledged';
@@ -23,7 +24,11 @@ String generalRecognizerNotice([TargetPlatform? platform]) {
 
 /// The purpose notice with [계속]; the OS permission dialog appears only after it (04 DP-7).
 class MicConsentSheet extends StatelessWidget {
-  const MicConsentSheet({super.key, required this.onContinue, this.withSpeechService = false});
+  const MicConsentSheet({
+    super.key,
+    required this.onContinue,
+    this.withSpeechService = false,
+  });
 
   final VoidCallback onContinue;
 
@@ -33,7 +38,9 @@ class MicConsentSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _NoticeCard(
     icon: Icons.mic_none_rounded,
-    message: withSpeechService ? '$micPurpose\n$androidSpeechServiceNotice' : micPurpose,
+    message: withSpeechService
+        ? '$micPurpose\n$androidSpeechServiceNotice'
+        : micPurpose,
     actions: [
       FilledButton(
         key: const Key('mic-consent-continue'),
@@ -76,7 +83,11 @@ class GeneralRecognizerNotice extends StatelessWidget {
 
 /// Android, permission already granted, first dictation: the speech-service sentence on its own.
 class SpeechServiceNotice extends StatelessWidget {
-  const SpeechServiceNotice({super.key, required this.onContinue, required this.onText});
+  const SpeechServiceNotice({
+    super.key,
+    required this.onContinue,
+    required this.onText,
+  });
 
   final VoidCallback onContinue;
   final VoidCallback onText;

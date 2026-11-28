@@ -91,7 +91,8 @@ class AssistantController extends ValueNotifier<AssistantState> {
     bool Function()? needsSpeechServiceNotice,
     void Function()? acknowledgeSpeechServiceNotice,
   }) : _needsSpeechServiceNotice = needsSpeechServiceNotice ?? _never,
-       _acknowledgeSpeechServiceNotice = acknowledgeSpeechServiceNotice ?? _noop,
+       _acknowledgeSpeechServiceNotice =
+           acknowledgeSpeechServiceNotice ?? _noop,
        super(const AssistantState(AssistantPhase.starting));
 
   static bool _never() => false;
