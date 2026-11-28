@@ -146,15 +146,21 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
         );
       } on ListenFailedException catch (error) {
         // iOS reports an unsupported on-device recognizer as a failed listen (plugin code onDeviceError).
-        final message = '${error.message} ${error.details}'.toLowerCase();
+        final message = [
+          error.message,
+          error.details,
+        ].whereType<Object>().join(' ').toLowerCase();
         _emit(
           onDevice && message.contains('on device')
               ? const SpeechOnDeviceUnavailable()
               : SpeechError(message.trim()),
           close: true,
         );
+        // speech_to_text 7.5.0 (iOS) answers onDeviceError and then still starts the audio engine.
+        await _release();
       } on PlatformException catch (error) {
         _emit(SpeechError(error.code), close: true);
+        await _release();
       }
     }();
     return session.stream;
@@ -180,6 +186,8 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
       _ => SpeechError(code),
     };
     _emit(event, close: true);
+    // The session is over for the assistant, so the microphone must be too (the OD-2 notice may follow).
+    unawaited(_release());
   }
 
   void _onStatus(String status) {
@@ -199,6 +207,15 @@ class PlatformSpeechRecognizer implements SpeechRecognizer {
     final session = _session;
     _session = null;
     if (session != null && !session.isClosed) session.close();
+  }
+
+  /// Turns the plugin's microphone off after a terminal error; the session is already closed.
+  Future<void> _release() async {
+    try {
+      await _speech.cancel();
+    } on PlatformException {
+      // Already stopped.
+    }
   }
 
   @override
