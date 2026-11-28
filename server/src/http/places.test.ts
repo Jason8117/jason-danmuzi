@@ -5,7 +5,9 @@ import { Writable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HeuristicBrain } from "../brain/heuristicBrain.js";
-import type { CallTask } from "../domain/types.js";
+import { OpenAiBrain } from "../brain/openaiBrain.js";
+import type { CallBrain } from "../brain/types.js";
+import type { CallTask, IntakeContent } from "../domain/types.js";
 import { EventBus } from "../events/eventBus.js";
 import type { Logger } from "../logger.js";
 import { KakaoLocalPlaceSearch } from "../places/kakaoLocalPlaceSearch.js";
@@ -25,16 +27,17 @@ const dirs: string[] = [];
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   await Promise.all(apps.splice(0).map((app) => app.close()));
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 async function makeApp(
   places: PlaceSearch | undefined,
-  options: { store?: TaskStore; bus?: EventBus; logger?: AppDeps["logger"] } = {},
+  options: { store?: TaskStore; bus?: EventBus; logger?: AppDeps["logger"]; brain?: CallBrain } = {},
 ) {
   const bus = options.bus ?? new EventBus();
-  const calls = new CallService(options.store ?? new InMemoryTaskStore(), bus, new HeuristicBrain(), new SimulatedCallProvider(200), {
+  const calls = new CallService(options.store ?? new InMemoryTaskStore(), bus, options.brain ?? new HeuristicBrain(), new SimulatedCallProvider(200), {
     maxConcurrentCalls: 1,
     maxCallsPerDay: 10,
     approvalTimeoutMs: 2000,
@@ -288,5 +291,133 @@ describe("POST /v1/places/search (SPEC-PLACE-001)", () => {
     const intake = (app: FastifyInstance) =>
       app.inject({ method: "POST", url: "/v1/intake", headers: auth, payload: { text: "라 파스타에 전화해서 금요일 예약해줘" } });
     expect((await intake(off)).json()).toEqual((await intake(on)).json());
+  });
+});
+
+/** A brain whose intake content is fixed by the test; everything else is the heuristic brain. */
+class FixedIntakeBrain extends HeuristicBrain {
+  constructor(private readonly placeQuery: unknown) {
+    super();
+  }
+  override async draftIntake(maskedText: string, language: "ko" | "en"): Promise<IntakeContent> {
+    const content = await super.draftIntake(maskedText, language);
+    return this.placeQuery === undefined ? content : ({ ...content, placeQuery: this.placeQuery } as IntakeContent);
+  }
+}
+
+const intake = (app: FastifyInstance, text: string) =>
+  app.inject({ method: "POST", url: "/v1/intake", headers: auth, payload: { text } });
+
+describe("POST /v1/intake placeQuery (SPEC-PLACE-001 0.2.0)", () => {
+  // AC-023 / REQ-023
+  it("intake answers with a place query", async () => {
+    const app = await makeApp(undefined);
+    const rows: Array<[string, string | null]> = [
+      ["근처 치과 내일 오전 예약해 줘", "치과"],
+      ["강남역 근처 파스타집, 금요일 7시 2명 예약해 줘", "강남역 파스타집"],
+      ["라 파스타에 전화해서 금요일 7시 예약", "라 파스타"],
+      ["해 줘", null],
+    ];
+    for (const [text, placeQuery] of rows) {
+      const res = await intake(app, text);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().placeQuery, text).toBe(placeQuery);
+    }
+    // Date and time stay in the request; only the search term drops them.
+    expect((await intake(app, "근처 치과 내일 오전 예약해 줘")).json().draft.goal).toContain("내일 오전");
+
+    // A brain-provided value is cleaned; a blank or missing one falls back to the rule.
+    for (const [brainValue, expected] of [
+      ["치과", "치과"],
+      ["근처 치과 010-1234-5678", "치과"],
+      ["   ", "치과"],
+      [undefined, "치과"],
+    ] as const) {
+      const fixed = await makeApp(undefined, { brain: new FixedIntakeBrain(brainValue) });
+      const body = (await intake(fixed, "근처 치과 내일 오전 예약해 줘")).json();
+      expect(body.placeQuery, String(brainValue)).toBe(expected);
+      expect(JSON.stringify(body)).not.toContain("010-1234-5678");
+    }
+  });
+
+  // AC-024 / REQ-024
+  it("intake placeQuery never reaches storage, events or logs", async () => {
+    const marker = "표식치과-5a5a";
+    const dir = await mkdtemp(join(tmpdir(), "intake-proof-"));
+    dirs.push(dir);
+    const dataFile = join(dir, "tasks.json");
+    const existing: CallTask = {
+      id: "6f1c1a52-1d7e-4c40-9e7f-5b0b0c9a1a02",
+      version: 1,
+      targetName: "기존 가게",
+      phoneNumber: "+821012345678",
+      goal: "영업시간 문의",
+      language: "ko",
+      requesterName: "김민수",
+      status: "completed",
+      transcript: [],
+      approvals: [],
+      provider: "simulated",
+      createdAt: "2026-11-01T00:00:00.000Z",
+      updatedAt: "2026-11-01T00:00:00.000Z",
+    };
+    await writeFile(dataFile, JSON.stringify([existing], null, 2));
+    const quiet: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+    const store = await JsonFileTaskStore.open(dataFile, { logger: quiet });
+    const fileBefore = await readFile(dataFile);
+
+    const captured: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, done) {
+        captured.push(String(chunk));
+        done();
+      },
+    });
+    const brainLogger = {
+      warn: (obj: object, msg: string) => captured.push(JSON.stringify(["warn", obj, msg])),
+    };
+    const bus = new EventBus();
+    let events = 0;
+    bus.subscribe(() => {
+      events += 1;
+    });
+
+    // (1) the LLM answers with the marker as placeQuery; (2) the LLM fails and the service rule applies.
+    const answers = [
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ targetName: null, goal: "예약", conditions: [], context: null, placeQuery: marker }) } }],
+        }),
+        { status: 200 },
+      ),
+      new Response("upstream", { status: 500 }),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => answers.shift()!),
+    );
+    const app = await makeApp(undefined, {
+      store,
+      bus,
+      logger: { stream },
+      brain: new OpenAiBrain("sk-test", "gpt-test", brainLogger),
+    });
+
+    const bodies = [];
+    for (let i = 0; i < 2; i += 1) {
+      const res = await intake(app, `근처 ${marker} 내일 오전 예약해 줘`);
+      expect(res.statusCode).toBe(200);
+      bodies.push(res.json());
+    }
+    expect(bodies.map((b) => [b.source, b.placeQuery])).toEqual([
+      ["llm", marker],
+      ["heuristic", marker],
+    ]);
+
+    expect(captured.length).toBeGreaterThan(0);
+    expect(captured.join("\n")).not.toContain(marker);
+    expect(await readFile(dataFile)).toEqual(fileBefore);
+    expect(store.list().map((t) => t.id)).toEqual([existing.id]);
+    expect(events).toBe(0);
   });
 });

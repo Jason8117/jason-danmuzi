@@ -6,15 +6,15 @@ import 'package:http/testing.dart';
 import 'package:kolbi_core/kolbi_core.dart';
 import 'package:test/test.dart';
 
-IntakeResult missingNumber({String? targetName, bool blocked = false}) =>
-    IntakeResult(
-      draft: PlanDraft(
-        goal: '예약',
-        targetName: targetName,
-        numberBlocked: blocked,
-      ),
-      missing: const ['phoneNumber'],
-    );
+IntakeResult missingNumber({
+  String? targetName,
+  bool blocked = false,
+  String? placeQuery,
+}) => IntakeResult(
+  draft: PlanDraft(goal: '예약', targetName: targetName, numberBlocked: blocked),
+  missing: const ['phoneNumber'],
+  placeQuery: placeQuery,
+);
 
 void main() {
   // AC-010 / REQ-010 (design.md D6)
@@ -26,6 +26,13 @@ void main() {
       ('내 주변 세탁소 문의해 줘', '세탁소', true),
       ('가까운 꽃집에 장미 있는지 알아봐 줘', '꽃집', true),
       ('해 줘', '', false),
+      // 0.2.0 (design.md D6 shared table; server/src/domain/placeQuery.test.ts pins the same keywords).
+      ('근처 치과 내일 오전 예약해 줘', '치과', true),
+      ('근처 미용실 토요일 오후 3시반에 예약해 줘', '미용실', true),
+      ('다음 주 수요일 저녁에 근처 고깃집 4명 예약해 줘', '고깃집', true),
+      ('지금 근처 약국 몇 시까지 하는지 물어봐 줘', '약국', true),
+      ('12월 24일 저녁 강남역 이탈리안 레스토랑 예약해 줘', '강남역 이탈리안 레스토랑', false),
+      ('주말 아침에 동네 빵집 몇 시에 여는지 물어봐 줘', '동네 빵집', false),
     ];
     for (final (text, keyword, nearby) in vectors) {
       final start = placeSearchStartFor(text, missingNumber());
@@ -63,6 +70,33 @@ void main() {
     // Capped at 30 characters.
     final long = placeSearchStartFor('${'가' * 40} 예약해 줘', missingNumber())!;
     expect(long.keyword.length, 30);
+  });
+
+  // AC-010 / REQ-010, REQ-023 (design.md D6, D10)
+  test('place search start prefers the intake placeQuery', () {
+    const text = '근처 치과 내일 오전 예약해 줘';
+    final served = placeSearchStartFor(
+      text,
+      missingNumber(placeQuery: '치과의원'),
+    )!;
+    expect((served.keyword, served.nearby), ('치과의원', true));
+    expect(
+      placeSearchStartFor(text, missingNumber(placeQuery: '  '))!.keyword,
+      '치과',
+    );
+    expect(
+      placeSearchStartFor(text, missingNumber(placeQuery: '가' * 40))!.keyword,
+      '가' * 30,
+    );
+
+    IntakeResult parse(Object? placeQuery) => IntakeResult.fromJson({
+      'draft': {'goal': '예약'},
+      'missing': ['phoneNumber'],
+      'placeQuery': ?placeQuery,
+    });
+    expect(parse('치과').placeQuery, '치과');
+    expect(parse(null).placeQuery, isNull);
+    expect(parse(7).placeQuery, isNull);
   });
 
   // AC-003 (app display) / REQ-015 (design.md D9)

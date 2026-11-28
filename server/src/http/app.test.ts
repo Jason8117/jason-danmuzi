@@ -696,7 +696,7 @@ describe("POST /v1/intake (SPEC-INTAKE-001)", () => {
     if (error) {
       expect(body.error).toBe(error);
     } else {
-      expect(Object.keys(body).sort()).toEqual(["draft", "missing", "numberIssue", "phoneSource", "source"]);
+      expect(Object.keys(body).sort()).toEqual(["draft", "missing", "numberIssue", "phoneSource", "placeQuery", "source"]);
       expect(Object.keys(body.draft).sort()).toEqual(["conditions", "context", "goal", "language", "phoneNumber", "targetName"]);
       const { language, targetName, phoneNumber, missing, ...top } = fields!;
       expect(body.draft.language).toBe(language);

@@ -5,6 +5,7 @@ import { InMemoryTaskStore } from "../store/taskStore.js";
 import { HeuristicBrain } from "./heuristicBrain.js";
 import { OpenAiBrain } from "./openaiBrain.js";
 import { INTAKE_LLM_TIMEOUT_MS, LLM_TIMEOUT_MS } from "./openaiBrain.js";
+import { INTAKE_SYSTEM_PROMPT } from "./prompts.js";
 
 const API_KEY = "sk-test-DO-NOT-LOG-1234";
 const AT = "2026-11-21T10:00:00.000Z";
@@ -505,5 +506,32 @@ describe("OpenAiBrain appointments (SPEC-FOLLOWUP-001)", () => {
 
     expect(outcome.source).toBe("heuristic");
     expect("appointment" in outcome).toBe(false);
+  });
+});
+
+describe("OpenAiBrain intake placeQuery (SPEC-PLACE-001 0.2.0)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // AC-023 (3) / REQ-023
+  it("intake reads placeQuery leniently", async () => {
+    const base = { targetName: null, goal: "예약", conditions: [], context: null };
+    stubFetch(async () => completion(JSON.stringify({ ...base, placeQuery: "치과" })));
+    const first = setup();
+    expect(await first.brain.draftIntake("근처 치과 내일 오전 예약해 줘", "ko")).toEqual({ ...base, placeQuery: "치과", source: "llm" });
+
+    for (const extra of [{}, { placeQuery: null }, { placeQuery: 7 }, { placeQuery: "가".repeat(101) }]) {
+      vi.unstubAllGlobals();
+      stubFetch(async () => completion(JSON.stringify({ ...base, ...extra })));
+      const { brain, log } = setup();
+      const draft = await brain.draftIntake("근처 치과 내일 오전 예약해 줘", "ko");
+      expect("placeQuery" in draft, JSON.stringify(extra)).toBe(false);
+      expect(draft.source).toBe("llm");
+      expect(log.warns).toHaveLength(0);
+    }
+
+    expect(INTAKE_SYSTEM_PROMPT).toContain("placeQuery");
+    expect(INTAKE_SYSTEM_PROMPT).toContain('"근처"');
   });
 });

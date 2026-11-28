@@ -231,6 +231,38 @@ void main() {
     expect(app.places.searchCalls.single.near, isNull);
   });
 
+  // AC-010 (3)(4) / REQ-010, REQ-023
+  testWidgets('the assistant searches with the intake placeQuery', (
+    tester,
+  ) async {
+    const dentist = '근처 치과 내일 오전 예약해 줘';
+    final served = IntakeResult(
+      draft: const PlanDraft(goal: dentist),
+      missing: const ['phoneNumber'],
+      placeQuery: '치과의원',
+    );
+    Future<PlacesApp> open(IntakeResult intake) => openPlaces(
+      tester,
+      text: dentist,
+      intake: intake,
+      overrides: [
+        locationReaderProvider.overrideWithValue(
+          FakeLocationReader(state: LocationAccess.granted),
+        ),
+      ],
+    );
+
+    var app = await open(served);
+    expect(editable(tester, searchField).controller.text, '치과의원');
+    expect(app.places.queries, ['치과의원']);
+    expect(app.places.searchCalls.single.near, isNotNull);
+
+    // An older server sends no placeQuery: the fallback rule now skips "오전".
+    app = await open(missingNumber(goal: dentist));
+    expect(editable(tester, searchField).controller.text, '치과');
+    expect(app.places.queries, ['치과']);
+  });
+
   // AC-011 / REQ-011
   testWidgets('place selection follows the wireframe order', (tester) async {
     await openPlaces(tester);

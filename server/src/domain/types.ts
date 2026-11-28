@@ -130,6 +130,8 @@ export interface IntakeContent {
   conditions: string[];
   context: string | null;
   source: IntakeSource;
+  /** The place search term the brain proposes (SPEC-PLACE-001 REQ-023); absent when it has none. */
+  placeQuery?: string;
 }
 
 /** The plan-card draft returned by POST /v1/intake. No task is created (SPEC-INTAKE-001 REQ-001, REQ-003). */
@@ -151,6 +153,8 @@ export interface IntakeResult {
   phoneSource: "text" | "history" | null;
   numberIssue: "blocked" | null;
   source: IntakeSource;
+  /** Place name or category only, for place search; never stored or logged (SPEC-PLACE-001 REQ-023, REQ-024). */
+  placeQuery: string | null;
 }
 
 /** Execution options for task creation, kept apart from the task input itself. */
