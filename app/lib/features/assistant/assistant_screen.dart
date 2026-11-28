@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,10 +45,21 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
       recognizer: ref.read(speechRecognizerProvider),
       memory: ref.read(assistantMemoryProvider),
       onFinal: _submit,
+      needsSpeechServiceNotice: _needsSpeechServiceNotice,
+      acknowledgeSpeechServiceNotice: _acknowledgeSpeechServiceNotice,
     )..addListener(_onState);
     if (widget.fill case final fill?) _fill(fill);
     _controller.start(textMode: widget.textMode || widget.fill != null);
   }
+
+  // OD-2 deviation (owner decision 2026-11-28): on Android the plugin may use the network recognizer
+  // without telling the app, so the speech-service sentence is shown once, up front.
+  bool _needsSpeechServiceNotice() =>
+      defaultTargetPlatform == TargetPlatform.android &&
+      !(ref.read(sharedPreferencesProvider).getBool(androidSpeechServiceNoticeKey) ?? false);
+
+  void _acknowledgeSpeechServiceNotice() =>
+      ref.read(sharedPreferencesProvider).setBool(androidSpeechServiceNoticeKey, true);
 
   @override
   void dispose() {
@@ -263,7 +275,15 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen>
                 if (state.notice case final notice?)
                   Text(notice, textAlign: TextAlign.center),
                 if (state.phase == AssistantPhase.consent)
-                  MicConsentSheet(onContinue: _controller.acceptConsent),
+                  MicConsentSheet(
+                    onContinue: _controller.acceptConsent,
+                    withSpeechService: _needsSpeechServiceNotice(),
+                  ),
+                if (state.phase == AssistantPhase.speechServiceNotice)
+                  SpeechServiceNotice(
+                    onContinue: _controller.acceptSpeechServiceNotice,
+                    onText: _controller.switchToText,
+                  ),
                 if (state.phase == AssistantPhase.fallbackConsent)
                   GeneralRecognizerNotice(
                     onContinue: _controller.acceptGeneralRecognizer,

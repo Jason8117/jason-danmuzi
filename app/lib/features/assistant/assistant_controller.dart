@@ -22,6 +22,10 @@ enum AssistantPhase {
 
   /// On-device recognition is not available: the OD-2 notice before the general recognizer (REQ-006).
   fallbackConsent,
+
+  /// Android, first dictation: who may turn speech into text, shown once before listening (OD-2 deviation,
+  /// owner decision 2026-11-28 — the plugin falls back to the network recognizer without telling the app).
+  speechServiceNotice,
   listening,
 
   /// The final sentence is on its way to intake.
@@ -84,7 +88,17 @@ class AssistantController extends ValueNotifier<AssistantState> {
     required this.recognizer,
     required this.memory,
     required this.onFinal,
-  }) : super(const AssistantState(AssistantPhase.starting));
+    bool Function()? needsSpeechServiceNotice,
+    void Function()? acknowledgeSpeechServiceNotice,
+  }) : _needsSpeechServiceNotice = needsSpeechServiceNotice ?? _never,
+       _acknowledgeSpeechServiceNotice = acknowledgeSpeechServiceNotice ?? _noop,
+       super(const AssistantState(AssistantPhase.starting));
+
+  static bool _never() => false;
+  static void _noop() {}
+
+  final bool Function() _needsSpeechServiceNotice;
+  final void Function() _acknowledgeSpeechServiceNotice;
 
   final SpeechRecognizer recognizer;
   final AssistantMemory memory;
@@ -137,6 +151,8 @@ class AssistantController extends ValueNotifier<AssistantState> {
   /// [계속] on the purpose notice: only now does the OS dialog appear.
   Future<void> acceptConsent() async {
     if (value.phase != AssistantPhase.consent) return;
+    // On Android the purpose notice also carries the speech-service sentence, so [계속] acknowledges it.
+    if (_needsSpeechServiceNotice()) _acknowledgeSpeechServiceNotice();
     final permission = await recognizer.requestPermission();
     if (_closed) return;
     switch (permission) {
@@ -153,7 +169,17 @@ class AssistantController extends ValueNotifier<AssistantState> {
 
   Future<void> openSettings() => recognizer.openAppSettings();
 
+  /// [계속] on the Android speech-service notice: remember it, then listen.
+  Future<void> acceptSpeechServiceNotice() async {
+    if (value.phase != AssistantPhase.speechServiceNotice) return;
+    _acknowledgeSpeechServiceNotice();
+    await _listen();
+  }
+
   Future<void> _listen() async {
+    if (_needsSpeechServiceNotice()) {
+      return _set(const AssistantState(AssistantPhase.speechServiceNotice));
+    }
     final locale = _localeId ??= await recognizer.koreanLocaleId();
     if (_closed) return;
     if (locale == null) return _toText(notice: noKorean);
