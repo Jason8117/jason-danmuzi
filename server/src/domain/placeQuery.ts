@@ -19,6 +19,11 @@ const TRAILING_PARTICLES = ["의", "을", "를"];
 const MAX_CODE_POINTS = 30;
 /** "7시", "3시반에", "24일", "12월", "2명". */
 const COUNT_WORD = /^\d+(시|분|명|일|월|주)/;
+/** Who comes along ("가족과 함께", "친구랑 같이") is not the place. */
+const COMPANION_WORDS = ["함께", "같이"];
+const COMPANION_ENDINGS = ["하고", "과", "와", "랑"];
+/** Adnominal verbs that lead into the place ("함께 갈 근처 고깃집", "같이 먹을 초밥집"). */
+const ADNOMINAL_VERBS = ["갈", "올", "먹을", "마실", "모일", "놀", "묵을"];
 /** An hour ("3시") that a spaced "반" ("3시 반에") belongs to. */
 const HOUR_WORD = /^\d+시$/;
 
@@ -39,6 +44,14 @@ function isWhen(word: string): boolean {
 const isWhenAt = (list: readonly string[], i: number) =>
   isWhen(list[i]!) || (i > 0 && HOUR_WORD.test(list[i - 1]!) && stripSuffix(list[i]!, WHEN_PARTICLES) === "반");
 
+/** A companion phrase ("함께", "같이", or "가족과"/"친구랑" right before one) or an adnominal verb ("갈", "먹을"). */
+const isCompanionAt = (list: readonly string[], i: number) =>
+  COMPANION_WORDS.includes(list[i]!) ||
+  ADNOMINAL_VERBS.includes(list[i]!) ||
+  (i + 1 < list.length &&
+    COMPANION_WORDS.includes(list[i + 1]!) &&
+    COMPANION_ENDINGS.some((e) => list[i]!.length > e.length && list[i]!.endsWith(e)));
+
 const isRequest = (word: string) =>
   REQUEST_PREFIXES.some((p) => word.startsWith(p)) || REQUEST_WORDS.includes(word) || REQUEST_SUFFIXES.some((s) => word.endsWith(s));
 
@@ -53,7 +66,7 @@ function fromSentence(text: string): string {
   const list = words(head);
   for (const [i, word] of list.entries()) {
     if (word.includes(PHONE_PLACEHOLDER)) continue;
-    if (isNear(word) || word.startsWith("가까운") || word === "내" || word === "여기" || isWhenAt(list, i)) continue;
+    if (isNear(word) || word.startsWith("가까운") || word === "내" || word === "여기" || isWhenAt(list, i) || isCompanionAt(list, i)) continue;
     if (isRequest(word)) break;
     const stripped = stripSuffix(word, PLACE_PARTICLES);
     kept.push(stripped);

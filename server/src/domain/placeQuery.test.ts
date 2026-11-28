@@ -27,6 +27,8 @@ describe("place query rules (SPEC-PLACE-001 0.2.0)", () => {
     ["엄마한테 저녁에 늦는다고 전화해 줘", "엄마"],
     ["김 대리님께 회의 30분 늦는다고 전해 줘", "김 대리님"],
     ["친구에게 내일 못 간다고 연락해 줘", "친구"],
+    ["가족과 함께 갈 근처 고깃집 예약해 줘", "고깃집"],
+    ["친구랑 같이 먹을 강남역 초밥집 예약해 줘", "강남역 초밥집"],
   ])("place query vectors shared with the app: %s", (text, expected) => {
     expect(placeQueryFor(text, null)).toBe(expected);
   });

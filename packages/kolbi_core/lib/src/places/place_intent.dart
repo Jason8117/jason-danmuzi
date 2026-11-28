@@ -54,6 +54,13 @@ const _maxKeyword = 30;
 
 final _countWord = RegExp(r'^\d+(시|분|명|일|월|주)');
 
+/// Who comes along ("가족과 함께", "친구랑 같이") is not the place.
+const _companionWords = ['함께', '같이'];
+const _companionEndings = ['하고', '과', '와', '랑'];
+
+/// Adnominal verbs that lead into the place ("함께 갈 근처 고깃집", "같이 먹을 초밥집").
+const _adnominalVerbs = ['갈', '올', '먹을', '마실', '모일', '놀', '묵을'];
+
 /// An hour ("3시") that a spaced "반" ("3시 반에") belongs to.
 final _hourWord = RegExp(r'^\d+시$');
 
@@ -72,6 +79,20 @@ bool _isWhenAt(List<String> words, int i) =>
     (i > 0 &&
         _hourWord.hasMatch(words[i - 1]) &&
         _strip(words[i], _whenParticles) == '반');
+
+/// A companion phrase ("함께", "같이", or "가족과"/"친구랑" right before one) or an adnominal verb ("갈", "먹을").
+bool _isCompanionAt(List<String> words, int i) =>
+    _companionWords.contains(words[i]) ||
+    _adnominalVerbs.contains(words[i]) ||
+    (i + 1 < words.length &&
+        _companionWords.contains(words[i + 1]) &&
+        _companionEndings.any(
+          (e) => words[i].length > e.length && words[i].endsWith(e),
+        ));
+
+/// Words that sit between "근처" or the place and the rest: time words and companion phrases.
+bool _isFillerAt(List<String> words, int i) =>
+    _isWhenAt(words, i) || _isCompanionAt(words, i);
 
 bool _isRequest(String word) =>
     _requestPrefixes.any(word.startsWith) ||
@@ -100,7 +121,7 @@ bool _nearby(List<String> words) {
     if (!_isNear(words[i])) continue;
     // Only time words before "근처" ("내일 저녁에 근처 …") still mean "near me"; a place name does not.
     var before = i - 1;
-    while (before >= 0 && _isWhenAt(words, before)) {
+    while (before >= 0 && _isFillerAt(words, before)) {
       before--;
     }
     if (before < 0 || _nearPrefixes.contains(words[before])) return true;
@@ -119,7 +140,7 @@ String _keywordFromSentence(String text) {
         word.startsWith('가까운') ||
         word == '내' ||
         word == '여기' ||
-        _isWhenAt(words, i)) {
+        _isFillerAt(words, i)) {
       continue;
     }
     if (_isRequest(word)) break;
