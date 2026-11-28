@@ -112,6 +112,17 @@ class AssistantController extends ValueNotifier<AssistantState> {
   bool _onDevice = true;
   bool _closed = false;
 
+  /// Bumped whenever listening is stopped; a start that awaited across a stop sees a newer value and gives up.
+  int _generation = 0;
+
+  /// After an await: whether a stop ([cancel], [switchToText], dispose) happened since [generation] was read.
+  bool _stoppedSince(int generation) => _closed || generation != _generation;
+
+  /// A start gave up because of a stop: wait for a tap, unless the stop was [switchToText].
+  void _afterStop() {
+    if (!value.isText) _set(const AssistantState(AssistantPhase.idle));
+  }
+
   void _set(AssistantState next) {
     if (!_closed) value = next;
   }
@@ -129,8 +140,9 @@ class AssistantController extends ValueNotifier<AssistantState> {
   }
 
   Future<void> _begin({required bool auto}) async {
+    final generation = _generation;
     final permission = await recognizer.permission();
-    if (_closed) return;
+    if (_stoppedSince(generation)) return _afterStop();
     switch (permission) {
       case MicPermission.unavailable:
         _toText();
@@ -138,7 +150,7 @@ class AssistantController extends ValueNotifier<AssistantState> {
         if (auto && memory.autoListenOff) {
           _set(const AssistantState(AssistantPhase.idle));
         } else {
-          await _listen();
+          await _listen(generation);
         }
       case MicPermission.notDetermined:
         _set(const AssistantState(AssistantPhase.consent));
@@ -154,11 +166,12 @@ class AssistantController extends ValueNotifier<AssistantState> {
     if (value.phase != AssistantPhase.consent) return;
     // On Android the purpose notice also carries the speech-service sentence, so [계속] acknowledges it.
     if (_needsSpeechServiceNotice()) _acknowledgeSpeechServiceNotice();
+    final generation = _generation;
     final permission = await recognizer.requestPermission();
-    if (_closed) return;
+    if (_stoppedSince(generation)) return _afterStop();
     switch (permission) {
       case MicPermission.granted:
-        await _listen();
+        await _listen(generation);
       case MicPermission.permanentlyDenied:
         _set(const AssistantState(AssistantPhase.settingsNeeded));
       case MicPermission.unavailable:
@@ -174,15 +187,17 @@ class AssistantController extends ValueNotifier<AssistantState> {
   Future<void> acceptSpeechServiceNotice() async {
     if (value.phase != AssistantPhase.speechServiceNotice) return;
     _acknowledgeSpeechServiceNotice();
-    await _listen();
+    await _listen(_generation);
   }
 
-  Future<void> _listen() async {
+  /// Sync audit 1 (F2): the first koreanLocaleId initializes the plugin and can take a while; a stop during
+  /// that wait (the app going to the background) must keep the microphone off afterwards.
+  Future<void> _listen(int generation) async {
     if (_needsSpeechServiceNotice()) {
       return _set(const AssistantState(AssistantPhase.speechServiceNotice));
     }
     final locale = _localeId ??= await recognizer.koreanLocaleId();
-    if (_closed) return;
+    if (_stoppedSince(generation)) return _afterStop();
     if (locale == null) return _toText(notice: noKorean);
     _start(locale, onDevice: !memory.generalRecognizer);
   }
@@ -270,6 +285,7 @@ class AssistantController extends ValueNotifier<AssistantState> {
   }
 
   void _stopListening() {
+    _generation++;
     _endSession();
     recognizer.cancel();
   }

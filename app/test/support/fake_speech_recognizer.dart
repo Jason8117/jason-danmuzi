@@ -55,8 +55,14 @@ class FakeSpeechRecognizer implements SpeechRecognizer {
   @override
   Future<void> openAppSettings() async => settingsCalls++;
 
+  /// While set and not completed, koreanLocaleId waits on it (the plugin's first initialize).
+  Completer<void>? localeHold;
+
   @override
-  Future<String?> koreanLocaleId() async => localeId;
+  Future<String?> koreanLocaleId() async {
+    await localeHold?.future;
+    return localeId;
+  }
 
   @override
   Stream<SpeechEvent> listen({

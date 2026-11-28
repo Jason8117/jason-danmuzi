@@ -944,4 +944,48 @@ void main() {
     expect(find.textContaining('구글 음성 인식 서비스'), findsNothing);
     expect(speech.listenCalls, hasLength(1));
   });
+
+  // Sync audit 1, F2: the app goes to the background while the first koreanLocaleId (the plugin's
+  // initialize) is still pending; listening must not start once it answers.
+  testWidgets(
+    'going to the background during the first start does not listen afterwards',
+    (tester) async {
+      final hold = Completer<void>();
+      final speech = FakeSpeechRecognizer(
+        sessions: [
+          [const SpeechPartial('오늘 저녁')],
+        ],
+      )..localeHold = hold;
+      final repo = await pumpAssistantApp(tester, speech: speech);
+      await openFromButton(tester);
+      await settle(tester);
+      expect(speech.listenCalls, isEmpty);
+
+      for (final s in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      hold.complete();
+      await settle(tester);
+      expect(speech.listenCalls, isEmpty);
+
+      for (final s in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await settle(tester);
+      expect(speech.listenCalls, isEmpty);
+      expect(chipText(tester), '기다리고 있어요');
+      // Back in the app, the orb still listens on a tap.
+      await tapAndSettle(tester, find.byKey(orb));
+      expect(speech.listenCalls, hasLength(1));
+      expect(repo.intakeCalls, isEmpty);
+    },
+  );
 }
