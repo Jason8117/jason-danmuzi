@@ -238,6 +238,9 @@ git diff <run_start_sha> -- app/test/ server/src/http/app.test.ts
 - 사람 이름("엄마", 연락처 이름)이 검색어로 카카오에 전송된다. OD-6 결정(2026-11-28)으로 소유자가 받아들인 위험이다. 개정 후보: 사람 호칭에 걸리면 자동 검색 없이 검색칸만 연다.
 - "근처" 검색의 좌표는 반올림(약 100m)된 채 카카오로 넘어가며, 카카오 쪽 보관 여부는 콜비가 보장하지 못한다. 그래서 문구는 "콜비는 위치를 저장하지 않아요"까지만 말한다.
 - `formatPhone`의 대표번호 규칙은 `+1` 뒤 7자리라는 서버의 현재 판정 모양에 기댄다. SPEC-POLICY-001이 대표번호 판정을 바꾸면 이 규칙도 다시 본다.
+- (sync 주석 2026-11-28) 서버 `checkTargetNumber`는 여전히 `"1588-0000"`을 `+15880000`(국가 번호 +1)으로 판정한다. 이 SPEC은 표시만 고쳤고(`formatPhone`, 앱 전체에 적용) 서버 판정은 바꾸지 않았다. 실제로 거는 숫자는 `toDomesticDialString`의 `15880000`이다.
+- (sync 주석 2026-11-28) 검색어 대체 규칙(서버 `domain/placeQuery.ts`, 앱 `kolbi_core` `place_intent.dart`)은 고정 낱말 목록이다. 시간 낱말·사람 조사·인용 어미·동행 표현·관형형 동사(`갈`·`올`·`먹을`·`마실`·`모일`·`놀`·`묵을`)를 건너뛰지만, 목록에 없는 관형형 동사(예: `앉을`·`쉴`)나 낯선 말투는 검색어에 섞일 수 있다. 사용자는 장소 선택 화면의 검색칸에서 고치거나 [번호 직접 입력]으로 넘어갈 수 있다. 실제 LLM(`OpenAiBrain`)이 내는 `placeQuery`의 품질은 가짜 `fetch` 시험으로만 확인했고 실제 호출로는 아직 보지 않았다.
+- (sync 주석 2026-11-28) Android에서 위치 권한을 한 번 거부한 뒤 다시 "근처" 부탁을 하면 사전 안내가 다시 보인다(`checkPermission`의 `denied`를 "아직 안 물음"으로 읽음). OS 창이 다시 뜰지는 OS가 정하며 실기기에서 확인하지 않았다.
 
 ## 완료 정의 (Definition of Done)
 
@@ -253,3 +256,9 @@ git diff <run_start_sha> -- app/test/ server/src/http/app.test.ts
 - [ ] sync-phase 문서 항목(`plan.md` §G)이 manager-docs에 넘겨짐
 - [ ] (0.2.0) AC-023·AC-024 PASS, RED 원문 `.moai/state/verify/SPEC-PLACE-001/red/amend_*.txt`
 - [ ] (0.2.0) iOS `BYPASS_PERMISSION_LOCATION_ALWAYS`: 빌드 설정으로 넣을 수 없음을 실행으로 확인한 기록(`design.md` D11)이 있고, 배포 절차(`flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa`, 바이너리 `strings` 확인 0)가 sync 문서 항목으로 넘겨짐. 소유자가 첫 배포 빌드에서 `strings` 확인 1건
+
+sync 주석(2026-11-28, 본문 기준은 바꾸지 않음):
+
+- 첫 줄의 "AC-001 ~ AC-022"는 0.2.0 개정 뒤 AC-023·AC-024 줄과 합쳐 AC-001 ~ AC-024로 읽는다. run 결과 24 / 24 PASS(`progress.md` §E.2 "M7 최종 확인", §E.3).
+- "`server/src/services`·`brain`·`providers`·`store`·`domain`과 `app.test.ts` 무변경" 줄은 0.1.x 범위의 기준이다. 0.2.0부터는 AC-022 Then이 기준이며, `providers`·`store`는 무변경, `services`·`brain`·`domain`은 `plan.md` §B.4 표의 파일만, `app.test.ts`는 `:699` 한 줄만 바뀌었다(`progress.md` §E.2 M7 범위).
+- 남은 소유자 확인: 카카오 콘솔의 로컬 API 사용 설정과 실제 키 1건, 첫 배포 빌드의 `strings` 확인 0, Android 재요청 동작, 실기기 위치 권한 창, OD-3 법무 해석. 상태는 `progress.md` §E.4 `owner_checks_pending`에 있다.

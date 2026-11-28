@@ -5,6 +5,7 @@
 - 근거: 현재 코드(인용한 `path:line`은 2026-11-26 작업 트리 기준), `docs/planning/03_SERVICE_FEATURE_PLAN.md`(이하 "03"), `docs/planning/04_DESIGN_PLAN.md`(이하 "04"), `docs/04_SDK_ADDON_PLATFORM_ARCHITECTURE.md`(이하 "SDK 제안"), `.moai/project/{product,structure,tech}.md`.
 - 표기: **가정**은 근거 없이 둔 설계 전제, **검증 필요**는 외부 계약(허브, A2A 세부 필드, 외부 API)과 맞춰 보아야 하는 항목이다. 코드 조각은 모양을 보이기 위한 설계용 의사 코드이며 최종 이름은 각 SPEC의 run 단계에서 정한다.
 - 개정 이력
+  - 2026-11-28: SPEC-PLACE-001 sync. §2.5 구현 표에 `/assistant/places`, SPEC-PLACE-001 구현 문단(장소 선택·상세, 위치 포트, 패키지 경계, 권한 선언, 계획 카드, 대표번호 표시)을 더함. §4.3을 실제 포트 모양(번호 판정을 제공자가 아니라 `placeSearch.ts`에서), 확인된 카카오 필드, 키 없는 실제 통화 서버의 꺼짐(OD-2), 접수 응답의 `placeQuery`(0.2.0)로 고침. S-2에 증명 시험을 적음.
   - 2026-11-28: SPEC-ASSIST-001 sync. §2.5 구현 표에 비서 자식 경로 셋과 `/calls/:id/live`를 더하고 이동 규칙을 실제 함수로 고침(`submitFromAssistant` 삭제), SPEC-ASSIST-001 구현 문단(받아쓰기 포트·플랫폼 어댑터, 패키지 경계, 권한 선언, OD-2 Android 편차)을 더함. AD-10 보강을 자식 경로 방식으로 바꿈.
   - 2026-11-27: SPEC-SHELL-001 sync. §2.5에 구현된 셸 경로·이름·갈래와 탭 사이 이동 규칙(SHELL research R1)을 더하고, AD-10에 "셸 밖 경로 위에 탭 경로를 `push`하지 않는다"를 보강.
   - 2026-11-27: SPEC-MODULE-001 sync. §1.1을 패키지 분리 뒤 상태로, §2.3 `kolbi_core` 외부 의존에 `characters`, §2.4 R-1·R-2 금지 목록을 실제 규칙 테스트에 맞춤(`package:riverpod/`·`package:shared_preferences/`, `package:share_plus/`·`package:kolbi_core/src/`), R-3 허용 목록 경과.
@@ -206,6 +207,7 @@ app/lib/
 | `/settings` | `settings` | 내 정보 | 기존 설정 |
 | `/assistant` | `assistant` | 셸 밖(루트) | SCR-A01 AI 비서(SPEC-ASSIST-001이 SHELL의 임시 화면을 바꿈) |
 | `/assistant/plan`·`/assistant/settings`·`/assistant/new` | `assistant-plan`·`assistant-settings`·`assistant-new` | 셸 밖(비서 자식) | 계획 카드·설정·직접 입력(탭 경로와 같은 화면 위젯, SPEC-ASSIST-001) |
+| `/assistant/places` | `assistant-places` | 셸 밖(비서 자식) | SCR-H02 장소 선택(SPEC-PLACE-001) |
 | `/calls/:id/live` | `live-call` | 셸 밖(루트) | SCR-T08 통화 중(SPEC-ASSIST-001) |
 
 - 배치: `app/lib/shell/`에 `app_router.dart`(유일한 `GoRouter`), `routes.dart`(`RouteNames`, `AppTab`), `navigation.dart`, `tab_scaffold.dart`, `kind_registration.dart`, `task_feed.dart`, `request_intake.dart`(SPEC-ASSIST-001; SHELL의 `assistant_placeholder.dart`는 지움). 옛 `core/router/app_router.dart`는 `routerProvider`를 다시 내보내기만 한다. 위 계약의 "경로 정의를 돌려주는 함수"는 만들지 않았고, 셸 라우터가 기능 화면을 직접 등록한다.
@@ -225,6 +227,16 @@ app/lib/
 - 기능 간 import 금지를 지키려고, 비서가 쓰는 부탁 접수(`/v1/intake`)·템플릿·최근 통화한 곳은 `shell/request_intake.dart`가 넘긴다(`task_feed.dart`와 같은 방식, plan §B 밖에서 더한 파일).
 - 권한 선언: iOS `Info.plist`의 `NSMicrophoneUsageDescription`·`NSSpeechRecognitionUsageDescription`(한국어 목적 문구), Android `AndroidManifest.xml`의 `RECORD_AUDIO`와 `<queries>`의 `android.speech.RecognitionService`. iOS 플러그인은 SwiftPM으로 받고 Podfile은 없다.
 - 개인정보 경계: 앱은 음성을 저장·업로드하지 않고 최종 문장만 `/v1`로 보낸다. 먼저 기기 안 인식을 시도하고, 쓸 수 없다는 오류가 오면 OD-2 안내 뒤 한 번만 일반 인식으로 넘어간다. Android에서는 speech_to_text가 오류 없이 네트워크 인식기로 넘어갈 수 있어(`SpeechToTextPlugin.kt` 620-640) 첫 받아쓰기 전에 안내를 한 번 미리 보이고 본 여부를 SharedPreferences `androidSpeechServiceNoticeAcknowledged`에 둔다(소유자 결정 2026-11-28). 실기기 확인은 남아 있다.
+
+**SPEC-PLACE-001 구현(2026-11-28).**
+
+- 배치: `app/lib/features/places/`에 장소 선택 화면(`place_search_screen.dart`, SCR-H02), 화면이 소유하는 상태(`place_search_controller.dart`, `ValueNotifier`), 후보 카드(`place_card.dart`, CMP-05), 장소 상세 시트(`place_detail_sheet.dart`, SCR-H03·CMP-06), 위치 사전 안내(`location_consent_sheet.dart`, CMP-23), 위치 포트 `location/location_reader.dart`와 어댑터 `location/platform_location_reader.dart`. 저장소·위치 공급자는 셸 다리 `shell/place_search.dart`, 모델·`PlacesRepository`·첫 검색어 규칙 `placeSearchStartFor`는 `kolbi_core`.
+- 흐름: 비서의 보내기 → `/v1/intake` → 결과 `missing`에 `phoneNumber`가 있고 차단이 아니면 `openAssistantPlaces`(자식 경로 `/assistant/places`), 아니면 계획 카드. 고른 후보로 이름·번호·번호 출처 "검색 결과"만 바꾼 초안을 만들어 그 위 `/assistant/plan`에 쌓는다(뒤로 가면 목록 그대로). [번호 직접 입력]은 어느 상태에서도 남는다.
+- 첫 검색어: 접수 응답의 `placeQuery`가 먼저이고, 없으면(옛 서버) `kolbi_core` 대체 규칙. "근처" 여부는 늘 앱이 문장으로 정한다. 서버 규칙과 앱 대체 규칙은 SPEC-PLACE-001 `design.md` D6의 같은 예시 표(24줄)를 두 언어 시험이 고정한다. 둘 다 고정 낱말 목록이라 목록 밖 표현(예: 관형형 동사 `앉을`·`쉴`)은 검색어에 섞일 수 있고, 사용자는 검색칸에서 고친다.
+- 패키지 경계: `geolocator` 14.1.2(MIT)는 앱 의존이며 어댑터 한 파일만 가져온다(`architecture_test.dart`가 검사). 장소 기능은 `permission_handler`를 쓰지 않는다. `kolbi_core`·`kolbi_ui`는 위치 패키지를 모른다. 시험은 가짜 위치·가짜 저장소만 쓴다.
+- 위치: "근처" 부탁에서만, 처음이면 사전 안내 → [계속] → OS 창. 대략 위치(`LocationAccuracy.low`)를 10초 제한으로 한 번 읽어 그 검색 요청 하나에만 싣고 저장하지 않는다. 거부·실패·시간 초과면 "동네 이름을 알려 주세요" 칸, 다시 묻지 않음이면 [설정 열기]. 권한 선언은 iOS `NSLocationWhenInUseUsageDescription`, Android `ACCESS_COARSE_LOCATION`뿐이다. iOS 배포 빌드는 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 환경 변수로 주고 깨끗한 상태에서 만든다(SPEC-PLACE-001 `design.md` D11, `README.md` 「iOS 배포 빌드」).
+- 계획 카드·오늘: 번호 출처 "검색 결과"(`PhoneSource.search`, 앱 전용 값), 통화 언어·내 이름 두 행을 한 줄로 접되 두 글자를 각각 누를 수 있게 둠(OD-10). 오늘과 비서 글로 입력 모드의 묶음 제목 "최근 통화한 곳"은 "최근 장소"로 바꿈.
+- 번호 표시: 서버 `checkTargetNumber`는 `1588-0000`을 `+15880000`으로 판정한다(서버 동작은 그대로). `kolbi_core` `formatPhone`이 `+1` 뒤 7자리이고 첫 숫자가 5·6·8인 값을 `1588-0000`처럼 보이게 고쳤고, `formatPhone`을 쓰는 모든 화면에 적용된다.
 
 ---
 
@@ -366,6 +378,26 @@ server/src/
 이 규칙은 `architecture.test.ts`에 같은 방식(소스 글자 대조)으로 더한다.
 
 ### 4.3 장소 검색 — `PlaceSearchProvider`
+
+**구현(SPEC-PLACE-001, 2026-11-28).** 계획 때 모양(아래)과 달리, 제공자는 번호 원문을 담은 `ProviderPlace`만 돌려주고 번호 판정(`checkTargetNumber` → `phoneCheck`)은 `placeSearch.ts`의 `createPlaceSearch` 한 곳에서 한다(두 제공자가 같은 규칙을 지나게). 실제 이름은 `server/src/places/types.ts`다.
+
+```ts
+export interface PlaceSearchProvider {          // 구현
+  readonly name: "kakao" | "simulated";
+  search(query: PlaceQuery, signal: AbortSignal): Promise<ProviderPlace[]>;
+}
+export interface PlaceQuery { keyword: string; near?: { lat: number; lng: number }; radiusM: number; limit: number }
+// ProviderPlace{providerPlaceId, name, category, address, distanceM, phone}             번호 원문, 판정 전
+// PlaceCandidate{id, name, category, address, distanceM, phone, phoneNumber, phoneCheck}  응답 후보
+```
+
+- 구현된 동작: `POST /v1/places/search`(`{query, near?}` → `{source, places}`, 최대 5곳, `near`가 있으면 반경 2,000m 거리순, 없으면 정확도순), `Cache-Control: no-store`. 서버는 `near` 좌표를 소수 셋째 자리(약 100m)로 반올림한 뒤에만 카카오로 넘긴다. 시간 제한은 `AbortController` + 주입 가능한 `timeoutMs`(기본 5초). 제공자 호출·정규화의 모든 예외는 원인 없는 `PlaceSearchError`로 감싸고, 오류 처리기가 이를 `request.log.error`보다 먼저 잡아 종류·상태만 경고로 남긴 뒤 502로 바꾼다. 그래서 검색어·결과가 로그나 응답에 새지 않는다.
+- 카카오 필드는 공식 문서로 확인했다("검증 필요" 해소, SPEC-PLACE-001 `research.md` R1): `GET https://dapi.kakao.com/v2/local/search/keyword.json`, `Authorization: KakaoAK ${REST_API_KEY}`, `size` 1~15, `radius` 0~20,000, `sort` accuracy/distance(`x`·`y` 필요), `documents[]` 필드 12개(`distance`는 좌표를 줄 때만). 오류·쿼터 초과 응답 형식은 아직 확인하지 않아 상태 코드만 보고 502로 묶는다(401 키 오류와 403 콘솔의 로컬 API 사용 설정 꺼짐은 어댑터 경고 로그의 `status`로 구분).
+- 조립(OD-2): 키 `KAKAO_REST_API_KEY`(서버 환경 변수만)가 있으면 카카오, 키가 없고 조립된 통화 제공자가 시뮬레이션이면 연습용 후보, 키가 없고 실제 통화(`kat`)면 장소 검색을 끄고 503 `place_search_unavailable`. 연습용 번호에 실제로 거는 일을 막기 위함이다.
+- 접수와의 관계(SPEC-PLACE-001 0.2.0, 소유자 화면 검토 뒤 OD-7 개정): `/v1/intake` 응답에 선택 키 `placeQuery`(장소 이름·분류만)가 더해졌다. `OpenAiBrain`은 LLM이 뽑은 값을 관대한 스키마로 읽고, 휴리스틱 두뇌·LLM 실패 대체에서는 `CallService`가 결정적 규칙 `domain/placeQuery.ts`로 채운다. 어느 경우든 번호 지움·`근처` 빼기·30자 정리를 지난다. `placeQuery`도 응답에만 실리고 로그·저장소에 남지 않는다. 앱은 키가 없는 옛 서버에서도 대체 규칙으로 동작한다. 실제 LLM이 내는 값의 품질은 실제 호출로 아직 확인하지 않았다.
+- 구조 규칙(`architecture.test.ts`): `places/`는 상태를 갖지 않고 `store`·`brain`·`services`를 가져오지 않으며, `http`는 구체 장소 제공자를 모르고, 장소 제공자 데이터에 `any`를 쓰지 않는다.
+
+계획 때 모양(2026-11-26, 참고용):
 
 ```ts
 export interface PlaceSearchProvider {
@@ -686,7 +718,7 @@ KolbiApprovalCard(approval: a, now: clock, onDecide: (approve, comment) async =>
 | # | 규칙 | 근거 |
 |---|---|---|
 | S-1 | 사용자별 분리(`userId`로 거르기)가 끝나기 전에는 여러 사용자·파트너가 같은 서버를 쓰지 않는다. 지금의 JSON 파일 저장소는 1인 개발용이다 | SDK 제안 §4, 03 F-ACCT-02 |
-| S-2 | 카카오 로컬 검색 결과를 저장·캐시·로그하지 않는다. 사용자가 고르고 통화한 상대만 작업 기록에 남는다 | 03 §8.1, OD-5 |
+| S-2 | 카카오 로컬 검색 결과를 저장·캐시·로그하지 않는다. 사용자가 고르고 통화한 상대만 작업 기록에 남는다. SPEC-PLACE-001이 `server/src/http/places.test.ts`의 증명 시험(저장소 바이트·이벤트 수·로그 스트림, 예상 못 한 예외·형식 오류 경로 포함)으로 지킨다. 작업 기록이 약관상 결과 저장에 해당하는지는 법무 해석을 계속 확인한다(SPEC-PLACE-001 OD-3) | 03 §8.1, OD-5 |
 | S-3 | KAT·OpenAI·허브 자격 증명, 파트너 비밀은 서버 환경 변수에만. SDK·앱 빌드에 넣지 않는다 | SDK 제안 §5 |
 | S-4 | 서버는 LLM에 전화번호를 보내지 않는다(지금 규칙 유지). A2A로 상대에게 넘기는 개인 정보는 계획 카드에 보인 것뿐이고, 추가 제공은 승인을 거친다(C-6) | EPIC D2, 03 §2.4 |
 | S-5 | 상대 에이전트가 보낸 메시지·산출물은 데이터로만 다루고 지시로 따르지 않는다. 고위험 행동은 항상 사용자 승인 | 03 F-WEB-06의 원칙을 A2A에 적용 |

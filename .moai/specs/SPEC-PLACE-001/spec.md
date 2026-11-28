@@ -1,8 +1,8 @@
 ---
 id: SPEC-PLACE-001
 title: "장소 찾기 — 카카오 로컬 검색, 장소 선택·상세, 계획 카드 채우기"
-version: "0.2.0"
-status: in-progress
+version: "0.2.1"
+status: implemented
 created: 2026-11-28
 updated: 2026-11-28
 author: jason
@@ -26,6 +26,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 | 0.1.1 | 2026-11-28 | jason (manager-spec) | plan-audit 1차(FAIL 0.84, `.moai/reports/plan-audit/SPEC-PLACE-001-review-1.md`) 반영. 소유자 결정 2026-11-28: OD-2·OD-3·OD-6·OD-7을 권장 기본값대로 확정(감사 D1), OD-2·REQ-001의 판정 기준을 조립된 `config.provider`로 명시. 검색어 멈춤 낱말과 "해 줘" 예시(감사 D2). 15xx 대표번호 표시를 `formatPhone`에서 고침(감사 D3). 저장 금지 증명에 예상 못 한 예외·형식 오류 경로를 더하고 모든 예외를 원인 없이 감쌈(감사 D4). 시간 제한 주입(감사 D5), 위치 문구 좁힘과 좌표 반올림(감사 D6), 사람 이름 검색어 위험 기록(감사 D7), 카카오 콘솔 활성화 확인(감사 D8), REQ 문구 정리(감사 D9·D16), 마일스톤 순서(감사 D10), 파일 수(감사 D11), 시뮬레이션 거리 순서(감사 D12), `Cache-Control: no-store`(감사 D13), AC 필드 이름(감사 D14), 주석 범위(감사 D15). 요구사항·인수 기준 수(22 / 22)는 그대로 |
 | 0.1.2 | 2026-11-28 | jason (manager-spec) | plan-audit 2차 PASS 0.91(`.moai/reports/plan-audit/SPEC-PLACE-001-review-2.md`) 뒤 정리. 소유자 Implementation Kickoff Approval(2026-11-28): OD-1·OD-4·OD-5·OD-8·OD-9·OD-10을 기본값대로 확정. 소유자 답변: 개발 서버는 실제 통화(KAT)에 쓰이므로 run은 그 서버를 건드리거나 다시 시작하지 않는다(D-11, §4). 감사 2차 N1(AC-005 (9)), N2(`cause` 단언 위치), N3(감사 결함 번호에 "감사" 접두), N4(sync 문서 항목) 반영. 요구사항·인수 기준 수(22 / 22)는 그대로 |
 | 0.2.0 | 2026-11-28 | jason (manager-spec) | 소유자 화면 검토(2026-11-28) 뒤 개정. "근처 치과 내일 오전 예약해 줘"의 첫 검색어가 "치과 오전"으로 나옴(앱 규칙이 `오전`을 건너뛰지 않음). 소유자 결정 2026-11-28: "서버 AI가 검색어도 뽑기" — OD-7을 뒤집어 `/v1/intake` 응답에 `placeQuery`를 더함(REQ-023, REQ-024 신설, REQ-010·REQ-022 개정, `design.md` D6·D10). 날짜·시각은 부탁 문장(계획 카드 "부탁할 일")에 그대로 남고 검색어에서만 빠진다. 앱 대체 규칙에도 같은 시간 낱말을 더함. 기존 시험 변경 `app.test.ts`의 접수 응답 키 고정 줄 하나(AC-022 표). 소유자 결정: geolocator의 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 iOS 배포 빌드에 적용(plan §B.4, 완료 정의). 요구사항·인수 기준 22 / 22 → 24 / 24 |
+| 0.2.1 | 2026-11-28 | jason (manager-docs) | sync 단계 기록. 상태 in-progress → implemented(완료 표시는 sync 감사 통과 뒤). 0.2.0 M7 뒤 조율자 확인에서 나온 검색어 규칙 수정 셋(띄어 쓴 "3시 반", 사람 조사·인용 어미 "엄마한테 … 늦는다고", 동행 표현·관형형 동사 "가족과 함께 갈")을 기록함. `design.md` D6 공유 예시 표는 24줄이며 서버 `domain/placeQuery.test.ts`와 앱 `kolbi_core/test/places_test.dart`가 같은 표를 고정함. 대체 규칙의 알려진 한계(고정 낱말 목록이라 `앉을`·`쉴` 같은 다른 관형형 동사나 낯선 표현은 놓칠 수 있음, 검색칸 고치기와 [번호 직접 입력]이 빠져나갈 길, 실제 LLM의 `placeQuery` 품질은 아직 확인 안 함)는 `acceptance.md` 잔여 위험에 주석으로 더함. 요구사항·인수 기준 수(24 / 24)와 본문은 그대로 |
 
 ## 1. 배경과 목적
 

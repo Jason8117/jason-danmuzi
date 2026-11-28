@@ -298,6 +298,90 @@ d11: "server/.env 읽지 않음, 서버 띄우지 않음, npm run dev/start 쓰�
 owner_checks_pending: ["M7 화면 재검토(근처 치과 내일 오전 → 치과)", "첫 배포 빌드에서 BYPASS 환경 변수 + strings 확인 0", "실제 카카오 키 1건 확인", "Android 재요청 동작 확인", "실제 LLM으로 placeQuery 품질 확인(시험은 가짜 fetch만)"]
 ```
 
+## §E.4 Sync-phase Audit-Ready Signal
+
+```yaml
+sync_complete_at: 2026-11-28
+sync_commit_sha: pending-backfill   # 이 sync 커밋은 자기 SHA를 적을 수 없음. `git log -1 --format=%h -- .moai/specs/SPEC-PLACE-001/progress.md`로 읽음
+sync_status: implemented   # sync 감사 통과 뒤 오케스트레이터가 completed로 올림(소유자 규칙)
+run_start_sha: be92194   # be92194317e2bf3bd49234178ef3aa5d68daf589, 계획 커밋. 코드 기준선은 부모 74a87c3
+run_commit_sha: 2d84a91   # 마지막 구현 커밋(M7 동행 표현 수정). §E.3의 "25a08c7 뒤의 동행 표현 수정 커밋"이 이것. 이 sync 커밋 직전 HEAD
+milestone_commits: [d28343a (M1), fb8ffdb (M2), b9b4096 (M3), 2d6ec54 (M4), 2e3c688 (M5), bee5d2b (M6), 1ec833a (run 증거), 7b87dd2 (계획 개정 0.2.0), d05bb86 (M7), 06497a2 (M7 증거), 72e9d2e (M7 반 시간), 25a08c7 (M7 사람 조사·인용 어미), 2d84a91 (M7 동행 표현·관형형 동사)]
+route: B   # 작업 폴더 /Users/jason/Documents/Jason-Danmuzi/wt-place-001의 feat/SPEC-PLACE-001, PR은 아직(병합은 소유자)
+pushed_state: not-pushed
+measured_by: "run 단계 기록에서 옮김(§E.2 M7 조율자 확인의 마지막 GREEN, 2d84a91 트리). manager-docs는 시험을 다시 돌리지 않음. sync는 문서만 바꿈. 이 커밋의 pre-commit 게이트 결과는 아래 pre_commit_hook_note"
+server_tests_at_sync: "npm --prefix server test -> Tests 438 passed (438) (기준 387)"
+server_typecheck_at_sync: "npm --prefix server run typecheck -> exit 0 (§E.2 M7 최종 확인)"
+app_tests_at_sync: "cd app && flutter --suppress-analytics test -> 00:14 +165: All tests passed! (기준 +148)"
+app_analyze_at_sync: "flutter analyze -> 1 issue found. (기존 info test/support/fakes.dart:54:5)"
+kolbi_core_tests_at_sync: "dart test -> +33: All tests passed! (기준 +27)"
+kolbi_ui_tests_at_sync: "flutter test -> +72 (변경 없음)"
+root_workspace_test_at_sync: "dart test -> +2"
+ios_simulator_build_at_sync: "flutter build ios --simulator --debug -> ✓ Built Runner.app (§E.2 M7 최종 확인, d05bb86)"
+acceptance_distinct_ac_ids: 24   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' .moai/specs/SPEC-PLACE-001/acceptance.md | sort -u | wc -l -> 24 (AC-001..AC-024). REQ/AC 24/24
+ac_result: "24 / 24 PASS (§E.2 AC 표 + M7 최종 확인). AC-021은 test-after"
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # version 0.2.0 -> 0.2.1, updated 2026-11-28, HISTORY 0.2.1 행
+spec_body_annotation:   # 본문 요구사항·인수 기준은 바꾸지 않음
+  spec.md: "HISTORY 0.2.1 행만(sync 기록, M7 규칙 수정 셋, 공유 예시 표 24줄, 대체 규칙 한계는 acceptance 잔여 위험으로)"
+  acceptance.md: "잔여 위험에 sync 주석 3줄(서버 1588 -> +1 판정은 그대로이고 표시만 고침, 대체 규칙의 고정 낱말 한계와 빠져나갈 길, 실제 LLM placeQuery 품질 미확인, Android 재요청 동작); 완료 정의 뒤 sync 주석(AC-001~AC-024로 읽음, 0.1.x의 '무변경' 줄은 0.2.0 AC-022 Then이 대신함, 남은 소유자 확인)"
+changelog_entry_position: not-applicable   # 저장소에 CHANGELOG.md 없음. formatPhone 대표번호 표시 변화는 structure.md「어디를 고쳐야 하는가」·modules.md·README「장소 찾기」에 적음
+mx_scan: skipped   # 문서만 바꾼 sync
+coverage: "앱 장소 기능 96.1% (391/407, 0.1.x 측정, M7 뒤 다시 재지 않음). 서버·kolbi_core는 측정 못 함(vitest 커버리지 제공자 없음)"
+divergence:
+  planned_vs_changed_files: "git diff --name-only 74a87c3..2d84a91 (.moai/specs 제외) -> 57개 = plan §B 49개 + §B.4(0.2.0)에서 새로 생긴 경로 8개(server/src/domain/placeQuery.ts·placeQuery.test.ts·types.ts, brain/prompts.ts·openaiBrain.ts·openaiBrain.test.ts, services/callService.ts, http/app.test.ts). 계획 밖 파일 0. iOS SwiftPM 산출 파일 3개는 도구가 바꾸지 않아 diff 없음"
+  protected_paths: "git diff --stat 74a87c3..2d84a91 -- server/src/providers server/src/store -> 출력 없음"
+  plan_deviations: "createPlaceSearch는 결과를 자르지 않음(상한은 limit 5), 컨트롤러는 Riverpod Notifier 대신 화면 소유 ValueNotifier, AC-010 앱 부분은 M4에서 시험, PlatformLocationReader에 supported 검사(§E.2 계획과 다른 점)"
+owner_decisions:
+  - "OD-1~OD-10 모두 DECIDED(2026-11-28). OD-2·OD-3·OD-6·OD-7은 plan-audit 1차 뒤 권장 기본값, 나머지는 Kickoff 승인 때 기본값"
+  - "OD-2: 판정은 조립된 config.provider. 키 없는 실제 통화 서버는 장소 검색 꺼짐(503)"
+  - "OD-3: 검색 결과·장소 ID는 어디에도 기록하지 않고 확정한 작업의 이름·번호만. 법무 해석은 계속 확인"
+  - "OD-6: 사람 이름이 검색어로 카카오에 전송되는 위험을 소유자가 받아들임. 0.2.0 뒤 조사만 다듬고 OD-6 그대로(소유자 결정, 72e9d2e 확인 때)"
+  - "OD-7 개정(0.2.0): 소유자 화면 검토에서 '근처 치과 내일 오전 예약해 줘' -> 검색어 '치과 오전'이 나와 '서버 AI가 검색어도 뽑기'를 고름. /v1/intake 응답에 placeQuery, nearby는 앱에 남김, 기존 시험 app.test.ts:699 한 줄"
+  - "iOS BYPASS_PERMISSION_LOCATION_ALWAYS: 소유자가 적용을 고름 -> 빌드 설정으로는 패키지에 닿지 않음을 실행으로 확인(design.md D11) -> 설정 파일 변경 없이 배포 절차로 문서화(README「iOS 배포 빌드」, tech.md)"
+  - "D-11: 개발 서버는 실제 통화(KAT)에 쓰임. run·sync는 그 서버를 멈추거나 다시 띄우거나 데이터·설정을 건드리지 않고 server/.env를 읽지 않음. 로컬 확인은 CALL_PROVIDER=simulated로 따로 띄운 서버만"
+owner_screen_review:
+  finding: "'근처 치과 내일 오전 예약해 줘'의 첫 검색어가 '치과 오전'(앱 규칙이 '오전'을 건너뛰지 않음)"
+  fix: "0.2.0: 서버 placeQuery(LLM + 결정적 규칙)와 앱 대체 규칙에 시간 낱말. 이어서 조율자 확인 셋으로 규칙 수정: '3시 반에' -> '반'(72e9d2e), '엄마한테 … 늦는다고' -> 사람 조사·인용 어미(25a08c7), '가족과 함께 갈 근처 고깃집' -> '가족과 함'(2d84a91, 동행 표현·관형형 동사). 공유 예시 표 12 -> 19 -> 22 -> 24줄, 서버·앱 두 시험이 같은 표를 고정"
+  rescreen: pending   # 소유자: M7 화면 재검토('근처 치과 내일 오전' -> '치과')
+known_limits:
+  - "대체 규칙은 고정 낱말 목록: 목록에 없는 관형형 동사(앉을·쉴 등)나 낯선 말투는 검색어에 섞일 수 있음. 검색칸 고치기와 [번호 직접 입력]이 빠져나갈 길"
+  - "실제 LLM(OpenAiBrain)의 placeQuery 품질은 가짜 fetch 시험으로만 확인"
+  - "서버 checkTargetNumber는 '1588-0000'을 +15880000(국가 번호 +1)으로 판정하는 동작 그대로. 표시만 formatPhone에서 1588-0000으로 고침(앱 전체 적용). 판정 개정은 SPEC-POLICY-001 쪽"
+  - "사용자별 검색 제한 없음(쿼터 일 100,000건), 카카오 오류·쿼터 초과 응답 형식 미확인(상태 코드만 보고 502)"
+debt_carried:
+  - "서버·kolbi_core 커버리지 측정 안 됨(커버리지 제공자 없음)"
+  - "AC-021 접근성 블록은 test-after"
+  - "iOS 배포 빌드 자동화(스크립트·CI) 없음"
+  - "docs/planning/01_SERVICE_BENCHMARK.md §5.2의 카카오 size '최대 30'(주소 검색 기준) 정정은 plan §G가 '소유자 판단'으로 둔 항목이라 고치지 않음. 03 §8.1에는 키워드 검색 1~15를 적음"
+owner_checks_pending:
+  - "카카오 개발자 콘솔에서 그 앱의 카카오맵(로컬) API 사용 설정과 REST API 키 확인, 실제 키로 '강남역 파스타' -> 후보 -> 계획 카드 1건(서버 로그에 결과 없음, 실패면 status 401/403 기록)"
+  - "첫 iOS 배포 빌드: cd app && flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa 뒤 strings ... | grep -c requestAlwaysAuthorization -> 0"
+  - "Android: 위치 권한을 한 번 거부한 뒤 다시 '근처' 부탁을 하면 사전 안내가 다시 보임(checkPermission의 denied를 '아직 안 물음'으로 읽음). OS 창이 다시 뜨는지 실기기 확인"
+  - "실기기 위치 권한 창(iOS·Android 한 대)과 대략 위치로 '근처' 검색 한 번"
+  - "OD-3 법무·약관 해석(작업 기록이 '결과 저장'에 해당하는지)"
+  - "M7 화면 재검토, 실제 LLM으로 placeQuery 품질 확인"
+simulator_check: done   # run 단계: iOS 시뮬레이터 debug 빌드 성공(§E.2). 화면 검토는 소유자가 따로 띄운 시뮬레이션 서버로 함(D-11)
+device_check: pending   # 소유자: 실기기 위치 권한 창, Android 재요청 동작
+untracked_handling: "git ls-files --others --exclude-standard -> 출력 없음. iOS SwiftPM Package.resolved 변경 없음"
+pre_commit_hook_note: "이 sync 커밋은 pre-commit 훅(moai gate)을 정상 실행함. --no-verify·SKIP_MOAI_PRECOMMIT 쓰지 않음"
+plan_g_items:
+  "(0.2.0) /v1/intake placeQuery": ".moai/project/structure.md REST 표에 /v1/intake 행(응답 키, placeQuery, 옛 서버 호환), docs/product/11_ARCHITECTURE.md §4.3 '접수와의 관계'(설계서에 접수 전용 절이 없어 장소 검색 절에 둠), codemaps entry-points.md 라우트 표"
+  "(0.2.0) iOS 배포 절차": "README.md「iOS 배포 빌드」(명령과 strings 확인), .moai/project/tech.md 「코드로 확인된 제약」"
+  .moai/project/structure.md: "서버 places/ 4행과 domain/placeQuery.ts, http/app.ts·schemas.ts, 계층 그림, 제공자 선택에 장소 검색·접수 검색어, 앱 features/places 트리, shell/place_search.dart·request_intake(requestIntake), /assistant/places 경로, REST 표 /v1/intake·/v1/places/search와 오류 코드 502·503, architecture_test 행, 어디를 고쳐야 하는가 4행(장소 검색, 첫 검색어 규칙, 장소 선택·위치, 번호 표시)"
+  .moai/project/tech.md: "앱 패키지 geolocator ^14.1.2(MIT), 환경 변수 KAKAO_REST_API_KEY·KAKAO_LOCAL_BASE_URL와 키가 없을 때의 동작, 외부 시스템 카카오 로컬, 제약(결과 저장 금지·no-store, 위치, iOS 배포 빌드)"
+  codemaps: "modules.md(domain/placeQuery, places/ 절, http AppDeps, container·config, formatPhone, plan_card·home·request_box 문구, features/places 표, shell place_search·requestIntake·openAssistantPlaces, kolbi_core 장소 추가분, 시험 목록); entry-points.md(기동 단계, 오류 처리기 502, /v1/intake·/v1/places/search 핸들러, /assistant/places 진입); dependencies.md(zod 사용처, 카카오 fetch, geolocator 사용 파일, mermaid 두 그림에 places 노드)"
+  docs/product/11_ARCHITECTURE.md: "§2.5 표에 /assistant/places와 SPEC-PLACE-001 구현 문단, §4.3 실제 포트 모양·카카오 필드 확인('검증 필요' 해소)·OD-2 꺼짐·placeQuery·구조 규칙, S-2, 개정 이력"
+  docs/planning/03_SERVICE_FEATURE_PLAN.md: "§8.1에 키워드 검색 size 1~15 행과 OD-5 진행 상황, 개정 이력"
+  docs/planning/01_SERVICE_BENCHMARK.md: "고치지 않음(소유자 판단 항목, debt_carried)"
+  .moai/specs/EPIC-KOLBI-APP/overview.md: "머리 상태 줄과 §2 표: PLACE-001 implemented(0.2.1), 문서 6개, Tier L"
+  README.md: "「장소 찾기」(흐름, 결과를 남기지 않음, 위치 권한과 문구, KAKAO_REST_API_KEY와 콘솔 설정, 대표번호 표시), 「iOS 배포 빌드」, 실제 통화 변수 표에 KAKAO_REST_API_KEY, 화면 구성·말로 부탁하기의 '최근 장소', 폴더 트리(server places/, app features/places/, kolbi_core)"
+  server/.env.example: "run에서 이미 바뀜(B.1): 값 없는 KAKAO_REST_API_KEY=와 설명, 주석 처리한 KAKAO_LOCAL_BASE_URL"
+  formatPhone_app_wide: "structure.md「어디를 고쳐야 하는가」번호 표시 행, modules.md formatters 행, 11_ARCHITECTURE SPEC-PLACE-001 구현 문단, README「장소 찾기」. CHANGELOG.md는 없음"
+project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/03_SERVICE_FEATURE_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
+sync_audit: pending
+```
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자
