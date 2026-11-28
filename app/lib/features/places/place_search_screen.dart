@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../shell/navigation.dart';
 import '../../shell/place_search.dart';
+import 'location_consent_sheet.dart';
 import 'place_card.dart';
 import 'place_detail_sheet.dart';
 import 'place_search_controller.dart';
@@ -32,6 +33,7 @@ class PlaceSearchScreen extends ConsumerStatefulWidget {
 
 class _PlaceSearchScreenState extends ConsumerState<PlaceSearchScreen> {
   late final _keyword = TextEditingController(text: widget.start.keyword);
+  final _area = TextEditingController();
   final _keywordFocus = FocusNode(debugLabel: 'place-search-field');
   final _detailFocus = <String, FocusNode>{};
   late final PlaceSearchController _controller;
@@ -42,6 +44,7 @@ class _PlaceSearchScreenState extends ConsumerState<PlaceSearchScreen> {
     super.initState();
     _controller = PlaceSearchController(
       repository: ref.read(placesRepositoryProvider),
+      location: ref.read(locationReaderProvider),
       start: widget.start,
     )..addListener(_onState);
     _controller.begin();
@@ -58,6 +61,7 @@ class _PlaceSearchScreenState extends ConsumerState<PlaceSearchScreen> {
       ..removeListener(_onState)
       ..dispose();
     _keyword.dispose();
+    _area.dispose();
     _keywordFocus.dispose();
     for (final node in _detailFocus.values) {
       node.dispose();
@@ -115,6 +119,49 @@ class _PlaceSearchScreenState extends ConsumerState<PlaceSearchScreen> {
     switch (state) {
       case PlaceIdle():
         return const [];
+      case PlaceNeedLocation():
+        return [LocationConsentSheet(onContinue: _controller.acceptLocation)];
+      case PlaceAskArea(:final foreverDenied):
+        void searchArea() {
+          if (_area.text.trim().isEmpty) return;
+          FocusScope.of(context).unfocus();
+          _controller.searchArea(_area.text, _keyword.text);
+        }
+        return [
+          Text('동네 이름을 알려 주세요', style: theme.textTheme.titleSmall),
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('place-area-field'),
+                  controller: _area,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(hintText: '예: 망원동'),
+                  onSubmitted: (_) => searchArea(),
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              FilledButton(
+                key: const Key('place-area-search'),
+                onPressed: searchArea,
+                child: const Text('찾기'),
+              ),
+            ],
+          ),
+          if (foreverDenied) ...[
+            const SizedBox(height: AppSpace.md),
+            Text('설정에서 위치 권한을 켜면 근처를 찾을 수 있어요', style: muted),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('location-open-settings'),
+                onPressed: _controller.openSettings,
+                child: const Text('설정 열기'),
+              ),
+            ),
+          ],
+        ];
       case PlaceLoading(:final keyword):
         return [
           Text(

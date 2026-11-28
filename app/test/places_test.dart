@@ -20,6 +20,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/services.dart';
 
+import 'package:callmate/features/places/location/location_reader.dart';
+import 'package:callmate/features/places/location/platform_location_reader.dart';
+
+import 'support/fake_location_reader.dart';
 import 'support/fake_places_repository.dart';
 import 'support/fakes.dart' show taskJson;
 import 'support/fake_speech_recognizer.dart';
@@ -566,5 +570,143 @@ void main() {
     await settle(tester);
     expect(tester.takeException(), isNull);
     expect(currentPath(tester), '/assistant');
+  });
+
+  // AC-016 / REQ-016
+  testWidgets('nearby asks for location with a purpose first', (tester) async {
+    const nearby = '근처 약국 오늘 몇 시까지 하는지 물어봐 줘';
+    const purpose =
+        '근처 가게를 찾으려면 지금 위치가 필요해요. 가까운 가게를 찾는 데만 써요. 콜비는 위치를 저장하지 않아요.';
+    Future<(PlacesApp, FakeLocationReader)> open(
+      FakeLocationReader location,
+    ) async {
+      final app = await openPlaces(
+        tester,
+        text: nearby,
+        overrides: [locationReaderProvider.overrideWithValue(location)],
+      );
+      return (app, location);
+    }
+
+    // (1) not asked yet → purpose → [계속] → OS dialog → allowed
+    var (app, location) = await open(FakeLocationReader());
+    expect(find.text(purpose), findsOneWidget);
+    expect(find.textContaining('위치는 검색에만'), findsNothing);
+    expect(location.requestCalls, 0);
+    expect(app.places.searchCalls, isEmpty);
+    await tapAndSettle(
+      tester,
+      find.byKey(const Key('location-consent-continue')),
+    );
+    expect(location.requestCalls, 1);
+    expect(app.places.searchCalls.last.query, '약국');
+    expect(app.places.searchCalls.last.near, (lat: 37.55, lng: 126.91));
+    expect(find.byKey(cardKey('k1')), findsOneWidget);
+
+    // (2) not asked yet → denied → neighbourhood field
+    (app, location) = await open(
+      FakeLocationReader(answer: LocationAccess.denied),
+    );
+    await tapAndSettle(
+      tester,
+      find.byKey(const Key('location-consent-continue')),
+    );
+    expect(find.text('동네 이름을 알려 주세요'), findsOneWidget);
+    expect(find.byKey(const Key('location-open-settings')), findsNothing);
+    expect(app.places.searchCalls, isEmpty);
+    await tester.enterText(find.byKey(const Key('place-area-field')), '망원동');
+    await tapAndSettle(tester, find.byKey(const Key('place-area-search')));
+    expect(app.places.searchCalls.single.query, '망원동 약국');
+    expect(app.places.searchCalls.single.near, isNull);
+
+    // (3) never ask again → field and [설정 열기], no purpose notice
+    (app, location) = await open(
+      FakeLocationReader(state: LocationAccess.deniedForever),
+    );
+    expect(find.text(purpose), findsNothing);
+    expect(find.text('동네 이름을 알려 주세요'), findsOneWidget);
+    expect(find.text('설정에서 위치 권한을 켜면 근처를 찾을 수 있어요'), findsOneWidget);
+    await tapAndSettle(tester, find.byKey(const Key('location-open-settings')));
+    expect(location.settingsCalls, 1);
+    expect(location.requestCalls, 0);
+
+    // (4) allowed but reading fails, (5) allowed but no answer for 11 s, (6) no location at all
+    for (final reader in [
+      FakeLocationReader(state: LocationAccess.granted, position: null),
+      FakeLocationReader(
+        state: LocationAccess.granted,
+        delay: const Duration(seconds: 11),
+      ),
+      FakeLocationReader(state: LocationAccess.unavailable),
+    ]) {
+      (app, location) = await open(reader);
+      if (reader.delay != null) {
+        await tester.pump(const Duration(seconds: 11));
+        await settle(tester);
+      }
+      expect(find.text(purpose), findsNothing);
+      expect(find.text('동네 이름을 알려 주세요'), findsOneWidget);
+      expect(app.places.searchCalls, isEmpty);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  // AC-017 / REQ-017
+  testWidgets('location stays out of storage and other requests', (
+    tester,
+  ) async {
+    // (1) after a nearby search with a position
+    var location = FakeLocationReader();
+    var app = await openPlaces(
+      tester,
+      text: '근처 약국 오늘 몇 시까지 하는지 물어봐 줘',
+      overrides: [locationReaderProvider.overrideWithValue(location)],
+    );
+    await tapAndSettle(
+      tester,
+      find.byKey(const Key('location-consent-continue')),
+    );
+    expect(app.places.searchCalls.last.near, isNotNull);
+    final stored = [
+      for (final key in app.preferences.getKeys())
+        '$key=${app.preferences.get(key)}',
+    ].join('\n');
+    expect(stored.contains('37.55'), isFalse);
+    expect(stored.contains('126.91'), isFalse);
+
+    // (2) a request that is not "nearby" never touches the location
+    location = FakeLocationReader(state: LocationAccess.granted);
+    app = await openPlaces(
+      tester,
+      overrides: [locationReaderProvider.overrideWithValue(location)],
+    );
+    expect(
+      location.accessCalls + location.requestCalls + location.readCalls,
+      0,
+    );
+    expect(app.places.searchCalls.single.near, isNull);
+  });
+
+  testWidgets(
+    'without a location plugin a nearby request asks for the neighbourhood',
+    (tester) async {
+      // The real reader: flutter_test has no geolocator plugin, which must read as "unavailable".
+      final app = await openPlaces(tester, text: '근처 약국 오늘 몇 시까지 하는지 물어봐 줘');
+      expect(find.text('동네 이름을 알려 주세요'), findsOneWidget);
+      expect(app.places.searchCalls, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  test('a forced platform reader without a plugin reports unavailable, never throws', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final forced = PlatformLocationReader(supported: true);
+    expect(await forced.access(), LocationAccess.unavailable);
+    expect(await forced.request(), LocationAccess.unavailable);
+    expect(await forced.readOnce(), isNull);
+    await forced.openSettings();
+    final host = PlatformLocationReader();
+    expect(await host.access(), LocationAccess.unavailable);
+    expect(await host.readOnce(), isNull);
   });
 }

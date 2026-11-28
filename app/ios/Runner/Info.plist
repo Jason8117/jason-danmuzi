@@ -70,6 +70,8 @@
 	<string>말로 부탁하면 제가 글로 받아 적어요. 콜비는 음성을 저장하지 않아요.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>말한 내용을 글로 바꿔 부탁으로 보내요. 기기에서 안 되면 애플 음성 인식 서비스를 써요. 콜비는 음성을 저장하지 않아요.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>가까운 가게를 찾는 데만 써요. 콜비는 위치를 저장하지 않아요.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

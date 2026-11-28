@@ -109,6 +109,25 @@
 - 더한 시험: 검색 중에 화면을 닫으면 늦은 응답을 무시(acceptance.md 엣지 케이스).
 - 결과: `flutter test test/places_test.dart` → `+8`, 전체 `flutter test` → `00:14 +156: All tests passed!`, `flutter analyze` → 기존 info 1건만.
 
+### M5 — 위치
+
+#### 첫 작업: `geolocator` 확인 (pub.dev API와 pub cache, 2026-11-28, 추가 전)
+
+- `curl -s https://pub.dev/api/packages/geolocator`(메타데이터만 읽음) → 최신 `14.1.2`, 게시 `2026-10-19T15:29:42Z`(한 달 넘음), `environment: sdk ^3.5.0, flutter >=2.8.0`, 의존 `geolocator_platform_interface ^4.4.0`, `geolocator_android ^5.1.0`, `geolocator_apple ^2.3.14`, `geolocator_web`, `geolocator_windows`, `geolocator_linux`.
+- `cd app && flutter pub add geolocator:^14.1.2` → `Changed 14 dependencies`. `git diff --stat pubspec.lock` → `112 +` (삭제 0줄). 새 항목 14개: `dbus`, `geoclue`, `geolocator`, `geolocator_android 5.2.1`, `geolocator_apple 2.4.3`, `geolocator_linux`, `geolocator_platform_interface`, `geolocator_web 4.1.4`, `geolocator_windows 0.2.5`, `gsettings 0.2.8`, `package_info_plus 10.2.2`, `package_info_plus_platform_interface 4.1.0`, `petitparser 7.1.0`, `xml 7.1.0`. 기존 항목은 바뀌지 않음.
+- 라이선스: `geolocator-14.1.2/LICENSE`, `geolocator_apple-2.4.3/LICENSE` 모두 "MIT License, Copyright (c) 2018 Baseflow".
+- SwiftPM: `geolocator_apple-2.4.3/darwin/geolocator_apple/Package.swift` 있음, `.iOS("11.0")`, `.macOS("10.11")` — 앱 배포 대상 `IPHONEOS_DEPLOYMENT_TARGET = 15.0` 이하이므로 문제없음. Android 쪽 `minSdkVersion flutter.minSdkVersion`, 플러그인 매니페스트에 위치 권한 선언 없음(앱 매니페스트의 `ACCESS_COARSE_LOCATION`만 쓰임).
+- 권한 요청 동작(플러그인 소스 `PermissionHandler.m:79-84`): `Info.plist`에 `NSLocationWhenInUseUsageDescription`이 있으면 `requestWhenInUseAuthorization`만 부른다. 다만 빌드 때 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 주지 않으면 바이너리에 `requestAlwaysAuthorization` 호출이 남아(`Package.swift:7-11` 주석: ITMS-90683) App Store 제출 때 "항상" 목적 문구 경고가 날 수 있다. REQ-018은 "항상" 키를 금지하므로 키는 넣지 않았다. **소유자 확인 필요**: 배포 빌드(`flutter build ipa` 등)에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1` 환경 변수를 줄지(sync 문서 항목 후보).
+- `permission_handler`와 공존: 두 플러그인은 서로 의존하지 않고(`pubspec.lock`에 공통 새 항목 없음), 장소 기능은 `permission_handler`를 쓰지 않는다(구조 시험). iOS 시뮬레이터 빌드가 두 플러그인을 함께 링크해 성공(아래).
+
+#### 구현
+
+- RED: `test/support/fake_location_reader.dart`, `places_test.dart`의 AC-016·AC-017 블록, `architecture_test.dart` 끝에 시험 둘을 먼저 더함 → `Error when reading 'lib/features/places/location/location_reader.dart'`, 구조 시험 `the location package stays inside the places feature`(`Expected: non-empty / Actual: []`)와 `platform files declare coarse location only` 실패. 원문 `red/m5_app_red.txt`.
+- GREEN: `features/places/location/location_reader.dart`(D8 포트), `platform_location_reader.dart`(`geolocator`, `LocationAccuracy.low`, `timeLimit`, iOS·Android 밖이나 플러그인이 없으면 `unavailable`, `checkPermission`의 `denied`는 "아직 안 물음"으로 읽음), `location_consent_sheet.dart`(CMP-23), 컨트롤러에 `PlaceNeedLocation`·`PlaceAskArea(foreverDenied)`와 위치 흐름(10초 제한, 좌표는 검색 요청 하나에만, 다시 시도 때는 새로 읽음), 화면의 동네 이름 칸·[설정 열기], `shell/place_search.dart`의 `locationReaderProvider`, `Info.plist` `NSLocationWhenInUseUsageDescription` "가까운 가게를 찾는 데만 써요. 콜비는 위치를 저장하지 않아요."(`plutil -lint` → OK), `AndroidManifest.xml` `ACCESS_COARSE_LOCATION`. 선언 diff 원문 `final/m5_declarations.diff`.
+- 처음 GREEN에서 "가짜 없이 실제 위치 구현" 시험이 실패했다: 위젯 시험 호스트에서는 플러그인 호출이 답하지 않아 화면이 로딩에 머묾. 비서의 `PlatformSpeechRecognizer`와 같은 방식으로 `supported`(iOS·Android만) 검사를 더해 해결하고, `supported: true`로 강제한 경우 `MissingPluginException`이 `unavailable`로 바뀌는 단위 시험을 더함.
+- `architecture_test.dart`에 `dart format`을 돌렸더니 기존 두 줄이 다시 배치되어, HEAD 내용에 새 블록만 붙이는 방식으로 되돌림 → `git diff --numstat` `45 0`(더하기만).
+- 결과: 전체 `flutter test` → `00:14 +162: All tests passed!`, `flutter analyze` → 기존 info 1건만. `cd app && flutter build ios --simulator --debug` → `✓ Built build/ios/iphonesimulator/Runner.app`(원문 `final/ios_build_m5.txt`). 빌드 뒤 `git status`에 `project.pbxproj`·`Package.resolved` 변경 없음. 생성된 `ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift`에 `geolocator_apple`이 들어감(gitignore된 산출물).
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자
