@@ -8,7 +8,7 @@ const TIME_WORDS = [
   "오늘", "내일", "모레", "이번", "다음", "오전", "오후", "아침", "점심", "저녁", "밤", "새벽",
   "주말", "평일", "이따", "이따가", "지금", "주", "이번주", "다음주",
 ];
-const WHEN_PARTICLES = ["에서", "에게", "에는", "에", "엔", "은", "는", "까지", "부터"];
+const WHEN_PARTICLES = ["에서", "에게", "에는", "에", "엔", "은", "는", "까지", "부터", "쯤"];
 const REQUEST_PREFIXES = ["예약", "문의", "확인", "물어봐", "알아봐", "전화", "찾아", "부탁"];
 const REQUEST_WORDS = ["해", "해줘", "해주세요", "중에", "있는", "몇"];
 const REQUEST_SUFFIXES = ["까지", "하는지", "있는지", "줘", "주세요"];
@@ -17,6 +17,8 @@ const TRAILING_PARTICLES = ["의", "을", "를"];
 const MAX_CODE_POINTS = 30;
 /** "7시", "3시반에", "24일", "12월", "2명". */
 const COUNT_WORD = /^\d+(시|분|명|일|월|주)/;
+/** An hour ("3시") that a spaced "반" ("3시 반에") belongs to. */
+const HOUR_WORD = /^\d+시$/;
 
 const stripSuffix = (word: string, suffixes: readonly string[]): string => {
   const suffix = suffixes.find((s) => word.length > s.length && word.endsWith(s));
@@ -31,6 +33,10 @@ function isWhen(word: string): boolean {
   return TIME_WORDS.includes(word) || TIME_WORDS.includes(base) || COUNT_WORD.test(word) || stripSuffix(word, PLACE_PARTICLES).endsWith("요일");
 }
 
+/** A time word at `i`, including a spaced half hour ("3시 반에", "10시 반쯤") right after an hour. */
+const isWhenAt = (list: readonly string[], i: number) =>
+  isWhen(list[i]!) || (i > 0 && HOUR_WORD.test(list[i - 1]!) && stripSuffix(list[i]!, WHEN_PARTICLES) === "반");
+
 const isRequest = (word: string) =>
   REQUEST_PREFIXES.some((p) => word.startsWith(p)) || REQUEST_WORDS.includes(word) || REQUEST_SUFFIXES.some((s) => word.endsWith(s));
 
@@ -42,9 +48,10 @@ function fromSentence(text: string): string {
   const comma = text.indexOf(",");
   const head = comma === -1 ? text : text.slice(0, comma);
   const kept: string[] = [];
-  for (const word of words(head)) {
+  const list = words(head);
+  for (const [i, word] of list.entries()) {
     if (word.includes(PHONE_PLACEHOLDER)) continue;
-    if (isNear(word) || word.startsWith("가까운") || word === "내" || word === "여기" || isWhen(word)) continue;
+    if (isNear(word) || word.startsWith("가까운") || word === "내" || word === "여기" || isWhenAt(list, i)) continue;
     if (isRequest(word)) break;
     const stripped = stripSuffix(word, PLACE_PARTICLES);
     kept.push(stripped);

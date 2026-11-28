@@ -224,7 +224,7 @@ cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesi
 #### 계획 개정 (0.1.2 → 0.2.0, manager-spec)
 
 - spec.md: HISTORY 0.2.0, REQ-010·REQ-022 개정, REQ-023(접수 응답 `placeQuery`)·REQ-024(응답 밖으로 내보내지 않음) 신설, §2 범위, OD-7 개정, 추적 표. 22 / 22 → 24 / 24.
-- design.md: D6(공유 예시 표 12줄 — "근처 치과 내일 오전 예약해 줘 → 치과, nearby true"와 0.1.x의 파스타 예시 포함, 시간 낱말, "근처" 판단), D10(`placeQuery` 계약·후처리·개인정보), D11(iOS 설정 확인 결과와 문서화 결론).
+- design.md: D6(공유 예시 표 12줄, 조율자 확인 뒤 19줄 — "근처 치과 내일 오전 예약해 줘 → 치과, nearby true"와 0.1.x의 파스타 예시 포함, 시간 낱말, "근처" 판단), D10(`placeQuery` 계약·후처리·개인정보), D11(iOS 설정 확인 결과와 문서화 결론).
 - plan.md: §A.6, §B.4(M7 변경 파일 13개), §B.5, M7, 위험 4행, §E 수, §F, §G.
 - acceptance.md: AC-010 개정, AC-022 표에 `app.test.ts:699`(한 줄)와 `openaiBrain.test.ts` 끝 더하기, AC-023·AC-024, 완료 정의 2행.
 
@@ -250,6 +250,7 @@ cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesi
 - 서식: `dart format`을 HEAD에서 서식이 깨끗했던 `place_intent.dart`, `kolbi_core/test/places_test.dart`, `app/test/places_test.dart`에만 적용. `intake_models.dart`는 HEAD부터 서식이 깨끗하지 않아(HEAD 사본에 `--set-exit-if-changed` → 1) 적용하지 않음. 서버는 서식 도구 설정 없음.
 - 개인정보 grep: `grep -rnE "(log|logger|console)\.(info|warn|error|debug|trace|fatal)\(" server/src --include='*.ts' | grep -v '\.test\.ts' | grep -ic placequery` → `0`. 비시험 서버 소스의 `placeQuery`는 스키마·프롬프트·타입·`callService.ts:303`·`:318`(응답 객체)뿐.
 - 커밋: `7b87dd2`(계획 개정 0.2.0), `d05bb86`(M7 구현).
+- 조율자 확인(시뮬레이션 서버, 06497a2): "주말 오후 3시 반에 미용실 예약 가능한지 물어봐 줘" → `placeQuery` `반`(띄어 쓴 "반에"를 장소 낱말로 읽음). RED `red/amend2_server_red.txt`(`expected '반' to be '미용실'` 등 3건)·`red/amend2_core_red.txt`(`Actual: '반'`) → 두 규칙에 `N시` 뒤 `반`(+`쯤` 조사) 처리, 공유 표 19줄(`design.md` D6). GREEN: 서버 `Tests  433 passed (433)`, kolbi_core `+33: All tests passed!`, 앱 `00:14 +165: All tests passed!`.
 
 #### M7 최종 확인 (HEAD d05bb86, 2026-11-28)
 
@@ -275,7 +276,7 @@ pushed: false
 run_status: complete
 ac_pass_count: 24
 ac_fail_count: 0
-server_tests: "426 통과 (기준 387, 0.1.x 끝 409)"
+server_tests: "433 통과 (기준 387, 0.1.x 끝 409)"
 server_typecheck: "exit 0"
 app_tests: "+165 통과 (기준 +148, 0.1.x 끝 +164)"
 app_analyze: "info 1건 (기존 fakes.dart:54)"

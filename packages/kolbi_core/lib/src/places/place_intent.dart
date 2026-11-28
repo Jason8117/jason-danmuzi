@@ -32,7 +32,7 @@ const _timeWords = [
   '이번주',
   '다음주',
 ];
-const _whenParticles = ['에서', '에게', '에는', '에', '엔', '은', '는', '까지', '부터'];
+const _whenParticles = ['에서', '에게', '에는', '에', '엔', '은', '는', '까지', '부터', '쯤'];
 const _requestPrefixes = ['예약', '문의', '확인', '물어봐', '알아봐', '전화', '찾아', '부탁'];
 const _requestWords = ['해', '해줘', '해주세요', '중에', '있는', '몇'];
 const _requestSuffixes = ['까지', '하는지', '있는지', '줘', '주세요'];
@@ -42,6 +42,9 @@ const _maxKeyword = 30;
 
 final _countWord = RegExp(r'^\d+(시|분|명|일|월|주)');
 
+/// An hour ("3시") that a spaced "반" ("3시 반에") belongs to.
+final _hourWord = RegExp(r'^\d+시$');
+
 bool _isNear(String word) => _nearWords.any(word.startsWith);
 
 /// A date, time or head count ("금요일", "오전", "3시반에", "2명"), with or without one trailing particle.
@@ -50,6 +53,13 @@ bool _isWhen(String word) =>
     _timeWords.contains(_strip(word, _whenParticles)) ||
     _countWord.hasMatch(word) ||
     _stripPlace(word).endsWith('요일');
+
+/// A time word at [i], including a spaced half hour ("3시 반에", "10시 반쯤") right after an hour.
+bool _isWhenAt(List<String> words, int i) =>
+    _isWhen(words[i]) ||
+    (i > 0 &&
+        _hourWord.hasMatch(words[i - 1]) &&
+        _strip(words[i], _whenParticles) == '반');
 
 bool _isRequest(String word) =>
     _requestPrefixes.any(word.startsWith) ||
@@ -78,7 +88,7 @@ bool _nearby(List<String> words) {
     if (!_isNear(words[i])) continue;
     // Only time words before "근처" ("내일 저녁에 근처 …") still mean "near me"; a place name does not.
     var before = i - 1;
-    while (before >= 0 && _isWhen(words[before])) {
+    while (before >= 0 && _isWhenAt(words, before)) {
       before--;
     }
     if (before < 0 || _nearPrefixes.contains(words[before])) return true;
@@ -90,12 +100,14 @@ String _keywordFromSentence(String text) {
   final comma = text.indexOf(',');
   final head = comma == -1 ? text : text.substring(0, comma);
   final kept = <String>[];
-  for (final word in _words(head)) {
+  final words = _words(head);
+  for (var i = 0; i < words.length; i++) {
+    final word = words[i];
     if (_isNear(word) ||
         word.startsWith('가까운') ||
         word == '내' ||
         word == '여기' ||
-        _isWhen(word)) {
+        _isWhenAt(words, i)) {
       continue;
     }
     if (_isRequest(word)) break;
