@@ -9,10 +9,19 @@ const TIME_WORDS = [
   "주말", "평일", "이따", "이따가", "지금", "주", "이번주", "다음주",
 ];
 const WHEN_PARTICLES = ["에서", "에게", "에는", "에", "엔", "은", "는", "까지", "부터", "쯤"];
-const REQUEST_PREFIXES = ["예약", "문의", "확인", "물어봐", "알아봐", "전화", "찾아", "부탁"];
-const REQUEST_WORDS = ["해", "해줘", "해주세요", "중에", "있는", "몇"];
+const REQUEST_PREFIXES = ["예약", "문의", "확인", "물어봐", "알아봐", "전화", "찾아", "부탁", "가능"];
+const REQUEST_WORDS = [
+  "해", "해줘", "해주세요", "중에", "있는", "몇",
+  // Questions and availability ("자리 있어?", "되나요") end the term, and so does what is asked about the place.
+  "있어", "있어요", "있나", "있나요", "있을까", "있을까요", "되나", "되나요", "돼", "돼요", "될까", "될까요", "하나요", "해요",
+  "자리", "좌석", "가격", "메뉴", "영업시간", "문",
+];
 // Quoted speech ("늦는다고", "가자고") is the message, not the place: it ends the term.
 const REQUEST_SUFFIXES = ["까지", "하는지", "있는지", "줘", "주세요", "다고", "라고", "냐고", "자고"];
+/** Endings that only count on a longer word, so "한지 공방" keeps its name while "가능한지" stops. */
+const LONG_REQUEST_SUFFIXES = ["한지", "나요"];
+/** A reason clause ("엄마 생신이라") comes before the place; what was kept so far is dropped. */
+const REASON_ENDINGS = ["이라서", "이라", "라서", "니까"];
 // Place and person particles ("꽃집에", "엄마한테", "대리님께"); longest first.
 const PLACE_PARTICLES = ["한테서", "께서", "에서", "에게", "한테", "에", "께"];
 const TRAILING_PARTICLES = ["의", "을", "를"];
@@ -23,7 +32,11 @@ const COUNT_WORD = /^\d+(시|분|명|일|월|주)/;
 const COMPANION_WORDS = ["함께", "같이"];
 const COMPANION_ENDINGS = ["하고", "과", "와", "랑"];
 /** Adnominal verbs that lead into the place ("함께 갈 근처 고깃집", "같이 먹을 초밥집"). */
-const ADNOMINAL_VERBS = ["갈", "올", "먹을", "마실", "모일", "놀", "묵을"];
+const ADNOMINAL_VERBS = ["갈", "올", "먹을", "마실", "모일", "놀", "묵을", "다닐"];
+/** "부모님 모시고", "아이 데리고": the word before them is who comes along. */
+const ESCORT_WORDS = ["모시고", "데리고"];
+/** "24시 약국" is a category, not a time. */
+const ALL_DAY = "24시";
 /** An hour ("3시") that a spaced "반" ("3시 반에") belongs to. */
 const HOUR_WORD = /^\d+시$/;
 
@@ -36,6 +49,7 @@ const isNear = (word: string) => NEAR_WORDS.some((near) => word.startsWith(near)
 
 /** A date, time or head count, with or without one trailing particle. */
 function isWhen(word: string): boolean {
+  if (word === ALL_DAY) return false;
   const base = stripSuffix(word, WHEN_PARTICLES);
   return TIME_WORDS.includes(word) || TIME_WORDS.includes(base) || COUNT_WORD.test(word) || stripSuffix(word, PLACE_PARTICLES).endsWith("요일");
 }
@@ -48,14 +62,23 @@ const isWhenAt = (list: readonly string[], i: number) =>
 const isCompanionAt = (list: readonly string[], i: number) =>
   COMPANION_WORDS.includes(list[i]!) ||
   ADNOMINAL_VERBS.includes(list[i]!) ||
+  ESCORT_WORDS.includes(list[i]!) ||
+  (i + 1 < list.length && ESCORT_WORDS.includes(list[i + 1]!)) ||
   (i + 1 < list.length &&
-    COMPANION_WORDS.includes(list[i + 1]!) &&
+    (COMPANION_WORDS.includes(list[i + 1]!) || ADNOMINAL_VERBS.includes(list[i + 1]!)) &&
     COMPANION_ENDINGS.some((e) => list[i]!.length > e.length && list[i]!.endsWith(e)));
 
 const isRequest = (word: string) =>
-  REQUEST_PREFIXES.some((p) => word.startsWith(p)) || REQUEST_WORDS.includes(word) || REQUEST_SUFFIXES.some((s) => word.endsWith(s));
+  REQUEST_PREFIXES.some((p) => word.startsWith(p)) || REQUEST_WORDS.includes(word) || REQUEST_SUFFIXES.some((s) => word.endsWith(s)) ||
+  LONG_REQUEST_SUFFIXES.some((s) => word.length > s.length && word.endsWith(s));
 
-const words = (text: string) => text.trim().split(/\s+/).filter((w) => w !== "");
+/** Words without trailing "?", ".", "!" or "~" ("있어?" → "있어"). */
+const words = (text: string) =>
+  text
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/[?.!~]+$/, ""))
+    .filter((w) => w !== "");
 
 const cap = (text: string) => Array.from(text).slice(0, MAX_CODE_POINTS).join("");
 
@@ -68,6 +91,10 @@ function fromSentence(text: string): string {
     if (word.includes(PHONE_PLACEHOLDER)) continue;
     if (isNear(word) || word.startsWith("가까운") || word === "내" || word === "여기" || isWhenAt(list, i) || isCompanionAt(list, i)) continue;
     if (isRequest(word)) break;
+    if (REASON_ENDINGS.some((e) => word.length > e.length && word.endsWith(e))) {
+      kept.length = 0;
+      continue;
+    }
     const stripped = stripSuffix(word, PLACE_PARTICLES);
     kept.push(stripped);
     if (stripped !== word) break;

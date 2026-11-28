@@ -45,6 +45,17 @@ void main() {
       ('친구에게 내일 못 간다고 연락해 줘', '친구', false),
       ('가족과 함께 갈 근처 고깃집 예약해 줘', '고깃집', true),
       ('친구랑 같이 먹을 강남역 초밥집 예약해 줘', '강남역 초밥집', false),
+      // sync audit 1 S1: questions, availability, punctuation, reasons and companions.
+      ('홍대 근처 고기집 오늘 저녁 6명 자리 있어?', '홍대 고기집', false),
+      ('판교 주변 세차장 지금 가능한지 확인해 줘', '판교 세차장', false),
+      ('근처에 24시 약국 있나 찾아줘', '24시 약국', true),
+      ('내일 오후에 다닐 헬스장 가격 물어봐', '헬스장', false),
+      ('아이랑 갈 키즈카페 주말 예약해 줘', '키즈카페', false),
+      ('부모님 모시고 갈 한정식집 다음주 토요일 예약', '한정식집', false),
+      ('엄마 생신이라 케이크 가게에 예약', '케이크 가게', false),
+      ('근처 미용실에 커트 예약 가능해?', '미용실', true),
+      ('동네 꽃집 오늘 문 열었나요?', '동네 꽃집', false),
+      ('한지 공방에 체험 문의해 줘', '한지 공방', false),
     ];
     for (final (text, keyword, nearby) in vectors) {
       final start = placeSearchStartFor(text, missingNumber());
@@ -200,8 +211,11 @@ void main() {
 
       expect((await repo.search('파스타')).source, PlaceSearchSource.simulated);
       await repo.search('약국', near: (lat: 37.55, lng: 126.91));
+      // Sync audit 1 I2: the app rounds to 3 decimals (about 100 m) before anything leaves the device.
+      await repo.search('세탁소', near: (lat: 37.497952, lng: 127.027619));
 
       expect(requests.map((r) => '${r.method} ${r.url.path}'), [
+        'POST /v1/places/search',
         'POST /v1/places/search',
         'POST /v1/places/search',
       ]);
@@ -209,6 +223,10 @@ void main() {
       expect(jsonDecode(requests[1].body), {
         'query': '약국',
         'near': {'lat': 37.55, 'lng': 126.91},
+      });
+      expect(jsonDecode(requests[2].body), {
+        'query': '세탁소',
+        'near': {'lat': 37.498, 'lng': 127.028},
       });
       expect(requests[0].headers['Authorization'], 'Bearer t');
     },

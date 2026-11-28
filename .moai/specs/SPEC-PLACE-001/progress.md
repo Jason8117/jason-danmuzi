@@ -278,7 +278,7 @@ pushed: false
 run_status: complete
 ac_pass_count: 24
 ac_fail_count: 0
-server_tests: "438 통과 (기준 387, 0.1.x 끝 409)"
+server_tests: "449 통과 (기준 387, 0.1.x 끝 409)"
 server_typecheck: "exit 0"
 app_tests: "+165 통과 (기준 +148, 0.1.x 끝 +164)"
 app_analyze: "info 1건 (기존 fakes.dart:54)"
@@ -381,6 +381,28 @@ plan_g_items:
 project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/03_SERVICE_FEATURE_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
 sync_audit: pending
 ```
+
+### sync 감사 1차 후속 수정 (2026-11-28)
+
+감사 보고서 `.moai/reports/sync-audit/SPEC-PLACE-001-audit-1.md`(PASS-with-debt 88.2, HEAD `d29fb4e`). 소유자가 모든 지적을 고치기로 승인함(2026-11-28). spec `status`는 `implemented` 그대로.
+
+| 지적 | 바꾼 것 | 시험 | RED |
+|---|---|---|---|
+| S1 대체 규칙의 묻는 말 | 서버 `domain/placeQuery.ts`·`kolbi_core` `place_intent.dart`를 똑같이: 낱말 끝 `?`·`.`·`!`·`~` 지움, 멈춤 낱말 `가능…`·`있어`·`있나(요)`·`있을까(요)`·`되나(요)`·`돼(요)`·`될까(요)`·`하나요`·`해요`·`자리`·`좌석`·`가격`·`메뉴`·`영업시간`·`문`, 세 글자 이상 낱말의 `…한지`·`…나요`(두 글자 `한지`는 이름으로 남음), 이유 낱말(`…이라`·`…라서`·`…니까`) 앞은 버림, `…랑`+관형형 동사·`모시고`/`데리고`와 그 앞 낱말 건너뜀, `다닐` 추가, `24시`는 분류로 남김. `design.md` D6 34줄 | 공유 표에 10줄 더함(감사 3.5의 '나쁨' 일곱 줄 모두 + `가능해?`·`문 열었나요?`·`한지 공방` 보호 줄). 프로그램 비교 `34 34 True`. 기존 24줄 그대로 통과 | `red/audit1_server_red.txt`: `Tests  9 failed | 28 passed (37)` — `expected '홍대 고기집 자리 있어?' to be '홍대 고기집'`, `expected '약국 있나' to be '24시 약국'` 등. `red/audit1_core_red.txt`: `Actual: '홍대 고기집 자리 있어?'` |
+| S2 README 낡은 문장 | `README.md:26`에 "번호 없이 장소만 말하면 먼저 장소 선택을 열고, 고른 곳으로 계획 카드를 채웁니다" | 문서 | — |
+| I2 앱 좌표 반올림 | `kolbi_core` `places_repository.dart`가 보내기 전에 소수 셋째 자리로 반올림(서버 반올림은 그대로). README 위치 권한 문장도 고침 | `places_test.dart` "the places repository posts …": `(37.497952, 127.027619)` → 본문 `{lat: 37.498, lng: 127.028}` | `red/audit1_core_red.txt`: `Actual: {'query': '세탁소', 'near': {'lat': 37.497952, 'lng': 127.027619}}` |
+| I3 `KAKAO_LOCAL_BASE_URL` https | `config.ts`가 `https`만 받고 `http`는 `127.0.0.1`·`localhost`만 받음. 어기면 기동 때 `loadConfig`가 실패하고 오류 문구는 고정(값 없음). `tech.md`·`design.md` D2 한 줄 | 새 `server/src/config.test.ts`: 기본값·https·루프백 통과, `http://marker-host…`·`ftp://`·주소 아님·`http://localhost.marker…` 거부, 오류 문구에 `KAKAO_LOCAL_BASE_URL`은 있고 표식 호스트·키는 없음 | `red/audit1_server_red.txt`: `http://marker-host-71c2.example: expected [Function] to throw an error` |
+| I5 제목 버전 | `acceptance.md`·`design.md` 제목 `(0.2.1)` | — | — |
+
+I1(플랫폼 위치 어댑터 커버리지)·I4(400 응답 `no-store` 단언)·I6(소유자 확인)은 이번 지시에 없어 그대로 둠.
+
+확인(이 커밋 직전 작업 트리):
+- `npm --prefix server test` → `Test Files  19 passed (19)`, `Tests  449 passed (449)`(감사 기준 438). typecheck exit 0. 원문 `final/audit1_server_test.txt`.
+- `cd packages/kolbi_core && dart test` → `00:00 +33: All tests passed!`, `dart analyze` → `No issues found!`.
+- `cd app && flutter --suppress-analytics test` → `00:14 +165: All tests passed!`, `flutter analyze` → 기준선 info 1건(`fakes.dart:54`).
+- `kolbi_ui` → `+72: All tests passed!`, 루트 `dart test` → `+2: All tests passed!`.
+- 서식: `dart format`을 HEAD에서 깨끗했던 `place_intent.dart`, `places_repository.dart`, `kolbi_core/test/places_test.dart`에만 적용.
+- 커밋: `fix(SPEC-PLACE-001): sync audit 1 follow-ups — placeQuery questions, app rounding, Kakao https`(이 절을 담은 커밋).
 
 ## §F Phase 4 Mode Selection
 

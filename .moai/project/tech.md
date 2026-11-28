@@ -94,7 +94,7 @@
 | `MAX_CALL_DURATION_SEC` | 600 | 통화당 최대 길이 |
 | `SIMULATION_SPEED` | 1 | 시뮬레이션 진행 속도 배율 |
 | `KAKAO_REST_API_KEY` | 없음 | 카카오 로컬 REST API 키(SPEC-PLACE-001). 서버 환경 변수로만 받고 앱·로그에 넣지 않는다. 없으면 시뮬레이션 서버는 연습용 장소, 실제 통화 서버는 장소 검색 꺼짐(503). `server/.env.example`에 빈 값과 설명이 있다. 카카오 개발자 콘솔에서 그 앱의 카카오맵(로컬) API 사용 설정을 켜야 한다(꺼져 있으면 403 → 502) |
-| `KAKAO_LOCAL_BASE_URL` | `https://dapi.kakao.com` | 카카오 로컬 API 주소(시험·대체용) |
+| `KAKAO_LOCAL_BASE_URL` | `https://dapi.kakao.com` | 카카오 로컬 API 주소(시험·대체용). `https`만 받고 `http`는 `127.0.0.1`·`localhost`일 때만 받는다. 어기면 기동 때 실패하며 오류 문구에 값을 싣지 않는다 |
 
 앱 빌드 정의: `CALLMATE_SERVER_URL`, `CALLMATE_API_TOKEN` (`--dart-define`, `app/lib/core/config/app_settings.dart`). `app_settings.dart`는 `prefs.getString(...) ?? <기본값>` 형태로 읽으므로 설정 화면에 저장한 값이 우선한다. 저장값이 없으면 `apiToken`은 `String.fromEnvironment('CALLMATE_API_TOKEN')`을, `serverUrl`은 `AppSettings.defaultServerUrl`을 쓴다.
 

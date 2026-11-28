@@ -5,6 +5,17 @@ const optional = z
   .optional()
   .transform((v) => (v && v.trim() ? v.trim() : undefined));
 
+function isSafeKakaoBaseUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "https:") return true;
+  return url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+}
+
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
   HOST: z.string().default("127.0.0.1"),
@@ -31,7 +42,12 @@ const EnvSchema = z.object({
   SIMULATION_SPEED: z.coerce.number().positive().default(1),
   /** Kakao Local REST API key for place search (SPEC-PLACE-001). Server-side only; never sent to the app or logged. */
   KAKAO_REST_API_KEY: optional,
-  KAKAO_LOCAL_BASE_URL: z.string().default("https://dapi.kakao.com"),
+  // The Kakao key travels in a header, so only https leaves the machine; plain http is for loopback test servers.
+  // The message never repeats the value (sync audit 1 I3).
+  KAKAO_LOCAL_BASE_URL: z
+    .string()
+    .default("https://dapi.kakao.com")
+    .refine(isSafeKakaoBaseUrl, { message: "KAKAO_LOCAL_BASE_URL must be an https URL (http only for localhost)" }),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema> & {

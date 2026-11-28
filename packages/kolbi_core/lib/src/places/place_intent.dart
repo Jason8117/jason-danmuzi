@@ -33,8 +33,36 @@ const _timeWords = [
   '다음주',
 ];
 const _whenParticles = ['에서', '에게', '에는', '에', '엔', '은', '는', '까지', '부터', '쯤'];
-const _requestPrefixes = ['예약', '문의', '확인', '물어봐', '알아봐', '전화', '찾아', '부탁'];
-const _requestWords = ['해', '해줘', '해주세요', '중에', '있는', '몇'];
+const _requestPrefixes = [
+  '예약',
+  '문의',
+  '확인',
+  '물어봐',
+  '알아봐',
+  '전화',
+  '찾아',
+  '부탁',
+  '가능',
+];
+const _requestWords = [
+  '해', '해줘', '해주세요', '중에', '있는', '몇',
+  // Questions and availability ("자리 있어?", "되나요") end the term, and so does what is asked about the place.
+  '있어',
+  '있어요',
+  '있나',
+  '있나요',
+  '있을까',
+  '있을까요',
+  '되나',
+  '되나요',
+  '돼',
+  '돼요',
+  '될까',
+  '될까요',
+  '하나요',
+  '해요',
+  '자리', '좌석', '가격', '메뉴', '영업시간', '문',
+];
 // Quoted speech ("늦는다고", "가자고") is the message, not the place: it ends the term.
 const _requestSuffixes = [
   '까지',
@@ -47,6 +75,13 @@ const _requestSuffixes = [
   '냐고',
   '자고',
 ];
+
+/// Endings that only count on a longer word, so "한지 공방" keeps its name while "가능한지" stops.
+const _longRequestSuffixes = ['한지', '나요'];
+
+/// A reason clause ("엄마 생신이라") comes before the place; what was kept so far is dropped.
+const _reasonEndings = ['이라서', '이라', '라서', '니까'];
+
 // Place and person particles ("꽃집에", "엄마한테", "대리님께"); longest first.
 const _placeParticles = ['한테서', '께서', '에서', '에게', '한테', '에', '께'];
 const _trailingParticles = ['의', '을', '를'];
@@ -59,7 +94,13 @@ const _companionWords = ['함께', '같이'];
 const _companionEndings = ['하고', '과', '와', '랑'];
 
 /// Adnominal verbs that lead into the place ("함께 갈 근처 고깃집", "같이 먹을 초밥집").
-const _adnominalVerbs = ['갈', '올', '먹을', '마실', '모일', '놀', '묵을'];
+const _adnominalVerbs = ['갈', '올', '먹을', '마실', '모일', '놀', '묵을', '다닐'];
+
+/// "부모님 모시고", "아이 데리고": the word before them is who comes along.
+const _escortWords = ['모시고', '데리고'];
+
+/// "24시 약국" is a category, not a time.
+const _allDay = '24시';
 
 /// An hour ("3시") that a spaced "반" ("3시 반에") belongs to.
 final _hourWord = RegExp(r'^\d+시$');
@@ -68,10 +109,11 @@ bool _isNear(String word) => _nearWords.any(word.startsWith);
 
 /// A date, time or head count ("금요일", "오전", "3시반에", "2명"), with or without one trailing particle.
 bool _isWhen(String word) =>
-    _timeWords.contains(word) ||
-    _timeWords.contains(_strip(word, _whenParticles)) ||
-    _countWord.hasMatch(word) ||
-    _stripPlace(word).endsWith('요일');
+    word != _allDay &&
+    (_timeWords.contains(word) ||
+        _timeWords.contains(_strip(word, _whenParticles)) ||
+        _countWord.hasMatch(word) ||
+        _stripPlace(word).endsWith('요일'));
 
 /// A time word at [i], including a spaced half hour ("3시 반에", "10시 반쯤") right after an hour.
 bool _isWhenAt(List<String> words, int i) =>
@@ -84,8 +126,11 @@ bool _isWhenAt(List<String> words, int i) =>
 bool _isCompanionAt(List<String> words, int i) =>
     _companionWords.contains(words[i]) ||
     _adnominalVerbs.contains(words[i]) ||
+    _escortWords.contains(words[i]) ||
+    (i + 1 < words.length && _escortWords.contains(words[i + 1])) ||
     (i + 1 < words.length &&
-        _companionWords.contains(words[i + 1]) &&
+        (_companionWords.contains(words[i + 1]) ||
+            _adnominalVerbs.contains(words[i + 1])) &&
         _companionEndings.any(
           (e) => words[i].length > e.length && words[i].endsWith(e),
         ));
@@ -97,7 +142,8 @@ bool _isFillerAt(List<String> words, int i) =>
 bool _isRequest(String word) =>
     _requestPrefixes.any(word.startsWith) ||
     _requestWords.contains(word) ||
-    _requestSuffixes.any(word.endsWith);
+    _requestSuffixes.any(word.endsWith) ||
+    _longRequestSuffixes.any((s) => word.length > s.length && word.endsWith(s));
 
 String _strip(String word, List<String> particles) {
   for (final particle in particles) {
@@ -112,8 +158,13 @@ String _stripPlace(String word) => _strip(word, _placeParticles);
 
 String _stripTrailing(String word) => _strip(word, _trailingParticles);
 
-List<String> _words(String text) =>
-    text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+/// Words without trailing "?", ".", "!" or "~" ("있어?" → "있어").
+List<String> _words(String text) => text
+    .trim()
+    .split(RegExp(r'\s+'))
+    .map((w) => w.replaceAll(RegExp(r'[?.!~]+$'), ''))
+    .where((w) => w.isNotEmpty)
+    .toList();
 
 bool _nearby(List<String> words) {
   for (var i = 0; i < words.length; i++) {
@@ -144,6 +195,10 @@ String _keywordFromSentence(String text) {
       continue;
     }
     if (_isRequest(word)) break;
+    if (_reasonEndings.any((e) => word.length > e.length && word.endsWith(e))) {
+      kept.clear();
+      continue;
+    }
     final stripped = _stripPlace(word);
     if (stripped != word) {
       kept.add(stripped);
