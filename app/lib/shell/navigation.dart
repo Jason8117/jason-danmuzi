@@ -3,7 +3,7 @@ import 'package:kolbi_core/kolbi_core.dart';
 
 import 'routes.dart';
 
-// SPEC-SHELL-001 design.md D1.2: the only place moves between tabs are written. Features call these four
+// SPEC-SHELL-001 design.md D1.2: the only place moves between tabs are written. Features call these
 // functions and named routes; they never call `go`, `goNamed` or `goBranch` themselves (AC-018).
 
 final _shells = Expando<StatefulNavigationShell>('tab shell');
