@@ -18,6 +18,7 @@ import 'package:kolbi_core/kolbi_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'package:callmate/features/places/location/location_reader.dart';
@@ -697,6 +698,121 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  // AC-019 / REQ-019 (OD-10)
+  testWidgets('the plan card folds defaults into one line', (tester) async {
+    await openPlaces(
+      tester,
+      intake: missingNumber(conditions: const ['창가 자리']),
+    );
+    await tapAndSettle(tester, find.byKey(callKey('k1')));
+    final row = find.byKey(const Key('plan-defaults-row'));
+    expect(row, findsOneWidget);
+    expect(
+      find.descendant(of: row, matching: find.text('한국어')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: row, matching: find.text('김민수')),
+      findsOneWidget,
+    );
+    expect(find.text('한국어'), findsOneWidget);
+    expect(find.text('김민수'), findsOneWidget);
+    expect(find.textContaining('한국어 · 김민수'), findsNothing);
+    for (final text in ['한국어', '김민수']) {
+      final size = tester.getSize(
+        find
+            .ancestor(of: find.text(text), matching: find.byType(InkWell))
+            .first,
+      );
+      expect(size.width, greaterThanOrEqualTo(48), reason: text);
+      expect(size.height, greaterThanOrEqualTo(48), reason: text);
+    }
+
+    await tapAndSettle(tester, find.text('한국어'));
+    expect(find.text('English'), findsOneWidget);
+    await tapAndSettle(tester, find.text('김민수'));
+    expect(currentPath(tester), '/assistant/settings');
+  });
+
+  // AC-021 / REQ-021
+  testWidgets('place screens meet the accessibility guidelines', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    Future<void> guidelines() async {
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(textContrastGuideline));
+    }
+
+    await openPlaces(tester);
+    final said = tester.takeAnnouncements();
+    expect(said.where((a) => a.message == '강남역 파스타집 4곳을 찾았어요'), hasLength(1));
+    expect(
+      said.firstWhere((a) => a.message == '강남역 파스타집 4곳을 찾았어요').assertiveness,
+      Assertiveness.polite,
+    );
+    expect(
+      find.bySemanticsLabel(RegExp('라 파스타, 양식, 350미터, 걸 수 있음')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel(RegExp('봉골레 키친.*번호 없음')), findsOneWidget);
+    await guidelines();
+
+    // Drawing the same result again does not announce it again.
+    await tapAndSettle(tester, find.byKey(detailKey('k1')));
+    await guidelines();
+    await tapAndSettle(tester, find.text('닫기'));
+    await tester.pump();
+    expect(
+      tester.takeAnnouncements().where((a) => a.message.contains('곳을 찾았어요')),
+      isEmpty,
+    );
+
+    // The location purpose notice and the neighbourhood field.
+    await openPlaces(
+      tester,
+      text: '근처 약국 오늘 몇 시까지 하는지 물어봐 줘',
+      overrides: [
+        locationReaderProvider.overrideWithValue(FakeLocationReader()),
+      ],
+    );
+    await guidelines();
+    await openPlaces(
+      tester,
+      text: '근처 약국 오늘 몇 시까지 하는지 물어봐 줘',
+      overrides: [
+        locationReaderProvider.overrideWithValue(
+          FakeLocationReader(state: LocationAccess.deniedForever),
+        ),
+      ],
+    );
+    await guidelines();
+
+    // A small phone with doubled text: no overflow anywhere.
+    for (final open in <Future<void> Function()>[
+      () async => openPlaces(tester, size: const Size(360, 640), textScale: 2),
+      () async {
+        await openPlaces(tester, size: const Size(360, 640), textScale: 2);
+        await tapAndSettle(tester, find.byKey(detailKey('k1')));
+      },
+      () async => openPlaces(
+        tester,
+        text: '근처 약국 오늘 몇 시까지 하는지 물어봐 줘',
+        size: const Size(360, 640),
+        textScale: 2,
+        overrides: [
+          locationReaderProvider.overrideWithValue(FakeLocationReader()),
+        ],
+      ),
+    ]) {
+      await open();
+      expect(tester.takeException(), isNull);
+    }
+    handle.dispose();
+  });
 
   test('a forced platform reader without a plugin reports unavailable, never throws', () async {
     TestWidgetsFlutterBinding.ensureInitialized();

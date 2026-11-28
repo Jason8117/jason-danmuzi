@@ -619,7 +619,7 @@ void main() {
     await pumpAt(tester, tasks: homeTasks(), size: const Size(800, 2400));
     expectOrder([
       find.text('진행 중'),
-      find.text('최근 통화한 곳'),
+      find.text('최근 장소'),
     ]);
 
     await pumpAt(tester, location: '/plan', extra: draft(phoneNumber: null), size: const Size(800, 2400));

@@ -258,17 +258,27 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
                           ? _textField(const Key('plan-context-field'), _context, maxLines: 4)
                           : Text(_context.text),
                     ),
+                  // SPEC-PLACE-001 REQ-019 (OD-10): the defaults fold into one line; each word still taps on its own.
                   _PlanRow(
-                    label: '통화 언어',
-                    onTap: () =>
-                        setState(() => _language = _language == CallLanguage.ko ? CallLanguage.en : CallLanguage.ko),
-                    child: Text(_language.label),
-                  ),
-                  _PlanRow(
-                    label: '내 이름',
-                    // Over the assistant this must be its child route (SPEC-ASSIST-001 REQ-009).
-                    onTap: () => openSettings(GoRouter.of(context)),
-                    child: Text(settings.hasProfile ? settings.requesterName : '설정에서 입력해 주세요'),
+                    key: const Key('plan-defaults-row'),
+                    label: '통화 언어 · 내 이름',
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _TapText(
+                          onTap: () => setState(
+                            () => _language = _language == CallLanguage.ko ? CallLanguage.en : CallLanguage.ko,
+                          ),
+                          child: Text(_language.label),
+                        ),
+                        const ExcludeSemantics(child: Text(' · ')),
+                        _TapText(
+                          // Over the assistant this must be its child route (SPEC-ASSIST-001 REQ-009).
+                          onTap: () => openSettings(GoRouter.of(context)),
+                          child: Text(settings.hasProfile ? settings.requesterName : '설정에서 입력해 주세요'),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -302,8 +312,32 @@ class _PlanCardScreenState extends ConsumerState<PlanCardScreen> {
   }
 }
 
+/// A word in a row that taps on its own, at least one tap target in each direction.
+class _TapText extends StatelessWidget {
+  const _TapText({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: kMinTapTarget, minHeight: kMinTapTarget),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
+          child: Center(widthFactor: 1, child: child),
+        ),
+      ),
+    ),
+  );
+}
+
 class _PlanRow extends StatelessWidget {
-  const _PlanRow({required this.label, required this.child, this.onTap});
+  const _PlanRow({super.key, required this.label, required this.child, this.onTap});
 
   final String label;
   final Widget child;

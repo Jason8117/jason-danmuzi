@@ -6,7 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../shell/request_intake.dart';
 
 /// SPEC-ASSIST-001 REQ-008: today's request box, moved whole into the assistant's text mode — the input (same
-/// hint and keys), send, [직접 입력하기], "최근 통화한 곳" and the templates (SPEC-INTAKE-001 REQ-017, REQ-018).
+/// hint and keys), send, [직접 입력하기], "최근 장소" and the templates (SPEC-INTAKE-001 REQ-017, REQ-018).
 class RequestBox extends ConsumerWidget {
   const RequestBox({
     super.key,
@@ -90,7 +90,7 @@ class RequestBox extends ConsumerWidget {
         ),
         TextButton(onPressed: onManual, child: const Text('직접 입력하기')),
         if (recent != null && recent.isNotEmpty) ...[
-          const _SectionHeader('최근 통화한 곳'),
+          const _SectionHeader('최근 장소'),
           for (final counterparty in recent)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpace.xs),

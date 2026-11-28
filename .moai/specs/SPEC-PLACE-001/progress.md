@@ -128,6 +128,14 @@
 - `architecture_test.dart`에 `dart format`을 돌렸더니 기존 두 줄이 다시 배치되어, HEAD 내용에 새 블록만 붙이는 방식으로 되돌림 → `git diff --numstat` `45 0`(더하기만).
 - 결과: 전체 `flutter test` → `00:14 +162: All tests passed!`, `flutter analyze` → 기존 info 1건만. `cd app && flutter build ios --simulator --debug` → `✓ Built build/ios/iphonesimulator/Runner.app`(원문 `final/ios_build_m5.txt`). 빌드 뒤 `git status`에 `project.pbxproj`·`Package.resolved` 변경 없음. 생성된 `ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift`에 `geolocator_apple`이 들어감(gitignore된 산출물).
 
+### M6 — 계획 카드·문구·접근성·회귀
+
+- RED: AC-022 표의 기존 시험 9줄(단언 7줄 + 주석 2줄)을 "최근 장소"로 바꾸고, `places_test.dart`에 AC-019("the plan card folds defaults into one line")·AC-021("place screens meet the accessibility guidelines") 블록을 더한 뒤 전체 실행 → `00:14 +158 -6: Some tests failed.` 실패: `accessibility_test.dart: screens follow the wireframe order`, `assistant_test.dart: text mode carries the whole request box`, `assistant_test.dart: today hands requests to the assistant`, `intake_flow_test.dart: suggests recent counterparties and templates`, `today_test.dart: today follows the dashboard order`, `places_test.dart: the plan card folds defaults into one line`. 원문 `red/m6_app_red.txt`. `intake_flow_test.dart` "…: no tasks yet"은 `findsNothing`이라 바꾼 뒤에도 통과(정상).
+- AC-021 블록은 처음 실행부터 통과했다. 화면을 M4·M5에서 지침에 맞춰 만들었기 때문이며, 이 블록은 사실상 test-after다(RED 출력 없음).
+- GREEN: `home_screen.dart`·`request_box.dart`의 묶음 제목과 주석 다섯 줄을 "최근 장소"로. `plan_card_screen.dart`에서 "통화 언어"·"내 이름" 두 행을 `Key('plan-defaults-row')` 한 줄("통화 언어 · 내 이름")로 접고, "한국어"와 이름은 각각 따로 누르는 48×48 이상 `_TapText`로 둠. `plan_card_test.dart`·`shell_test.dart`는 손대지 않고 통과.
+- 서식: `request_box.dart`(HEAD에서 서식 일치, 문자열만 바뀜)와 새 시험만. `plan_card_screen.dart`·`home_screen.dart`는 HEAD에서도 `dart format` 기준과 달라 돌리지 않음.
+- 결과: 전체 `flutter test` → `00:14 +164: All tests passed!`, analyze → 기존 info 1건만.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자

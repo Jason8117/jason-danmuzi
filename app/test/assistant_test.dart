@@ -118,7 +118,7 @@ Future<void> systemBack(WidgetTester tester) async {
   await settle(tester);
 }
 
-/// The mixed set plus a finished, connected call, so "최근 통화한 곳" has an entry.
+/// The mixed set plus a finished, connected call, so "최근 장소" has an entry.
 List<CallTask> withRecentPlace() => [
   ...mixedTasks(),
   shellTask(
@@ -553,7 +553,7 @@ void main() {
     expect(find.byKey(field), findsOneWidget);
     expect(find.byTooltip('보내기'), findsOneWidget);
     expect(find.text('직접 입력하기'), findsOneWidget);
-    expect(find.text('최근 통화한 곳'), findsOneWidget);
+    expect(find.text('최근 장소'), findsOneWidget);
     expect(find.textContaining('동네 세탁소 ·'), findsOneWidget);
     expect(find.text('이런 부탁도 할 수 있어요'), findsOneWidget);
     expect(find.byKey(chip), findsNothing);
@@ -577,7 +577,7 @@ void main() {
     );
     openAssistant(appRouter(tester), text: true);
     await settle(tester);
-    expect(find.text('최근 통화한 곳'), findsNothing);
+    expect(find.text('최근 장소'), findsNothing);
     expect(find.byKey(field), findsOneWidget);
     expect(find.text('직접 입력하기'), findsOneWidget);
     expect(find.text('이런 부탁도 할 수 있어요'), findsOneWidget);
@@ -847,7 +847,7 @@ void main() {
       find.text('비서에게 부탁하기'),
       find.text('확인이 필요해요'),
       find.text('진행 중'),
-      find.text('최근 통화한 곳'),
+      find.text('최근 장소'),
     ];
     final tops = [for (final f in order) tester.getTopLeft(f).dy];
     for (var i = 1; i < tops.length; i++) {
