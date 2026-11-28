@@ -99,7 +99,7 @@ git diff <run_start_sha> -- app/test/ server/src/http/app.test.ts
 
 ## AC-010 — 첫 검색어와 근처 (REQ-010)
 
-- **Given** `design.md` D6 공유 예시 표의 열아홉 줄("해 줘", "근처 치과 내일 오전 예약해 줘" 포함, `placeQuery` 없는 결과 — 옛 서버의 대체 규칙)과 이름 있는 경우 한 줄, `placeQuery`가 있는 결과(문장 "근처 치과 내일 오전 예약해 줘", `placeQuery` `치과`; 공백뿐인 `placeQuery` `"  "`; 40자 `placeQuery`), 그리고 번호 있음·차단 번호 결과. `IntakeResult.fromJson`에 `placeQuery` `"치과"` / 키 없음 / `7`(숫자)
+- **Given** `design.md` D6 공유 예시 표의 스물두 줄("해 줘", "근처 치과 내일 오전 예약해 줘" 포함, `placeQuery` 없는 결과 — 옛 서버의 대체 규칙)과 이름 있는 경우 한 줄, `placeQuery`가 있는 결과(문장 "근처 치과 내일 오전 예약해 줘", `placeQuery` `치과`; 공백뿐인 `placeQuery` `"  "`; 40자 `placeQuery`), 그리고 번호 있음·차단 번호 결과. `IntakeResult.fromJson`에 `placeQuery` `"치과"` / 키 없음 / `7`(숫자)
 - **When** `placeSearchStartFor`를 부르고 JSON을 해석하면
 - **Then** 표의 `keyword`·`nearby`와 같고, `placeQuery` `치과`이면 `keyword` `치과`·`nearby` `true`, 공백뿐이면 대체 규칙 값, 40자면 30자로 잘림, 번호 있음·차단은 `null`이다. 해석은 차례로 `"치과"`, `null`, `null`(예외 없음). 앱에서는 (1) 검색어 "강남역 파스타집"으로 화면이 열리면 검색칸 글자가 그것이고 `searchCalls`가 `["강남역 파스타집"]`이다 (2) 검색어가 빈 문장("해 줘", D6 표의 고정 줄)이면 검색칸이 비어 초점을 갖고 `searchCalls`가 비어 있으며, "망원동 세탁소"를 적고 [다시 찾기]를 누르면 `searchCalls`가 `["망원동 세탁소"]`다
   앱에서 (3) 부탁 "근처 치과 내일 오전 예약해 줘", 접수 결과의 `placeQuery`가 `치과의원`(대체 규칙 값 `치과`와 일부러 다르게), 가짜 위치가 이미 허용·좌표 (37.55, 126.91)이면 검색칸 글자가 "치과의원"이고 `searchCalls`가 검색어 "치과의원"과 `near (37.55, 126.91)` 하나다(`nearby`는 앱이 정함) (4) 같은 부탁에 `placeQuery`가 없으면(옛 서버) 검색어가 "치과"다
@@ -211,7 +211,7 @@ git diff <run_start_sha> -- app/test/ server/src/http/app.test.ts
 
 - **Given** (1) 휴리스틱 두뇌의 앱(`places.test.ts`의 `makeApp`) (2) 접수 내용을 정해 주는 가짜 두뇌 (3) 가짜 `fetch`로 부르는 `OpenAiBrain`
 - **When** (1) `POST /v1/intake`에 "근처 치과 내일 오전 예약해 줘", "강남역 근처 파스타집, 금요일 7시 2명 예약해 줘", "라 파스타에 전화해서 금요일 7시 예약", "해 줘" (2) 두뇌가 `placeQuery` `"치과"` / `"근처 치과 010-1234-5678"` / `"   "`(문장 "근처 치과 내일 오전 예약해 줘") / 값 없음 (3) LLM 답의 `placeQuery`가 `"치과"` / 없음 / `null` / `7` / 101자이고, 프롬프트를 보면
-- **Then** (1) 응답 `placeQuery`가 차례로 `"치과"`, `"강남역 파스타집"`, `"라 파스타"`, `null`이고 `draft.goal`에는 "내일 오전"이 그대로 있다. `domain/placeQuery.test.ts`가 D6 공유 예시 표 열아홉 줄을 `placeQueryFor(text, null)`로 고정한다 (2) `"치과"`, `"치과"`(번호·`근처` 지움), `"치과"`(대체 규칙), `"치과"`(대체 규칙) (3) 결과 `placeQuery`가 `"치과"`이고 `source` `llm`; 없음·`null`·`7`·101자이면 결과에 `placeQuery` 키가 없고 `source`는 여전히 `llm`(휴리스틱으로 떨어지지 않음, 경고 로그 0). `INTAKE_SYSTEM_PROMPT`에 `placeQuery`와 `"근처"`가 있다
+- **Then** (1) 응답 `placeQuery`가 차례로 `"치과"`, `"강남역 파스타집"`, `"라 파스타"`, `null`이고 `draft.goal`에는 "내일 오전"이 그대로 있다. `domain/placeQuery.test.ts`가 D6 공유 예시 표 스물두 줄을 `placeQueryFor(text, null)`로 고정한다 (2) `"치과"`, `"치과"`(번호·`근처` 지움), `"치과"`(대체 규칙), `"치과"`(대체 규칙) (3) 결과 `placeQuery`가 `"치과"`이고 `source` `llm`; 없음·`null`·`7`·101자이면 결과에 `placeQuery` 키가 없고 `source`는 여전히 `llm`(휴리스틱으로 떨어지지 않음, 경고 로그 0). `INTAKE_SYSTEM_PROMPT`에 `placeQuery`와 `"근처"`가 있다
 - 시험: `server/src/domain/placeQuery.test.ts` — "place query vectors shared with the app", `server/src/http/places.test.ts` — "intake answers with a place query", `server/src/brain/openaiBrain.test.ts` — "intake reads placeQuery leniently"
 
 ## AC-024 — `placeQuery`는 응답에만 (REQ-024)

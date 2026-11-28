@@ -40,6 +40,9 @@ void main() {
       ('다음 주 화요일 저녁에 동네 치과 예약해 줘', '동네 치과', false),
       ('토요일 오전 10시 반쯤 근처 카페 예약해 줘', '카페', true),
       ('반찬가게 3시 반까지 하는지 물어봐 줘', '반찬가게', false),
+      ('엄마한테 저녁에 늦는다고 전화해 줘', '엄마', false),
+      ('김 대리님께 회의 30분 늦는다고 전해 줘', '김 대리님', false),
+      ('친구에게 내일 못 간다고 연락해 줘', '친구', false),
     ];
     for (final (text, keyword, nearby) in vectors) {
       final start = placeSearchStartFor(text, missingNumber());

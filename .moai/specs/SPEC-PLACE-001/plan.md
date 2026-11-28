@@ -130,7 +130,7 @@
 | `server/src/http/app.test.ts` | 수정(한 줄) | `:699` 응답 키 목록에 `placeQuery`(AC-022 표) |
 | `packages/kolbi_core/lib/src/models/intake_models.dart` | 수정(더하기) | `IntakeResult.placeQuery` |
 | `packages/kolbi_core/lib/src/places/place_intent.dart` | 수정 | `placeQuery` 우선, 시간 낱말, "근처" 판단(D6) |
-| `packages/kolbi_core/test/places_test.dart` | 수정(이 SPEC의 새 파일) | 예시 표 19줄, `placeQuery` 우선·JSON 해석 |
+| `packages/kolbi_core/test/places_test.dart` | 수정(이 SPEC의 새 파일) | 예시 표 22줄, `placeQuery` 우선·JSON 해석 |
 | `app/test/places_test.dart` | 수정(이 SPEC의 새 파일, 시험 더함) | 비서가 접수 `placeQuery`로 검색 |
 | iOS 배포 빌드 절차 | 문서만(`design.md` D11) | `BYPASS_PERMISSION_LOCATION_ALWAYS=1`은 SwiftPM 매니페스트 환경 변수로만 먹고 빌드 설정으로는 닿지 않음을 실행으로 확인 — 설정 파일 변경 없음. sync에서 README·`tech.md`의 배포 절차에 옮김 |
 

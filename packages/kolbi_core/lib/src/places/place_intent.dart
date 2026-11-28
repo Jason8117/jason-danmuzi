@@ -35,8 +35,20 @@ const _timeWords = [
 const _whenParticles = ['에서', '에게', '에는', '에', '엔', '은', '는', '까지', '부터', '쯤'];
 const _requestPrefixes = ['예약', '문의', '확인', '물어봐', '알아봐', '전화', '찾아', '부탁'];
 const _requestWords = ['해', '해줘', '해주세요', '중에', '있는', '몇'];
-const _requestSuffixes = ['까지', '하는지', '있는지', '줘', '주세요'];
-const _placeParticles = ['에서', '에게', '에'];
+// Quoted speech ("늦는다고", "가자고") is the message, not the place: it ends the term.
+const _requestSuffixes = [
+  '까지',
+  '하는지',
+  '있는지',
+  '줘',
+  '주세요',
+  '다고',
+  '라고',
+  '냐고',
+  '자고',
+];
+// Place and person particles ("꽃집에", "엄마한테", "대리님께"); longest first.
+const _placeParticles = ['한테서', '께서', '에서', '에게', '한테', '에', '께'];
 const _trailingParticles = ['의', '을', '를'];
 const _maxKeyword = 30;
 
