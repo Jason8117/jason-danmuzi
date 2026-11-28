@@ -101,6 +101,14 @@
 - 결과: kolbi_core `dart test` → `00:00 +32: All tests passed!`, `dart analyze` → `No issues found!`; 앱 `flutter test` → `00:13 +149: All tests passed!`, analyze → 기존 info 1건만; 루트 `dart test` → `+2`.
 - 계획과 다른 점: AC-010의 앱 부분(검색칸 채움, 빈 검색어면 초점, `searchCalls`)은 화면이 있어야 해서 M4에서 시험한다. 서식: 새 파일과 HEAD에서 이미 서식이 맞던 수정 파일에만 `dart format` 적용. `intake_models.dart`, `formatters.dart`는 HEAD에서도 `dart format` 기준과 달라(줄 길이 120 관례) 전체 재배치를 피하려고 서식을 돌리지 않았다.
 
+### M4 — 장소 선택·상세
+
+- RED: `app/test/places_test.dart`에 AC-010(앱), AC-011, AC-012, AC-013, AC-014, AC-015(+AC-004 앱 부분) 블록을 먼저 더함. M3의 뼈대 화면에서 실행 → 다섯 블록이 `Expected: exactly one matching candidate`로 실패(`+1 -5`). 원문 `red/m4_app_red.txt`.
+- GREEN: `features/places/place_search_controller.dart`(봉인 상태 `PlaceIdle`·`PlaceLoading`·`PlaceResults`·`PlaceFailed(unavailable)`, 세대 번호로 늦은 응답 무시, `draftFor`는 D5대로 이름·번호·`PhoneSource.search`만 바꿈), `place_card.dart`(CMP-05, 읽기 단위 라벨, 상태 글자·비활성 이유, 첫 걸 수 있는 후보만 인디고 테두리와 `FilledButton`, 첫 후보에 거리가 있을 때만 "가장 가까워요", 뼈대 카드), `place_detail_sheet.dart`(SCR-H03, 제목에 자동 초점, [번호 복사], [여기에 물어보기]는 걸 수 있을 때만, 닫으면 [상세]로 초점 복귀), `place_search_screen.dart`(D7 문구 전체, 목적격 조사 판단, 결과 문장 정중한 알림 1회).
+- 설계 판단: 컨트롤러는 Riverpod `Notifier` 대신 화면이 소유하는 `ValueNotifier`로 했다. 상태가 화면 하나에만 속하고(REQ-004: 결과는 화면이 닫히면 사라짐), 저장소는 `placesRepositoryProvider`로 주입된다. 계획 A.3의 상태 목록 가운데 `needLocation`·`askArea`는 M5에서 더한다.
+- 더한 시험: 검색 중에 화면을 닫으면 늦은 응답을 무시(acceptance.md 엣지 케이스).
+- 결과: `flutter test test/places_test.dart` → `+8`, 전체 `flutter test` → `00:14 +156: All tests passed!`, `flutter analyze` → 기존 info 1건만.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자

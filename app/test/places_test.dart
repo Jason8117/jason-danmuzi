@@ -1,5 +1,7 @@
 // SPEC-PLACE-001 (place selection, place detail, location, plan card defaults). Only fakes: the places
 // repository, the location reader and the speech recognizer are never real here.
+import 'dart:async';
+
 import 'package:callmate/app.dart';
 import 'package:callmate/core/clock.dart';
 import 'package:callmate/core/config/app_settings.dart';
@@ -16,7 +18,10 @@ import 'package:kolbi_core/kolbi_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter/services.dart';
+
 import 'support/fake_places_repository.dart';
+import 'support/fakes.dart' show taskJson;
 import 'support/fake_speech_recognizer.dart';
 import 'support/shell_support.dart';
 
@@ -108,6 +113,44 @@ Future<void> systemBack(WidgetTester tester) async {
   await settle(tester);
 }
 
+const searchField = Key('place-search-field');
+const searchAgain = Key('place-search-again');
+const manual = Key('place-manual');
+Key cardKey(String id) => Key('place-card-$id');
+Key callKey(String id) => Key('place-call-$id');
+Key detailKey(String id) => Key('place-detail-$id');
+
+/// Opens place selection from the assistant with [text] and the intake [intake].
+Future<PlacesApp> openPlaces(
+  WidgetTester tester, {
+  String text = pastaRequest,
+  IntakeResult? intake,
+  FakePlacesRepository? places,
+  Size size = const Size(800, 2400),
+  double textScale = 1,
+  List<Override> overrides = const [],
+}) async {
+  final app = await pumpPlacesApp(
+    tester,
+    intake: intake ?? missingNumber(),
+    places: places,
+    size: size,
+    textScale: textScale,
+    overrides: overrides,
+  );
+  app.calls.nextCreated = CallTask.fromJson(taskJson(id: 'created-1'));
+  await sendRequest(tester, text);
+  expect(find.byType(PlaceSearchScreen), findsOneWidget);
+  return app;
+}
+
+double top(WidgetTester tester, Finder finder) => tester.getTopLeft(finder).dy;
+
+EditableText editable(WidgetTester tester, Key key) =>
+    tester.widget<EditableText>(
+      find.descendant(of: find.byKey(key), matching: find.byType(EditableText)),
+    );
+
 void main() {
   // AC-009 / REQ-009
   testWidgets(
@@ -166,4 +209,362 @@ void main() {
       }
     },
   );
+
+  // AC-010 (app) / REQ-010
+  testWidgets('the search field starts from the request', (tester) async {
+    var app = await openPlaces(tester);
+    expect(editable(tester, searchField).controller.text, '강남역 파스타집');
+    expect(app.places.queries, ['강남역 파스타집']);
+
+    app = await openPlaces(tester, text: '해 줘');
+    expect(editable(tester, searchField).controller.text, '');
+    expect(editable(tester, searchField).focusNode.hasFocus, isTrue);
+    expect(app.places.searchCalls, isEmpty);
+    await tester.enterText(find.byKey(searchField), '망원동 세탁소');
+    await tapAndSettle(tester, find.byKey(searchAgain));
+    expect(app.places.queries, ['망원동 세탁소']);
+    expect(app.places.searchCalls.single.near, isNull);
+  });
+
+  // AC-011 / REQ-011
+  testWidgets('place selection follows the wireframe order', (tester) async {
+    await openPlaces(tester);
+    expect(find.text('장소 선택'), findsOneWidget);
+    final order = [
+      find.byKey(const Key('place-request-line')),
+      find.text('고치기'),
+      find.byKey(searchField),
+      find.text('강남역 파스타집 4곳을 찾았어요'),
+      find.byKey(cardKey('k1')),
+      find.byKey(cardKey('k2')),
+      find.byKey(cardKey('k3')),
+      find.byKey(cardKey('k4')),
+      find.text('장소 정보는 카카오 로컬 검색 결과예요'),
+      find.byKey(manual),
+    ];
+    for (final finder in order) {
+      expect(finder, findsOneWidget);
+    }
+    final tops = [for (final finder in order) top(tester, finder)];
+    for (var i = 1; i < tops.length; i++) {
+      expect(tops[i], greaterThanOrEqualTo(tops[i - 1]), reason: 'item $i');
+    }
+    expect(top(tester, find.byKey(searchField)), greaterThan(tops[0]));
+    expect(
+      tester.widget<Text>(find.byKey(const Key('place-request-line'))).data,
+      contains(pastaRequest),
+    );
+
+    final inFirst = find.descendant(
+      of: find.byKey(cardKey('k1')),
+      matching: find.text('가장 가까워요'),
+    );
+    expect(inFirst, findsOneWidget);
+    expect(find.text('가장 가까워요'), findsOneWidget);
+    expect(tester.widget(find.byKey(callKey('k1'))), isA<FilledButton>());
+    expect(tester.widget(find.byKey(callKey('k2'))), isA<OutlinedButton>());
+    for (final (id, name, distance, phone) in [
+      ('k1', '라 파스타', '350m', '02-111-0000'),
+      ('k2', '파스타 하우스', '600m', '02-222-0000'),
+      ('k3', '봉골레 키친', '900m', null),
+      ('k4', '응급 파스타', '1.2km', '119'),
+    ]) {
+      Finder inCard(Finder f) =>
+          find.descendant(of: find.byKey(cardKey(id)), matching: f);
+      expect(inCard(find.text(name)), findsOneWidget);
+      expect(inCard(find.text('양식')), findsOneWidget);
+      expect(inCard(find.text(distance)), findsOneWidget);
+      if (phone != null) expect(inCard(find.text(phone)), findsOneWidget);
+      expect(inCard(find.text('상세')), findsOneWidget);
+      expect(inCard(find.text('여기로 전화')), findsOneWidget);
+    }
+
+    // [고치기] returns to the assistant with the sentence.
+    await tapAndSettle(tester, find.text('고치기'));
+    expect(find.byType(PlaceSearchScreen), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byKey(field)).controller!.text,
+      pastaRequest,
+    );
+
+    // Practice places and no distances.
+    await openPlaces(
+      tester,
+      places: FakePlacesRepository(
+        result: PlaceSearchResult(
+          source: PlaceSearchSource.simulated,
+          places: [
+            for (final place in kakaoFour.places)
+              Place(
+                id: place.id,
+                name: place.name,
+                category: place.category,
+                address: place.address,
+                phone: place.phone,
+                phoneNumber: place.phoneNumber,
+                phoneCheck: place.phoneCheck,
+              ),
+          ],
+        ),
+      ),
+    );
+    expect(find.text('연습용 장소예요. 실제 가게가 아니에요'), findsOneWidget);
+    expect(find.text('장소 정보는 카카오 로컬 검색 결과예요'), findsNothing);
+    expect(find.text('가장 가까워요'), findsNothing);
+  });
+
+  // AC-012 / REQ-012
+  testWidgets('loading, empty, failure and nothing callable', (tester) async {
+    // (1) loading
+    var places = FakePlacesRepository()..hold = Completer<void>();
+    await openPlaces(tester, places: places);
+    expect(find.text('강남역 파스타집을 찾는 중이에요'), findsOneWidget);
+    expect(find.byKey(const Key('place-skeleton')), findsNWidgets(3));
+    expect(find.byKey(manual), findsOneWidget);
+    places.hold!.complete();
+    await settle(tester);
+    expect(find.byKey(const Key('place-skeleton')), findsNothing);
+    expect(find.byKey(cardKey('k1')), findsOneWidget);
+
+    // (2) nothing found
+    await openPlaces(
+      tester,
+      places: FakePlacesRepository(
+        result: const PlaceSearchResult(source: PlaceSearchSource.kakao),
+      ),
+    );
+    expect(find.text('조건에 맞는 곳을 찾지 못했어요'), findsOneWidget);
+    expect(find.byKey(manual), findsOneWidget);
+
+    // (3) failed
+    places = FakePlacesRepository()
+      ..error = const ApiException(
+        'place_search_failed',
+        'Place search failed',
+        statusCode: 502,
+      );
+    await openPlaces(tester, places: places);
+    expect(find.text('장소를 찾지 못했어요. 잠시 뒤 다시 시도해 주세요'), findsOneWidget);
+    expect(find.byKey(manual), findsOneWidget);
+    await tapAndSettle(tester, find.text('다시 시도'));
+    expect(places.searchCalls, hasLength(2));
+
+    // (4) switched off
+    places = FakePlacesRepository()
+      ..error = const ApiException(
+        'place_search_unavailable',
+        'Place search is not available',
+        statusCode: 503,
+      );
+    await openPlaces(tester, places: places);
+    expect(find.text('지금은 장소 찾기를 쓸 수 없어요'), findsOneWidget);
+    expect(find.text('다시 시도'), findsNothing);
+    expect(find.byKey(manual), findsOneWidget);
+
+    // (5) nothing callable: shown, never skipped to the plan card
+    await openPlaces(
+      tester,
+      places: FakePlacesRepository(
+        result: PlaceSearchResult(
+          source: PlaceSearchSource.kakao,
+          places: kakaoFour.places.sublist(2),
+        ),
+      ),
+    );
+    expect(find.byKey(cardKey('k3')), findsOneWidget);
+    expect(find.byKey(cardKey('k4')), findsOneWidget);
+    expect(find.text('전화할 수 있는 곳이 없어요'), findsOneWidget);
+    expect(find.byType(PlanCardScreen), findsNothing);
+    expect(find.byKey(manual), findsOneWidget);
+  });
+
+  // AC-013 / REQ-013
+  testWidgets('uncallable candidates cannot be chosen', (tester) async {
+    await openPlaces(tester);
+    Finder inCard(String id, Finder f) =>
+        find.descendant(of: find.byKey(cardKey(id)), matching: f);
+    expect(inCard('k1', find.text('걸 수 있음')), findsOneWidget);
+    expect(inCard('k3', find.text('번호 없음')), findsOneWidget);
+    expect(inCard('k3', find.text('번호가 없어 전화할 수 없어요')), findsOneWidget);
+    expect(inCard('k4', find.text('걸 수 없는 번호')), findsOneWidget);
+    expect(inCard('k4', find.text('걸 수 없는 번호예요')), findsOneWidget);
+    for (final id in ['k3', 'k4']) {
+      expect(
+        tester.widget<ButtonStyleButton>(find.byKey(callKey(id))).onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.byKey(callKey(id)));
+      await tester.tap(find.byKey(callKey(id)), warnIfMissed: false);
+      await settle(tester);
+      expect(find.byType(PlanCardScreen), findsNothing);
+    }
+    await tapAndSettle(tester, find.byKey(detailKey('k3')));
+    expect(
+      tester
+          .widget<ButtonStyleButton>(find.byKey(const Key('place-ask')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('번호가 없어 전화할 수 없어요'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  // AC-014 / REQ-014
+  testWidgets('place detail sheet', (tester) async {
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await openPlaces(tester);
+    await tapAndSettle(tester, find.byKey(detailKey('k1')));
+    final sheet = find.byType(BottomSheet);
+    Finder inSheet(Finder f) => find.descendant(of: sheet, matching: f);
+    expect(inSheet(find.text('라 파스타')), findsOneWidget);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'place-detail-title',
+    );
+    expect(inSheet(find.text('양식 · 350m')), findsOneWidget);
+    expect(inSheet(find.text('서울 강남구 테헤란로 12')), findsOneWidget);
+    expect(inSheet(find.text('02-111-0000')), findsOneWidget);
+    expect(inSheet(find.text('여기에 물어보기')), findsOneWidget);
+    await tapAndSettle(tester, inSheet(find.text('번호 복사')));
+    expect(copied, ['02-111-0000']);
+    await tapAndSettle(tester, inSheet(find.text('닫기')));
+    expect(sheet, findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'place-detail-button-k1',
+    );
+
+    await tapAndSettle(tester, find.byKey(detailKey('k3')));
+    expect(inSheet(find.text('번호 복사')), findsNothing);
+  });
+
+  // AC-015 / REQ-015, AC-004 (app) / REQ-004
+  testWidgets('choosing a place fills the plan card', (tester) async {
+    final draft = missingNumber(conditions: const ['창가 자리']);
+    Future<void> expectPlan(String name, String phone) async {
+      expect(find.byType(PlanCardScreen), findsOneWidget);
+      expect(find.text(name), findsOneWidget);
+      expect(find.text(phone), findsOneWidget);
+      expect(find.text('검색 결과'), findsOneWidget);
+      expect(find.text('금요일 7시 2명 예약'), findsOneWidget);
+      expect(find.text('창가 자리'), findsOneWidget);
+      expect(find.byKey(const Key('plan-phone-field')), findsNothing);
+    }
+
+    // (1) [여기로 전화] on the first card
+    var app = await openPlaces(tester, intake: draft);
+    await tapAndSettle(tester, find.byKey(callKey('k1')));
+    await expectPlan('라 파스타', '02-111-0000');
+    expect(currentPath(tester), '/assistant/plan');
+    await systemBack(tester);
+    expect(find.byType(PlaceSearchScreen), findsOneWidget);
+    expect(find.byKey(cardKey('k4')), findsOneWidget);
+    expect(app.places.searchCalls, hasLength(1));
+    await systemBack(tester);
+    expect(find.byType(PlaceSearchScreen), findsNothing);
+    expect(currentPath(tester), '/assistant');
+    await tapAndSettle(tester, find.byKey(send));
+    await tapAndSettle(tester, find.byKey(callKey('k1')));
+    await tapAndSettle(tester, find.byKey(const Key('plan-start')));
+    expect(app.calls.createRequests.single.targetName, '라 파스타');
+    expect(app.calls.createRequests.single.phoneNumber, '+8221110000');
+
+    // AC-004 (app): nothing about the places is stored on the device.
+    final stored = [
+      for (final key in app.preferences.getKeys())
+        '$key=${app.preferences.get(key)}',
+    ].join('\n');
+    for (final marker in [
+      '라 파스타',
+      '파스타 하우스',
+      '02-111-0000',
+      '+8221110000',
+      '테헤란로',
+      'k1',
+      'k2',
+    ]) {
+      expect(stored.contains(marker), isFalse, reason: marker);
+    }
+
+    // (2) [상세] → [여기에 물어보기]
+    await openPlaces(tester, intake: draft);
+    await tapAndSettle(tester, find.byKey(detailKey('k2')));
+    await tapAndSettle(tester, find.byKey(const Key('place-ask')));
+    await expectPlan('파스타 하우스', '02-222-0000');
+
+    // (3) [번호 직접 입력]
+    await openPlaces(tester, intake: draft);
+    await tapAndSettle(tester, find.byKey(manual));
+    expect(find.byType(PlanCardScreen), findsOneWidget);
+    final phoneField = find.byKey(const Key('plan-phone-field'));
+    expect(phoneField, findsOneWidget);
+    expect(top(tester, phoneField), lessThan(top(tester, find.text('전화할 곳'))));
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('plan-target-field')))
+          .controller!
+          .text,
+      '',
+    );
+
+    // (4) a representative number
+    app = await openPlaces(
+      tester,
+      intake: draft,
+      places: FakePlacesRepository(
+        result: const PlaceSearchResult(
+          source: PlaceSearchSource.kakao,
+          places: [
+            Place(
+              id: 'rep',
+              name: '고객센터 대표',
+              phone: '1588-0000',
+              phoneNumber: '+15880000',
+              phoneCheck: PlacePhoneCheck.ok,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tapAndSettle(tester, find.byKey(callKey('rep')));
+    expect(find.text('1588-0000'), findsOneWidget);
+    expect(find.textContaining('+15880000'), findsNothing);
+    await tapAndSettle(tester, find.byKey(const Key('plan-start')));
+    expect(app.calls.createRequests.single.phoneNumber, '+15880000');
+  });
+
+  // acceptance.md edge case: closing place selection while it searches.
+  testWidgets('a late answer after leaving place selection is ignored', (
+    tester,
+  ) async {
+    final places = FakePlacesRepository()..hold = Completer<void>();
+    await openPlaces(tester, places: places);
+    await systemBack(tester);
+    expect(find.byType(PlaceSearchScreen), findsNothing);
+    places.hold!.complete();
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(currentPath(tester), '/assistant');
+  });
 }
