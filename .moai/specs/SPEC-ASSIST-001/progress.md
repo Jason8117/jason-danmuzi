@@ -64,6 +64,13 @@ Evidence files (gitignored, kept for audit): `.moai/state/verify/SPEC-ASSIST-001
 - Accessibility announcement API in Flutter 3.50.1: send with `SemanticsService.sendAnnouncement(View.of(context), message, textDirection, assertiveness: Assertiveness.polite)` (`announce` is deprecated since 3.35); record with `tester.takeAnnouncements()` → `CapturedAccessibilityAnnouncement` (`flutter_test/lib/src/binding.dart:1662`).
 - Declarations: `Info.plist` `NSMicrophoneUsageDescription` "말로 부탁하면 제가 글로 받아 적어요. 콜비는 음성을 저장하지 않아요.", `NSSpeechRecognitionUsageDescription` "말한 내용을 기기의 음성 인식으로 글로 바꿔 부탁으로 보내요. 콜비는 음성을 저장하지 않아요." (`plutil -lint` → OK); `AndroidManifest.xml` `RECORD_AUDIO` + `<queries><intent><action android:name="android.speech.RecognitionService"/></intent>`; no Bluetooth permission.
 
+### Run status — stopped before the M4 commit (owner decision needed)
+
+- Committed on feat/SPEC-ASSIST-001: M1 `7623909`, M2 `b39c48d`, M3 `afa4fa8`, M5 `013df8c` (M5 was taken before M4 because it does not depend on it and M4 is blocked). Each commit ran the pre-commit hook normally; `flutter.version.json` present after each.
+- M4 is implemented in the working tree, **uncommitted** (patch copy: `.moai/state/verify/SPEC-ASSIST-001/m4_pending.patch`): today without the request box and first-use empty state, briefing empty wording, recent places and shortcuts open the assistant, the AC-016 table edits (`intake_flow_test` helper + `:138`/`:151` lines; `approval_flow_test` empty-state lines; `accessibility_test` empty-state block, `byTooltip('보내기')`, home order block; `today_test` AC-015 block) and the new AC-010 test.
+- With all of it applied: `flutter test` → `00:11 +129 -1: Some tests failed.` — the only failure is **`font_overflow_test.dart:73-75` "home fits a 360x640 phone at 2x text with the real font"** (`Bad state: No element` in `scrollUntilVisible(find.text('직접 입력하기'))`). It is not in the AC-016 table. Cause: REQ-010 removes [직접 입력하기] from today, and the test uses that label as its probe for the Pretendard font on home. The app cannot keep the label on today without breaking REQ-010 / AC-010.
+- `today_test` "today shortcuts" and `inbox_test` "empty and error states" (AC-016 rows) needed no edit: the assistant keeps the SHELL keys `assistant-intake-field` / `assistant-intake-send` around the new input and send button. `shell_test` AC-006 (2) was edited in M2 per the table.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
@@ -82,3 +89,5 @@ _<pending sync-phase>_
 - evaluation: direct — not selected; fanout — not selected (coding-heavy); sweep — not selected; serial — selected
 - Decision: serial
 - justification: the speech port (M1) and assistant state (M2) gate every screen milestone, and M4/M5 edit the shell router and call screens that M2 also touches; one writer in order avoids races
+- Resolution (owner decision 2026-11-28, via orchestrator AskUserQuestion): AC-016 table extended by one row — `font_overflow_test.dart:73` probe changed from '직접 입력하기' to '전화 대신하기' (a Today shortcut that stays under REQ-010); intent unchanged (Home, 360×640, 2× text, real Pretendard). Cause: REQ-010. Applied by the orchestrator after the run agent hit the usage limit. Result on the working tree: `cd app && flutter --suppress-analytics test` → `00:11 +130: All tests passed!`; `flutter analyze` → `1 issue found.` (baseline info). Evidence `.moai/state/verify/SPEC-ASSIST-001/m4_app_test.txt`.
+- Pending owner decision applied next (2026-11-28): Android OD-2 deviation — speech_to_text 7.5.0 silently falls back to the network recognizer on Android (SpeechToTextPlugin.kt:620-640), so show a one-time notice with the first-use pre-permission sheet on Android: "Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요." (not blocking; iOS keeps the planned event-driven notice).

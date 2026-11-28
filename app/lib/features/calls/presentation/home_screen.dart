@@ -9,60 +9,19 @@ import '../../../core/clock.dart';
 import '../../../core/config/app_settings.dart';
 import '../../../shell/kind_registration.dart';
 import '../../../shell/navigation.dart';
-import '../../../shell/request_intake.dart';
 import '../../../shell/routes.dart';
 import '../../../shell/tab_scaffold.dart';
 import '../../../shell/task_feed.dart';
 import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
-import 'call_templates.dart';
 
-/// SPEC-INTAKE-001 REQ-017: one input at the top sends a one-line request to `POST /v1/intake` and opens the plan card.
-class HomeScreen extends ConsumerStatefulWidget {
+/// SCR-H01. Requests start in the AI assistant (SPEC-ASSIST-001 REQ-010): today keeps the briefing, the
+/// shortcuts that open the assistant, the task lists and "최근 통화한 곳".
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _input = TextEditingController();
-  bool _sending = false;
-
-  bool get _canSend => !_sending && _input.text.trim().length >= 2;
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  /// Replaces the input and puts the cursor at the end, so the user can keep typing.
-  void _fill(String text) => setState(() {
-    _input.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  });
-
-  Future<void> _send() async {
-    final text = _input.text.trim();
-    if (!_canSend) return;
-    // The plan card needs the requester's name; the typed text stays where it is meanwhile.
-    if (!ref.read(settingsProvider).hasProfile) {
-      context.pushNamed(RouteNames.settings);
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(context);
-    setState(() => _sending = true);
-    final draft = await requestPlanDraft(ref, messenger, text);
-    if (!mounted) return;
-    setState(() => _sending = false);
-    if (draft != null) context.pushNamed(RouteNames.plan, extra: draft);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(sortedTasksProvider);
     final settings = ref.watch(settingsProvider);
 
@@ -84,15 +43,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           AsyncData(:final value) => _TaskList(
             tasks: value,
             hasProfile: settings.hasProfile,
-            intake: _IntakeBox(
-              input: _input,
-              sending: _sending,
-              onChanged: () => setState(() {}),
-              onSend: _canSend ? _send : null,
-              onManual: () => context.pushNamed(settings.hasProfile ? RouteNames.newCall : RouteNames.settings),
-              onFill: _fill,
+            // A recent place starts a request to it in the assistant's text mode.
+            recentPlaces: _RecentPlaces(
+              suggestions: recentCounterparties(value),
+              onFill: (start) => openAssistant(GoRouter.of(context), fill: start),
             ),
-            recentPlaces: _RecentPlaces(suggestions: recentCounterparties(value), onFill: _fill),
           ),
           AsyncError(:final error) => MessageView(
             icon: Icons.cloud_off_rounded,
@@ -175,86 +130,8 @@ class _LiveIndicator extends ConsumerWidget {
   }
 }
 
-class _IntakeBox extends StatelessWidget {
-  const _IntakeBox({
-    required this.input,
-    required this.sending,
-    required this.onChanged,
-    required this.onSend,
-    required this.onManual,
-    required this.onFill,
-  });
-
-  final TextEditingController input;
-  final bool sending;
-  final VoidCallback onChanged;
-  final VoidCallback? onSend;
-  final VoidCallback onManual;
-  final ValueChanged<String> onFill;
-
-  static const _decoration = InputDecoration(hintText: '무엇을 도와드릴까요?', counterText: '');
-
-  @override
-  Widget build(BuildContext context) {
-    // While another screen covers home (including its push transition), the input is drawn as a look-alike without
-    // an editor: a covered screen needs no live text field, and screens on top keep being the only TextField owner.
-    final current = ModalRoute.of(context)?.isCurrent ?? true;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpace.sm),
-        Row(
-          children: [
-            Expanded(
-              child: current
-                  ? TextField(
-                      key: const Key('home-intake-field'),
-                      controller: input,
-                      minLines: 1,
-                      maxLines: 4,
-                      maxLength: 1000,
-                      textInputAction: TextInputAction.send,
-                      decoration: _decoration,
-                      onChanged: (_) => onChanged(),
-                      onSubmitted: (_) => onSend?.call(),
-                    )
-                  : InputDecorator(
-                      decoration: _decoration,
-                      isEmpty: input.text.isEmpty,
-                      child: Text(input.text, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-            ),
-            const SizedBox(width: AppSpace.sm),
-            IconButton.filled(
-              key: const Key('home-intake-send'),
-              tooltip: '보내기',
-              onPressed: onSend,
-              icon: sending
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send_rounded),
-            ),
-          ],
-        ),
-        TextButton(onPressed: onManual, child: const Text('직접 입력하기')),
-        const _SectionHeader('이런 부탁도 할 수 있어요'),
-        Wrap(
-          spacing: AppSpace.sm,
-          runSpacing: AppSpace.sm,
-          children: [
-            for (final template in callTemplates)
-              ActionChip(
-                avatar: Icon(template.icon, size: 18, color: Theme.of(context).colorScheme.primary),
-                label: Text(template.label),
-                onPressed: () => onFill(template.goal),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// "최근 통화한 곳": recent counterparties; tapping one starts a request to it (SPEC-INTAKE-001 REQ-018).
+/// "최근 통화한 곳": recent counterparties; tapping one starts a request to it in the assistant (SPEC-INTAKE-001
+/// REQ-018, SPEC-ASSIST-001 REQ-010).
 class _RecentPlaces extends StatelessWidget {
   const _RecentPlaces({required this.suggestions, required this.onFill});
 
@@ -285,15 +162,14 @@ class _RecentPlaces extends StatelessWidget {
   }
 }
 
-/// SCR-H01 in the order of SPEC-SHELL-001 REQ-015: date and greeting, briefing, the request input with its
-/// chips and shortcuts, then 확인이 필요해요 and 진행 중 (first two each), then 최근 통화한 곳. Finished tasks
-/// live in the history tab.
+/// SCR-H01 in the order of SPEC-SHELL-001 REQ-015 without the request box (SPEC-ASSIST-001 REQ-010): date and
+/// greeting, briefing, the shortcuts, then 확인이 필요해요 and 진행 중 (first two each), then 최근 통화한 곳.
+/// Finished tasks live in the history tab.
 class _TaskList extends ConsumerWidget {
-  const _TaskList({required this.tasks, required this.hasProfile, required this.intake, required this.recentPlaces});
+  const _TaskList({required this.tasks, required this.hasProfile, required this.recentPlaces});
 
   final List<CallTask> tasks;
   final bool hasProfile;
-  final Widget intake;
   final Widget recentPlaces;
 
   @override
@@ -329,13 +205,22 @@ class _TaskList extends ConsumerWidget {
               onLink: () => openTab(router, AppTab.tasks),
             ),
           ],
+          // SHELL-001 OD-2 resolved (04 §17.2): with no task at all the briefing says so, where the first-use
+          // empty state used to be.
+          if (tasks.isEmpty) ...[
+            const SizedBox(height: AppSpace.lg),
+            KolbiBriefingCard(
+              key: const Key('today-briefing'),
+              title: '오늘은 맡긴 일이 없어요.',
+              message: '가운데 버튼으로 부탁해 보세요.',
+              linkLabel: '부탁하기 →',
+              onLink: () => openAssistant(router),
+            ),
+          ],
           const _SectionHeader('비서에게 부탁하기'),
-          intake,
-          const SizedBox(height: AppSpace.lg),
           _Shortcuts(onAssistant: () => openAssistant(router)),
           if (isSimulated) const _SimulationBanner(),
           if (!hasProfile) const _ProfilePrompt(),
-          if (tasks.isEmpty) const _EmptyState(),
           if (tasks.isNotEmpty && groups.approvals.isNotEmpty) ...[
             _SectionHeader(
               '확인이 필요해요',
@@ -514,23 +399,6 @@ class _ProfilePrompt extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  // REQ-018 (b): the template chips live only in the suggestion row above, so the empty state keeps just its message.
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(top: AppSpace.xxl),
-      child: MessageView(
-        icon: Icons.support_agent_rounded,
-        title: '귀찮은 전화, 대신 걸어드릴게요',
-        message: '예약, 문의, 요금 할인, 환불 요청까지.\n목적만 알려주시면 AI 비서가 통화하고 결과를 정리해 드려요.',
       ),
     );
   }

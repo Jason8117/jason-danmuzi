@@ -810,4 +810,62 @@ void main() {
     await settle(tester);
     handle.dispose();
   });
+
+  // AC-010
+  testWidgets('today hands requests to the assistant', (tester) async {
+    void expectNoRequestBox(String reason) {
+      final today = find.byKey(todayScreen);
+      Finder inToday(Finder f) => find.descendant(of: today, matching: f);
+      expect(inToday(find.byKey(field)), findsNothing, reason: reason);
+      expect(inToday(find.byTooltip('보내기')), findsNothing, reason: reason);
+      expect(inToday(find.text('직접 입력하기')), findsNothing, reason: reason);
+      expect(
+        inToday(find.text('이런 부탁도 할 수 있어요')),
+        findsNothing,
+        reason: reason,
+      );
+    }
+
+    // (1) the mixed set plus a finished call to recent places
+    await pumpAssistantApp(tester, tasks: withRecentPlace());
+    expectNoRequestBox('(1)');
+    final order = [
+      find.byKey(const Key('today-briefing')),
+      find.text('비서에게 부탁하기'),
+      find.text('확인이 필요해요'),
+      find.text('진행 중'),
+      find.text('최근 통화한 곳'),
+    ];
+    final tops = [for (final f in order) tester.getTopLeft(f).dy];
+    for (var i = 1; i < tops.length; i++) {
+      expect(tops[i], greaterThan(tops[i - 1]), reason: 'item $i');
+    }
+    final place = find.textContaining('동네 세탁소 ·');
+    await tapAndSettle(tester, place);
+    expect(find.byKey(const Key('assistant-screen')), findsOneWidget);
+    expect(find.byKey(chip), findsNothing);
+    expect(input(tester).text, '동네 세탁소에 ');
+
+    for (final key in ['shortcut-call', 'shortcut-search']) {
+      await pumpAssistantApp(
+        tester,
+        speech: FakeSpeechRecognizer(),
+        tasks: withRecentPlace(),
+      );
+      await tapAndSettle(tester, find.byKey(Key(key)));
+      expect(
+        find.byKey(const Key('assistant-screen')),
+        findsOneWidget,
+        reason: key,
+      );
+    }
+
+    // (2) no tasks
+    await pumpAssistantApp(tester);
+    expectNoRequestBox('(2)');
+    expect(find.text('귀찮은 전화, 대신 걸어드릴게요'), findsNothing);
+    expect(find.text('오늘은 맡긴 일이 없어요.'), findsOneWidget);
+    expect(find.text('가운데 버튼으로 부탁해 보세요.'), findsOneWidget);
+    expect(find.byTooltip('설정'), findsOneWidget);
+  });
 }

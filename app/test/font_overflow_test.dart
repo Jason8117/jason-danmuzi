@@ -70,7 +70,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    final manual = find.text('직접 입력하기');
+    // Probe a label that stays on Today after SPEC-ASSIST-001 REQ-010 (owner decision 2026-11-28).
+    final manual = find.text('전화 대신하기');
     await tester.scrollUntilVisible(manual, 200, scrollable: find.byType(Scrollable).first);
     expect(manual, findsOneWidget);
     expect(
