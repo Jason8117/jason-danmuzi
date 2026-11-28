@@ -127,7 +127,7 @@ void main() {
       call('g', '피자집', '+82311116666', '20', status: 'in_progress'),
     ]);
 
-    expect(find.text('최근 통화한 곳'), findsOneWidget);
+    expect(find.text('최근 장소'), findsOneWidget);
     final suggestions = find.textContaining('번 통화');
     expect(suggestions, findsNWidgets(3));
     final first = find.text('라파스타 · 02-123-4567 · 2번 통화');
@@ -154,7 +154,7 @@ void main() {
     await pumpHome(tester, []);
 
     expect(find.text('식당 예약'), findsOneWidget);
-    expect(find.text('최근 통화한 곳'), findsNothing);
+    expect(find.text('최근 장소'), findsNothing);
 
     await tapAndSettle(tester, find.text('식당 예약'));
 

@@ -4,6 +4,9 @@ import type { CallBrain } from "./brain/types.js";
 import type { AppConfig } from "./config.js";
 import { EventBus } from "./events/eventBus.js";
 import type { Logger } from "./logger.js";
+import { KakaoLocalPlaceSearch } from "./places/kakaoLocalPlaceSearch.js";
+import { createPlaceSearch, type PlaceSearch } from "./places/placeSearch.js";
+import { SimulatedPlaceSearch } from "./places/simulatedPlaceSearch.js";
 import { KatCallProvider } from "./providers/kat/katProvider.js";
 import { SimulatedCallProvider } from "./providers/simulatedProvider.js";
 import type { CallProvider, ProviderRoutes } from "./providers/types.js";
@@ -17,6 +20,8 @@ export interface Container {
   providerRoutes?: ProviderRoutes;
   /** True when the active provider dials real phones. */
   realCalls: boolean;
+  /** Place search, or undefined when it is switched off (real calls without a Kakao key, OD-2). */
+  places?: PlaceSearch;
 }
 
 /** Wires concrete implementations from configuration. The only place that knows which ones exist. */
@@ -61,5 +66,16 @@ export function createContainer(config: AppConfig, store: TaskStore, log: Logger
     maxCallDurationMs: config.MAX_CALL_DURATION_SEC * 1000,
   });
 
-  return { calls, bus, providerRoutes: provider.routes?.(), realCalls };
+  // Judged on the assembled provider, not CALL_PROVIDER: "auto" without full KAT settings is simulated.
+  // A real-call server without a key gets no place search, so practice numbers are never dialed for real.
+  let places: PlaceSearch | undefined;
+  if (config.KAKAO_REST_API_KEY) {
+    places = createPlaceSearch(
+      new KakaoLocalPlaceSearch({ apiKey: config.KAKAO_REST_API_KEY, baseUrl: config.KAKAO_LOCAL_BASE_URL, logger: log }),
+    );
+  } else if (config.provider === "simulated") {
+    places = createPlaceSearch(new SimulatedPlaceSearch());
+  }
+
+  return { calls, bus, providerRoutes: provider.routes?.(), realCalls, places };
 }

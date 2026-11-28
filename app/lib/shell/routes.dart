@@ -15,6 +15,9 @@ abstract final class RouteNames {
   static const assistantSettings = 'assistant-settings';
   static const assistantNew = 'assistant-new';
 
+  /// SPEC-PLACE-001 REQ-009: place selection (SCR-H02) over the assistant.
+  static const assistantPlaces = 'assistant-places';
+
   /// SPEC-ASSIST-001 REQ-011: the live call screen, outside the tab shell.
   static const liveCall = 'live-call';
 }

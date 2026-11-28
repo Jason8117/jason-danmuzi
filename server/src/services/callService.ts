@@ -13,6 +13,7 @@ import {
   stripPhoneNumbers,
 } from "../domain/intake.js";
 import { checkTargetNumber } from "../domain/phone.js";
+import { cleanPlaceQuery, placeQueryFor } from "../domain/placeQuery.js";
 import { assertTransition } from "../domain/stateMachine.js";
 import {
   type ApprovalDecision,
@@ -298,6 +299,9 @@ export class CallService {
     if (!phoneNumber) missing.push("phoneNumber");
     if (!goal) missing.push("goal");
 
+    // SPEC-PLACE-001 REQ-023: the brain's term, cleaned, or the deterministic rule shared with the app's fallback.
+    const placeQuery = cleanPlaceQuery(content.placeQuery) || placeQueryFor(masked, targetName || null);
+
     return {
       draft: {
         targetName: targetName || null,
@@ -311,6 +315,7 @@ export class CallService {
       phoneSource,
       numberIssue: fromText.numberIssue,
       source: content.source,
+      placeQuery,
     };
   }
 

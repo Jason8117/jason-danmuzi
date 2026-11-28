@@ -221,4 +221,49 @@ void main() {
     expect(manifest, contains('android.speech.RecognitionService'));
     expect(manifest, isNot(contains('BLUETOOTH')));
   });
+
+  // SPEC-PLACE-001 AC-017 / REQ-017 (OD-8): the location package sits behind the places feature's port,
+  // and the places feature asks for location through it, not through permission_handler.
+  test('the location package stays inside the places feature', () {
+    final found = <String>[
+      for (final file in [
+        ...dartFiles('lib'),
+        ...dartFiles('../packages/kolbi_ui/lib'),
+        ...dartFiles('../packages/kolbi_core/lib'),
+      ])
+        for (final uri in directiveUris(file))
+          if (uri.startsWith('package:geolocator')) file,
+    ];
+    expect(
+      found,
+      isNotEmpty,
+      reason: 'the location adapter imports the package',
+    );
+    expect(
+      found.where((f) => !f.startsWith('lib/features/places/location/')),
+      isEmpty,
+    );
+    final placesPermission = <String>[
+      for (final file in dartFiles('lib/features/places'))
+        for (final uri in directiveUris(file))
+          if (uri.startsWith('package:permission_handler/')) file,
+    ];
+    expect(placesPermission, isEmpty);
+  });
+
+  // SPEC-PLACE-001 AC-018 / REQ-018: coarse, foreground location only.
+  test('platform files declare coarse location only', () {
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    final key = RegExp(
+      r'<key>NSLocationWhenInUseUsageDescription</key>\s*<string>([^<]*)</string>',
+    ).firstMatch(plist);
+    expect(key, isNotNull);
+    expect(key!.group(1), contains('콜비는 위치를 저장하지 않아요'));
+    expect(plist, isNot(contains('NSLocationAlways')));
+    final manifest = File('android/app/src/main/AndroidManifest.xml')
+        .readAsStringSync();
+    expect(manifest, contains('android.permission.ACCESS_COARSE_LOCATION'));
+    expect(manifest, isNot(contains('ACCESS_FINE_LOCATION')));
+    expect(manifest, isNot(contains('ACCESS_BACKGROUND_LOCATION')));
+  });
 }

@@ -66,7 +66,9 @@ The input is JSON with "language" and "request". Return JSON with exactly these 
 targetName (string or null: who to call, written exactly as in the request; null when the request does not name them),
 goal (string: what the call must achieve, including times, counts and limits, but without the items you put in conditions),
 conditions (0-5 strings: constraints or alternatives the user stated, e.g. "8시도 괜찮음"),
-context (string or null: only information the user said may be shared with the callee).
+context (string or null: only information the user said may be shared with the callee),
+placeQuery (string or null: what to type into a map search to find the place to call — only the place name or category,
+e.g. "치과", "강남역 파스타집"; never dates, times, head counts, request verbs or "근처"/"주변"; null when the request names no place).
 Never invent names, numbers, dates or details. "[전화번호]" marks a removed phone number: never copy it and never write any phone number.
 Write in the requested language.`;
 

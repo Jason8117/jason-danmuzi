@@ -11,7 +11,7 @@ import 'support/shell_support.dart';
 Finder inToday(Finder finder) =>
     find.descendant(of: find.byKey(todayScreen), matching: finder);
 
-/// The mixed set plus a finished, connected call, so "최근 통화한 곳" has an entry.
+/// The mixed set plus a finished, connected call, so "최근 장소" has an entry.
 List<CallTask> withRecentPlace() => [
   ...mixedTasks(),
   shellTask(
@@ -41,7 +41,7 @@ void main() {
       find.text('전화 대신하기'),
       find.text('확인이 필요해요'),
       find.text('진행 중'),
-      find.text('최근 통화한 곳'),
+      find.text('최근 장소'),
     ];
     final tops = [
       for (final f in order) tester.getTopLeft(inToday(f).first).dy,

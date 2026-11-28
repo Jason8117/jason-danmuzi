@@ -8,7 +8,10 @@ enum PhoneSource {
   history('지난번 통화한 번호'),
 
   /// "다시 걸기": the number of the task being redialed. App-side only; the server never sends it (SPEC-FOLLOWUP-001).
-  previousCall('지난번과 같은 번호');
+  previousCall('지난번과 같은 번호'),
+
+  /// Chosen on place selection. App-side only; the server never sends it (SPEC-PLACE-001 REQ-019).
+  search('검색 결과');
 
   const PhoneSource(this.label);
   final String label;
@@ -67,7 +70,7 @@ class PlanDraft {
 /// A parsed `POST /v1/intake` response. Parsing never throws on unknown or malformed values.
 @immutable
 class IntakeResult {
-  const IntakeResult({required this.draft, this.missing = const []});
+  const IntakeResult({required this.draft, this.missing = const [], this.placeQuery});
 
   factory IntakeResult.fromJson(Map<String, dynamic> json) {
     final draft = json['draft'] is Map ? (json['draft'] as Map).cast<String, dynamic>() : const <String, dynamic>{};
@@ -84,11 +87,15 @@ class IntakeResult {
         source: json['source'] == 'llm' ? IntakeSource.llm : IntakeSource.heuristic,
       ),
       missing: _strings(json['missing']),
+      placeQuery: _string(json['placeQuery']),
     );
   }
 
   final PlanDraft draft;
   final List<String> missing;
+
+  /// The server's place search term (SPEC-PLACE-001 REQ-023); null from older servers. Never stored.
+  final String? placeQuery;
 }
 
 /// REQ-021: the goal sent to the server, with the conditions appended as `\n조건: a / b`.

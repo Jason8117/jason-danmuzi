@@ -54,3 +54,78 @@ describe("module boundaries (SPEC-ARCH-001)", () => {
     expect(existsSync(new URL("./brain/scenario.ts", import.meta.url))).toBe(false);
   });
 });
+
+/** Non-test source files under places/, as paths relative to src/. */
+function placesFiles(): string[] {
+  return readdirSync(new URL("./places/", import.meta.url), { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .map((file) => `places/${file.split(sep).join("/")}`);
+}
+
+/** Module specifiers a file imports or re-exports. */
+function importedModules(text: string): string[] {
+  return [...text.matchAll(/(?:^|\n)\s*(?:import|export)\b[^;]*?\bfrom\s+"([^"]+)"|(?:^|\n)\s*import\s+"([^"]+)"/g)].map(
+    (match) => match[1] ?? match[2] ?? "",
+  );
+}
+
+describe("place search boundaries (SPEC-PLACE-001)", () => {
+  // AC-008 / REQ-008, REQ-004 (design.md D2 rules 1 and 2)
+  it("places module stays stateless and out of store, brain and services", () => {
+    const files = placesFiles();
+    expect(files).toContain("places/kakaoLocalPlaceSearch.ts");
+    expect(files).toContain("places/placeSearch.ts");
+
+    const allowed = (specifier: string) =>
+      specifier.startsWith("./") || specifier.startsWith("../domain/") || specifier === "../logger.js" || specifier === "zod";
+    const badImports = files.flatMap((file) =>
+      importedModules(source(file))
+        .filter((specifier) => !allowed(specifier))
+        .map((specifier) => `${file}: ${specifier}`),
+    );
+    expect(badImports).toEqual([]);
+
+    const forbidden = files.flatMap((file) =>
+      linesContaining(source(file), [
+        'from "../store/',
+        'from "../brain/',
+        'from "../services/',
+        '"node:fs',
+        '"fs"',
+        "new Map(",
+        "new Set(",
+        "WeakMap",
+        "localStorage",
+      ]).map((line) => `${file}:${line}`),
+    );
+    expect(forbidden).toEqual([]);
+
+    // No module-level mutable state (a cache would need one).
+    const moduleLets = files.flatMap((file) =>
+      source(file)
+        .split("\n")
+        .map((line, index) => `${file}:${index + 1}: ${line}`)
+        .filter((line) => /^[^:]+:\d+: (export )?(let|var) /.test(line)),
+    );
+    expect(moduleLets).toEqual([]);
+  });
+
+  // AC-008 / REQ-008 (design.md D2 rule 3)
+  it("http layer does not know concrete place providers", () => {
+    expect(
+      linesContaining(source("http/app.ts"), ["kakaoLocal", "KakaoLocalPlaceSearch", "simulatedPlaceSearch", "SimulatedPlaceSearch", "dapi.kakao.com"]),
+    ).toEqual([]);
+  });
+
+  // AC-008 / REQ-008 (design.md D2 rule 4)
+  it("no any for place provider data", () => {
+    const anyPattern = /Record<string, any>|:\s*any\b|as any\b/;
+    const offending = placesFiles().flatMap((file) =>
+      source(file)
+        .split("\n")
+        .map((line, index) => `${file}:${index + 1}: ${line.trim()}`)
+        .filter((line) => anyPattern.test(line)),
+    );
+    expect(offending).toEqual([]);
+  });
+});

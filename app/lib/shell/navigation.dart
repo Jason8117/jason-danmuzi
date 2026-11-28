@@ -62,6 +62,10 @@ void closeAssistant(GoRouter router) {
 void openAssistantPlan(GoRouter router, PlanDraft draft) =>
     router.pushNamed(RouteNames.assistantPlan, extra: draft);
 
+/// Place selection over the assistant (SPEC-PLACE-001 REQ-009); back returns to the assistant with its input.
+void openAssistantPlaces(GoRouter router, PlaceSearchStart start) =>
+    router.pushNamed(RouteNames.assistantPlaces, extra: start);
+
 /// Settings over the assistant (the request needs the requester's name).
 void openAssistantSettings(GoRouter router) =>
     router.pushNamed(RouteNames.assistantSettings);

@@ -11,6 +11,7 @@ import '../features/calls/presentation/plan_card_screen.dart';
 import '../features/history/history_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/me/me_screen.dart';
+import '../features/places/place_search_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'kind_registration.dart';
 import 'routes.dart';
@@ -125,6 +126,15 @@ final routerProvider = Provider<GoRouter>((ref) {
                 state.extra is PlanDraft ? null : '/assistant',
             builder: (context, state) =>
                 PlanCardScreen(draft: state.extra! as PlanDraft),
+          ),
+          // SPEC-PLACE-001 REQ-009: place selection; the plan card it opens is pushed over it.
+          GoRoute(
+            path: 'places',
+            name: RouteNames.assistantPlaces,
+            redirect: (context, state) =>
+                state.extra is PlaceSearchStart ? null : '/assistant',
+            builder: (context, state) =>
+                PlaceSearchScreen(start: state.extra! as PlaceSearchStart),
           ),
           GoRoute(
             path: 'settings',

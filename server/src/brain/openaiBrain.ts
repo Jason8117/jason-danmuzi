@@ -88,6 +88,8 @@ const IntakeSchema = z.object({
     .max(1000)
     .nullish()
     .transform((value) => value ?? null),
+  // Lenient on purpose: a bad search term must not send the whole intake to the heuristic (SPEC-PLACE-001 D10).
+  placeQuery: z.string().max(100).optional().catch(undefined),
 });
 
 /** Planning and summarizing budget per LLM call. */
@@ -148,7 +150,9 @@ export class OpenAiBrain implements CallBrain {
       op: "intake",
       timeoutMs: this.intakeTimeoutMs,
     });
-    return draft ? { ...draft, source: "llm" } : this.fallback.draftIntake(maskedText, language);
+    if (!draft) return this.fallback.draftIntake(maskedText, language);
+    const { placeQuery, ...rest } = draft;
+    return { ...rest, ...(placeQuery !== undefined && { placeQuery }), source: "llm" };
   }
 
   async createPlan(input: CallTaskInput): Promise<CallPlan> {

@@ -10,7 +10,8 @@
 |---|---|---|
 | `types.ts` | `Language`, `TaskStatus`, `Speaker`, `TranscriptEntry`, `CallPlan`, `ApprovalStatus`, `ApprovalDecisionReason`, `ApprovalDecision`, `ApprovalRequest`, `OutcomeResult`, `CallOutcome`, `CallTaskInput`, `CallTask`, `ACTIVE_CALL_STATUSES`, `TERMINAL_STATUSES`, `isActiveCall`, `isTerminal` | `services`, `brain`, `providers`, `store`, `events` |
 | `stateMachine.ts` | `canTransition`, `assertTransition`, `InvalidTransitionError` | `services/callService.ts`(`assertTransition`), `http/app.ts`(`InvalidTransitionError`로 409 매핑) |
-| `phone.ts` | `normalizePhoneNumber`, `isBlockedNumber`, `checkTargetNumber`, `maskPhoneNumber` | `services/callService.ts`(정규화·차단 강제), `providers/kat/katProvider.ts`(로그 마스킹) |
+| `phone.ts` | `normalizePhoneNumber`, `isBlockedNumber`, `checkTargetNumber`, `maskPhoneNumber` | `services/callService.ts`(정규화·차단 강제), `providers/kat/katProvider.ts`(로그 마스킹), `places/placeSearch.ts`(후보 번호 판정, SPEC-PLACE-001) |
+| `placeQuery.ts` | `placeQueryFor(text, targetName)`(결정적 검색어 규칙, 없으면 `null`), `cleanPlaceQuery(value)`(번호 지움·`근처`/`주변` 빼기·30자) (SPEC-PLACE-001 0.2.0) | `services/callService.ts`(`draftIntake` 후처리와 대체) |
 | `scenario.ts` | `Scenario`, `detectScenario`, `SCENARIO_TEMPLATES` (SPEC-ARCH-001에서 `brain/`에서 이동) | `brain/heuristicBrain.ts`, `providers/simulatedProvider.ts` |
 | `approvalComment.ts` | `SENSITIVE_PLACEHOLDER`, `sanitizeApprovalComment` (SPEC-APPROVAL-001) | `services/callService.ts`, `brain/prompts.ts`(규칙 7 문구의 자리표시) |
 | `intake.ts` | `PHONE_PLACEHOLDER`, `maskPhoneNumbers`, `TextNumber`, `findPhoneNumberInText`, `normalizeName`, `stripPhoneNumbers`, `answeredHistory`, `findKnownName`, `findHistoryNumber` (SPEC-INTAKE-001) | `services/callService.ts`, `brain/heuristicBrain.ts`(`PHONE_PLACEHOLDER`) |
@@ -23,10 +24,10 @@
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
-| `types.ts` | `interface CallBrain { name; createPlan(input); summarize(task); draftIntake?(maskedText, language) }` — `draftIntake`는 선택(없으면 서비스가 결정적 규칙을 씀) | `services/callService.ts`, `container.ts` |
-| `openaiBrain.ts` | `class OpenAiBrain` (Chat Completions, `response_format: json_object`), `OpenAiBrainOptions`(`intakeTimeoutMs`), `LLM_TIMEOUT_MS`(30 s), `INTAKE_LLM_TIMEOUT_MS`(15 s), `SUMMARY_TIMEZONE`. LLM 호출이 실패하면 내부의 `HeuristicBrain`으로 대체한다(`completeJson`의 `fallback`). 요약 결과의 선택 필드 `appointment`는 확정된 일정만 남긴다(SPEC-FOLLOWUP-001) | `container.ts` |
+| `types.ts` | `interface CallBrain { name; createPlan(input); summarize(task); draftIntake?(maskedText, language) }` — `draftIntake`는 선택(없으면 서비스가 결정적 규칙을 씀). 접수 내용 `IntakeContent`의 선택 필드 `placeQuery`는 `domain/types.ts`에 있다(SPEC-PLACE-001 0.2.0) | `services/callService.ts`, `container.ts` |
+| `openaiBrain.ts` | `class OpenAiBrain` (Chat Completions, `response_format: json_object`), `OpenAiBrainOptions`(`intakeTimeoutMs`), `LLM_TIMEOUT_MS`(30 s), `INTAKE_LLM_TIMEOUT_MS`(15 s), `SUMMARY_TIMEZONE`. LLM 호출이 실패하면 내부의 `HeuristicBrain`으로 대체한다(`completeJson`의 `fallback`). 요약 결과의 선택 필드 `appointment`는 확정된 일정만 남긴다(SPEC-FOLLOWUP-001). 접수 스키마의 `placeQuery`는 `z.string().max(100).optional().catch(undefined)`로 관대하게 읽고 값이 있을 때만 결과에 넣는다(틀린 값이어도 휴리스틱으로 떨어지지 않음, SPEC-PLACE-001 0.2.0) | `container.ts` |
 | `heuristicBrain.ts` | `class HeuristicBrain`, `isFiller` | `container.ts`, `openaiBrain.ts` |
-| `prompts.ts` | `openingLine`, `buildAgentInstructions`(Hard rule 7: `user_comment` 따르기), `PLAN_SYSTEM_PROMPT`, `INTAKE_SYSTEM_PROMPT`, `SUMMARY_SYSTEM_PROMPT` | `heuristicBrain.ts`, `openaiBrain.ts`, `providers/realtimeBridge.ts` |
+| `prompts.ts` | `openingLine`, `buildAgentInstructions`(Hard rule 7: `user_comment` 따르기), `PLAN_SYSTEM_PROMPT`, `INTAKE_SYSTEM_PROMPT`(SPEC-PLACE-001부터 `placeQuery` 키: 장소 이름·분류만, 날짜·시각·요청 낱말·`근처` 빼기), `SUMMARY_SYSTEM_PROMPT` | `heuristicBrain.ts`, `openaiBrain.ts`, `providers/realtimeBridge.ts` |
 
 ### `providers/`
 
@@ -67,14 +68,27 @@
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
 | `app.ts` | `AppDeps`, `buildApp(deps)` | `index.ts`, `app.test.ts` |
-| `schemas.ts` | `CreateTaskBody`, `ApprovePlanBody`, `ApprovalDecisionBody`, `TaskParams`, `ApprovalParams` (zod) | `app.ts` |
+| `schemas.ts` | `CreateTaskBody`, `ApprovePlanBody`, `ApprovalDecisionBody`, `TaskParams`, `ApprovalParams`, `PlaceSearchBody` (zod) | `app.ts` |
+
+`AppDeps`에 SPEC-PLACE-001이 `places?: PlaceSearch | null`(없으면 `/v1/places/search`가 503)과 시험용 로그 스트림 옵션을 더했다. 스트림은 운영 serializer와 `info` 수준 위에 더하기만 한다.
+
+### `places/` (SPEC-PLACE-001)
+
+책임: 장소 후보 검색과 후보 번호 판정. 상태를 갖지 않고 결과를 저장·캐시·로그하지 않는다(에픽 D-8). `store`·`brain`·`services`를 가져오지 않으며 가져오는 것은 `domain/phone.ts`, `logger.ts`(타입), `zod`뿐이다(`architecture.test.ts` "places module stays stateless and out of store, brain and services").
+
+| 파일 | 공개 인터페이스 | 사용처 |
+|---|---|---|
+| `types.ts` | `PlaceQuery`(`keyword`, 반올림된 `near?`, `radiusM`, `limit`), `ProviderPlace`, `PlaceSearchProvider`(`name: "kakao" \| "simulated"`, `search(query, signal)`), `PhoneCheck`(`ok`·`invalid`·`blocked`·`missing`), `PlaceCandidate`, `PlaceSearchFailure`(`timeout`·`network`·`status`·`format`·`unexpected`), `PlaceSearchError(kind, status?)`(원인·메시지·응답 본문을 담지 않음) | `placeSearch.ts`, 두 제공자, `http/app.ts`(`PlaceSearchError` → 502) |
+| `placeSearch.ts` | `PlaceSearchRequest`, `PlaceSearchResult`(`source`, `places`), `PlaceSearch`(`source`, `search`), `createPlaceSearch(provider, {timeoutMs})` — 5곳·2,000m, 좌표 소수 셋째 자리 반올림, `AbortController`+`Promise.race` 시간 제한(기본 5초), 번호는 `checkTargetNumber`로 판정(결과를 자르지 않음, 상한은 제공자의 `limit`) | `container.ts`, `http/app.ts`(타입) |
+| `kakaoLocalPlaceSearch.ts` | `KakaoLocalOptions`(`apiKey`, `baseUrl?`, 주입 `fetch?`, `logger`), `KakaoLocalPlaceSearch` — 키워드 검색 요청, zod 응답 스키마, 상태 코드·형식 오류를 `PlaceSearchError` 종류로(401·403은 로그의 `status`로 구분) | `container.ts` |
+| `simulatedPlaceSearch.ts` | `SimulatedPlaceSearch` — 연습용 후보 5곳, 결정적, 네트워크 없음 | `container.ts` |
 
 ### 최상위 파일
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
-| `config.ts` | `AppConfig`(env 필드 + `provider`, `llm`), `loadConfig(env)` | `index.ts`, `container.ts`, `http/app.ts`(타입) |
-| `container.ts` | `Container { calls; bus; kat? }`, `createContainer(config, store, log)` | `index.ts` |
+| `config.ts` | `AppConfig`(env 필드 + `provider`, `llm`; SPEC-PLACE-001에서 `KAKAO_REST_API_KEY`·`KAKAO_LOCAL_BASE_URL`), `loadConfig(env)` | `index.ts`, `container.ts`, `http/app.ts`(타입) |
+| `container.ts` | `Container { calls; bus; providerRoutes?; realCalls; places? }`, `createContainer(config, store, log)` — 장소 제공자 선택(키 → 카카오, 키 없음 + 시뮬레이션 → 연습용, 키 없음 + 실제 통화 → 없음) | `index.ts` |
 | `logger.ts` | `Logger` 인터페이스, `logger` | `index.ts`, `container.ts` |
 | `index.ts` | 없음(진입점) | — |
 
@@ -94,7 +108,7 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 | `widgets/trust_notice.dart` (SPEC-SHELL-001에서 `features/calls/presentation/`에서 옮김) | `trustStatements`, `agentRulesNotice`, `liveCallTrustLine`, `ensureTrustAcknowledged`, `TrustStatementList` | `settings_screen.dart`, `features/calls/presentation/trust_notice.dart`(다시 내보내기) |
 | `theme/app_theme.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/theme/app_theme.dart`) | `AppTheme`(씨앗 색 `#635BFF`, `fontFamily` Pretendard, 카드 1px 선), `CardTone`(neutral·attention·positive·caution·critical; `caution`은 neutral과 같은 무채색 값), `ToneColors`, 상태 색 | `app.dart`, 여러 화면·위젯 |
 | `theme/tokens.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/theme/tokens.dart`) | `AppSpace`(4~32), `AppRadius`(12·16·20·pill), `AppMotion`(150·250·400 ms, `pulse` 1100 ms), `kMinTapTarget`(48), `motionDuration`, `scrollToOffset`, `relativeLuminance`, `contrastRatio`. 06 §3 색 상수 `AppColors`도 이 파일에 있으나 배럴로 내보내지 않는 패키지 내부용이다(SPEC-DESIGN-001) | `app_theme.dart`, `common.dart`, `features/calls/presentation/**`, `settings_screen.dart` |
-| `utils/formatters.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/format/formatters.dart`) | `formatPhone`, `formatDuration`, `formatRelative`, `formatClock` | `home_screen`, `new_call_screen`, `call_detail_screen` |
+| `utils/formatters.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/format/formatters.dart`) | `formatPhone`(SPEC-PLACE-001부터 `+1` 뒤 7자리이고 첫 숫자가 5·6·8이면 `1588-0000`처럼 대표번호로 보임 — `formatPhone`을 쓰는 모든 화면에 적용), `formatDuration`, `formatRelative`, `formatClock` | `home_screen`, `new_call_screen`, `call_detail_screen` |
 | `widgets/common.dart` (다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/common.dart`) | `ResponsiveBody`, `AppCard`(공용 카드: 머리 줄·본문·행동 줄·`tone`), `SectionCard`, `BulletList`, `MessageView`(공용 빈 상태), `PulsingDot`, `runWithFeedback`, `describeError` | 화면과 위젯 전반 |
 
 ### `features/calls/`
@@ -104,7 +118,7 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 | domain | `call_models.dart` (다시 내보내기 → `packages/kolbi_core/lib/src/models/call_models.dart`; 같은 방식으로 `intake_models`·`counterparties` → `src/models/`, `follow_up` → `src/follow_up.dart`, `approval_comment` → `src/approval_comment.dart` + kolbi_ui `src/input/code_point_formatter.dart`) | `CallLanguage`, `TaskStatus`, `Speaker`, `ApprovalStatus`, `OutcomeResult`, `TranscriptEntry`, `CallPlan`, `ApprovalRequest`, `CallOutcome`, `CallTask`(SPEC-SHELL-001에서 `kind`(`String?`, 없거나 문자열이 아니면 `null` = `call`) 추가), `NewCallRequest`, `ServerInfo` | 거의 모든 calls 파일, `settings_screen.dart`, `app_router.dart` |
 | data | `calls_repository.dart` (공급자는 앱에 남고, 클래스·이벤트는 `packages/kolbi_core/lib/src/data/calls_repository.dart`에서 다시 내보냄) | `CallsEvent`(`TasksSnapshot`, `TaskUpdated`, `TaskDeleted`), `CallsRepository`(`serverInfo`, `list`, `create`, `approvePlan`, `cancel`, `decide`, `delete`, `openLiveChannel`, `parseEvent`) — kolbi_core; `apiClientProvider`, `callsRepositoryProvider`, `serverInfoProvider` — 앱 | `calls_controller.dart`, `home_screen.dart` |
 | application | `calls_controller.dart` | `LiveStatusController`, `liveStatusProvider`, `CallsController`, `callsControllerProvider`, `sortedTasksProvider`, `taskProvider`(family), `PendingApproval`, `pendingApprovalsProvider` | 화면, `approval_listener.dart`, `approval_card.dart` |
-| presentation | `home_screen.dart`(오늘 탭: 날짜·인사·브리핑·바로가기·최근 통화한 곳·확인이 필요해요·진행 중; SPEC-ASSIST-001부터 부탁 입력 상자와 첫 사용 빈 상태가 없고, 바로가기·최근 통화한 곳은 `openAssistant`로 비서를 엶), `live_call_screen.dart`(`LiveCallScreen(taskId)`: SCR-T08 몰입형 다크, 상태·통화 시간, 실시간 자막(`TranscriptView`), [통화 끊기], 대기 승인이면 `ApprovalCard`; 통화가 요약 단계 이상이 되면 `closeLiveCall`로 한 번 닫힘, SPEC-ASSIST-001), `plan_card_screen.dart`(`PlanCardScreen`, [이대로 시작] 뒤 `openTask`), `new_call_screen.dart`, `call_detail_screen.dart`(맨 위 `KolbiStepTimeline`, 통화 중이면 앱 바 [통화 보기] `Key('open-live-call')` → `openLiveCall`), `trust_notice.dart`(다시 내보내기 → `core/widgets/trust_notice.dart`), `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`·`follow_up_actions`(`FollowUpService`, `DeviceFollowUpService`, `followUpServiceProvider`, `followUpClockProvider`, `FollowUpActions`)·`call_task_tile`(`CallTaskTile`, 옛 홈 `_TaskTile`, 칩 열은 화면 폭의 40 % 이하)·`call_timer`(`CallTimer(since:)`, 옛 상세 `_CallTimer`)는 앱에 남음; `outcome_card`·`status_chip`·`transcript_view`는 다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/`) | `app_router.dart`, `app.dart` |
+| presentation | `home_screen.dart`(오늘 탭: 날짜·인사·브리핑·바로가기·최근 장소(SPEC-PLACE-001에서 "최근 통화한 곳"을 바꿈)·확인이 필요해요·진행 중; SPEC-ASSIST-001부터 부탁 입력 상자와 첫 사용 빈 상태가 없고, 바로가기·최근 장소는 `openAssistant`로 비서를 엶), `live_call_screen.dart`(`LiveCallScreen(taskId)`: SCR-T08 몰입형 다크, 상태·통화 시간, 실시간 자막(`TranscriptView`), [통화 끊기], 대기 승인이면 `ApprovalCard`; 통화가 요약 단계 이상이 되면 `closeLiveCall`로 한 번 닫힘, SPEC-ASSIST-001), `plan_card_screen.dart`(`PlanCardScreen`, [이대로 시작] 뒤 `openTask`; SPEC-PLACE-001부터 번호 출처 "검색 결과"(`PhoneSource.search`)와, 통화 언어·내 이름을 한 줄 `Key('plan-defaults-row')`("통화 언어 · 내 이름")로 접되 두 글자를 각각 누를 수 있게 둠), `new_call_screen.dart`, `call_detail_screen.dart`(맨 위 `KolbiStepTimeline`, 통화 중이면 앱 바 [통화 보기] `Key('open-live-call')` → `openLiveCall`), `trust_notice.dart`(다시 내보내기 → `core/widgets/trust_notice.dart`), `call_templates.dart`(`CallTemplate`), `approval_listener.dart`(`ApprovalListener`, `scaffoldMessengerKey`), `widgets/`(`approval_card`·`follow_up_actions`(`FollowUpService`, `DeviceFollowUpService`, `followUpServiceProvider`, `followUpClockProvider`, `FollowUpActions`)·`call_task_tile`(`CallTaskTile`, 옛 홈 `_TaskTile`, 칩 열은 화면 폭의 40 % 이하)·`call_timer`(`CallTimer(since:)`, 옛 상세 `_CallTimer`)는 앱에 남음; `outcome_card`·`status_chip`·`transcript_view`는 다시 내보내기 → `packages/kolbi_ui/lib/src/widgets/`) | `app_router.dart`, `app.dart` |
 
 ### `features/settings/settings_screen.dart`
 
@@ -112,7 +126,7 @@ SPEC-MODULE-001 이후 아래 표에서 "다시 내보내기"로 표시한 파�
 
 ### `features/assistant/` (SPEC-ASSIST-001)
 
-AI 비서 화면(SCR-A01)과 받아쓰기. `features/calls`를 가져오지 않고 부탁 접수·템플릿·최근 통화한 곳은 `shell/request_intake.dart`, 이동은 `shell/navigation.dart`로 한다. 음성 인식 패키지 `speech_to_text`·`permission_handler`는 `speech/platform_speech_recognizer.dart` 한 파일만 가져온다(`architecture_test.dart` "speech and permission packages stay inside the assistant feature"). 앱은 음성 데이터를 다루지 않고, 서버로는 최종 문장만 `/v1/intake`로 보낸다.
+AI 비서 화면(SCR-A01)과 받아쓰기. `features/calls`를 가져오지 않고 부탁 접수·템플릿·최근 장소는 `shell/request_intake.dart`, 이동은 `shell/navigation.dart`로 한다. 음성 인식 패키지 `speech_to_text`·`permission_handler`는 `speech/platform_speech_recognizer.dart` 한 파일만 가져온다(`architecture_test.dart` "speech and permission packages stay inside the assistant feature"). 앱은 음성 데이터를 다루지 않고, 서버로는 최종 문장만 `/v1/intake`로 보낸다.
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
@@ -121,7 +135,23 @@ AI 비서 화면(SCR-A01)과 받아쓰기. `features/calls`를 가져오지 않�
 | `assistant_controller.dart` | `AssistantState`(단계·상태 칩 문구 "기다리고 있어요"/"듣고 있어요"/"처리하고 있어요"·문장·안내), `AssistantMemory`·`assistantMemoryProvider`(앱 실행 동안 기기 안 인식 대체·연속 실패 기억), `AssistantController`(듣기·멈춤·취소, 실패 규칙, OD-2 대체 한 번, Android 안내 단계 `speechServiceNotice`·`acceptSpeechServiceNotice`; 안내 필요 여부·확인 콜백은 화면이 주입) | `assistant_screen.dart` |
 | `assistant_screen.dart` | `AssistantScreen(textMode:, fill:)`(늘 `KolbiTheme.immersive()`; `KolbiOrb`, 상태 칩, 받아쓰기 문장, 조작 줄 [글로 입력]·[말하기 끝]·[그만하기], 상태 변화 `SemanticsService.sendAnnouncement`; 닫기 `Key('assistant-close')` → `closeAssistant`; Android 안내 본 여부는 SharedPreferences `androidSpeechServiceNoticeAcknowledged`) | `shell/app_router.dart` |
 | `mic_consent_sheet.dart` | `MicConsentSheet`(목적 안내, Android 첫 안내면 `withSpeechService`), `GeneralRecognizerNotice`(OD-2), `SpeechServiceNotice`(Android 음성 인식 서비스 안내, 소유자 결정 2026-11-28), `MicSettingsNotice`(다시 묻지 않음 → [설정 열기]), 문구 상수 `androidSpeechServiceNotice`·`androidSpeechServiceNoticeKey` | `assistant_screen.dart` |
-| `request_box.dart` | `RequestBox`(글로 입력 모드의 부탁 입력 상자: 입력칸 `Key('assistant-intake-field')`, 보내기 `Key('assistant-intake-send')`, [직접 입력하기], 최근 통화한 곳, 예시 템플릿 — 옛 오늘 `_IntakeBox`) | `assistant_screen.dart` |
+| `request_box.dart` | `RequestBox`(글로 입력 모드의 부탁 입력 상자: 입력칸 `Key('assistant-intake-field')`, 보내기 `Key('assistant-intake-send')`, [직접 입력하기], 최근 장소(SPEC-PLACE-001), 예시 템플릿 — 옛 오늘 `_IntakeBox`) | `assistant_screen.dart` |
+
+비서의 보내기(SPEC-PLACE-001): `requestIntake`의 결과로 `placeSearchStartFor(text, result)`가 값을 주면 `openAssistantPlaces`, 아니면 지금처럼 `openAssistantPlan`.
+
+### `features/places/` (SPEC-PLACE-001)
+
+장소 선택(SCR-H02)과 장소 상세(SCR-H03). `features/calls`·`features/assistant`를 가져오지 않고 저장소·위치는 `shell/place_search.dart`, 이동은 `shell/navigation.dart`로 한다. 위치 패키지 `geolocator`는 `location/platform_location_reader.dart` 한 파일만 가져온다(`architecture_test.dart` "the location package stays inside the places feature"). 결과와 좌표는 화면이 닫히면 사라지고 기기에 저장되지 않는다.
+
+| 파일 | 공개 인터페이스 | 사용처 |
+|---|---|---|
+| `place_search_screen.dart` | `PlaceSearchScreen(start)`(검색칸에 첫 검색어, 빈 검색어면 검색 없이 초점; 출처 줄 "장소 정보는 카카오 로컬 검색 결과예요"·"연습용 장소예요. 실제 가게가 아니에요"; 후보 목록; 늘 남는 [번호 직접 입력]; 로딩 "{검색어}을(를) 찾는 중이에요"+뼈대 카드 3개, 없음, 실패 [다시 시도], 503 "지금은 장소 찾기를 쓸 수 없어요", 걸 곳 없음 "전화할 수 있는 곳이 없어요"; 위치 거부면 동네 이름 칸, 다시 묻지 않음이면 [설정 열기]), `withObjectParticle(word)` | `shell/app_router.dart` |
+| `place_search_controller.dart` | `PlaceSearchState`(봉인: `PlaceIdle`·`PlaceNeedLocation`·`PlaceAskArea(foreverDenied)`·`PlaceLoading`·`PlaceResults(source, places)`·`PlaceFailed(unavailable)`), `PlaceSearchController`(화면이 소유하는 `ValueNotifier`, 세대 번호로 늦은 응답 무시, 위치는 10초 제한·검색 한 번에만, `draftFor`는 이름·번호·`PhoneSource.search`만 바꾼 초안) | `place_search_screen.dart` |
+| `place_card.dart` | `PlaceCard`(CMP-05: 읽기 단위 라벨, 상태 글자 "걸 수 있음"·"번호 없음"·"걸 수 없는 번호"와 [여기로 전화]를 막은 이유, 첫 걸 수 있는 후보만 인디고 테두리·`FilledButton`, 첫 후보에 거리가 있을 때만 "가장 가까워요"), `PlaceSkeletonCard`, `formatDistance`, `spokenDistance`, `placeStatus`, `placeBlockedReason`, `placeReadLabel` | `place_search_screen.dart` |
+| `place_detail_sheet.dart` | `PlaceDetailSheet`(SCR-H03·CMP-06: 제목에 자동 초점, [번호 복사], [여기에 물어보기]는 걸 수 있을 때만, 닫으면 [상세]로 초점 복귀) | `place_search_screen.dart` |
+| `location_consent_sheet.dart` | `LocationConsentSheet`(CMP-23: "근처 가게를 찾으려면 지금 위치가 필요해요. 가까운 가게를 찾는 데만 써요. 콜비는 위치를 저장하지 않아요." + [계속]) | `place_search_screen.dart` |
+| `location/location_reader.dart` | 포트 `LocationReader`(`access`, `request`, `readOnce(timeLimit:)`, `openSettings`), `LocationAccess`(`notDetermined`·`granted`·`denied`·`deniedForever`·`unavailable`) | 컨트롤러, `shell/place_search.dart` |
+| `location/platform_location_reader.dart` | `PlatformLocationReader`(geolocator 14.1.2 어댑터, `LocationAccuracy.low`, iOS·Android 밖이나 플러그인이 없으면 `unavailable`, `checkPermission`의 `denied`는 "아직 안 물음"으로 읽음) | `shell/place_search.dart` |
 
 ### `features/inbox`, `features/history`, `features/me` (SPEC-SHELL-001)
 
@@ -139,19 +169,20 @@ AI 비서 화면(SCR-A01)과 받아쓰기. `features/calls`를 가져오지 않�
 
 | 파일 | 공개 인터페이스 | 사용처 |
 |---|---|---|
-| `app_router.dart` | `routerProvider`(유일한 `GoRouter`: `StatefulShellRoute` 4갈래 + 셸 밖 `/assistant`(자식 `plan`·`settings`·`new`)·`/calls/:id/live`) | `core/router/app_router.dart`(다시 내보내기) |
-| `routes.dart` | `RouteNames`(today, new-call, plan, inbox, task, history, me, settings, assistant, assistant-plan, assistant-settings, assistant-new, live-call), `AppTab`(today `/`, tasks `/inbox`, history `/history`, me `/me`) | 셸, 기능 화면 |
-| `navigation.dart` | `registerTabShell`, `openTask(router, id)`(쌓인 화면을 최대 32번 닫고 `goNamed(inbox)` + `pushNamed(task)`), `openTab(router, tab)`(등록된 셸의 `goBranch`, 없으면 `go`), `openAssistant(router, text:, fill:)`, `closeAssistant`(첫 화면이면 오늘로), `openAssistantPlan`·`openAssistantSettings`·`openAssistantManual`(비서의 자식 경로), `openSettings`(비서 아래면 `/assistant/settings`, 아니면 `/settings`), `openLiveCall`·`closeLiveCall`(첫 화면이면 `openTask`), `taskLocation`, `liveCallLocation`. SHELL의 `submitFromAssistant`는 SPEC-ASSIST-001에서 지움 | 오늘·업무·기록, 계획 카드, 직접 입력, 승인 스낵바, 비서, 통화 상세·통화 중 화면 |
+| `app_router.dart` | `routerProvider`(유일한 `GoRouter`: `StatefulShellRoute` 4갈래 + 셸 밖 `/assistant`(자식 `plan`·`settings`·`new`·`places`)·`/calls/:id/live`) | `core/router/app_router.dart`(다시 내보내기) |
+| `routes.dart` | `RouteNames`(today, new-call, plan, inbox, task, history, me, settings, assistant, assistant-plan, assistant-settings, assistant-new, assistant-places, live-call), `AppTab`(today `/`, tasks `/inbox`, history `/history`, me `/me`) | 셸, 기능 화면 |
+| `navigation.dart` | `registerTabShell`, `openTask(router, id)`(쌓인 화면을 최대 32번 닫고 `goNamed(inbox)` + `pushNamed(task)`), `openTab(router, tab)`(등록된 셸의 `goBranch`, 없으면 `go`), `openAssistant(router, text:, fill:)`, `closeAssistant`(첫 화면이면 오늘로), `openAssistantPlan`·`openAssistantSettings`·`openAssistantManual`·`openAssistantPlaces(router, start)`(비서의 자식 경로, 장소 선택은 SPEC-PLACE-001), `openSettings`(비서 아래면 `/assistant/settings`, 아니면 `/settings`), `openLiveCall`·`closeLiveCall`(첫 화면이면 `openTask`), `taskLocation`, `liveCallLocation`. SHELL의 `submitFromAssistant`는 SPEC-ASSIST-001에서 지움 | 오늘·업무·기록, 계획 카드, 직접 입력, 승인 스낵바, 비서, 통화 상세·통화 중 화면 |
 | `tab_scaffold.dart` | `TabScaffold`(`Scaffold`가 아닌 `Material` + `Column`, 탭 화면에는 탭 바 위 높이의 `MediaQuery`), `BranchStack`(`IndexedStack` + 숨은 갈래 `HeroMode` 끔), `TabScrollScope`(탭 첫 화면 스크롤, 다시 누르면 맨 위로) | `app_router.dart`, 탭 첫 화면 |
 | `kind_registration.dart` | `taskKindCatalogProvider`(`call` 등록), `taskKindPresentersProvider`, `presenterForTask(ref, task)`, `CallKindPresenter`, `TaskDetailRoute` | 업무·기록·오늘, `app_router.dart` |
 | `task_feed.dart` | `taskListProvider`, `taskGroupsProvider`, `historyDaysProvider`, `reloadTasks`, `refreshTasks` | 오늘·업무·기록, 탭 바 배지 |
-| `request_intake.dart` | `requestTemplatesProvider`(예시 템플릿), `recentPlacesProvider`(최근 통화한 곳, 불러오는 중·실패면 `null`), `requestPlanDraft(ref, messenger, text)`(`/v1/intake`, 404면 빈 초안, 그 밖의 실패는 스낵바 뒤 `null`). 비서가 `features/calls`를 가져오지 않게 하려고 둔 파일(SPEC-ASSIST-001, plan §B 밖) | `features/assistant` |
+| `request_intake.dart` | `requestTemplatesProvider`(예시 템플릿), `recentPlacesProvider`(최근 장소, 불러오는 중·실패면 `null`), `requestIntake(ref, messenger, text)` → `IntakeResult?`(`/v1/intake`, 404면 빈 `missing`의 결과라 계획 카드로, 그 밖의 실패는 스낵바 뒤 `null`; SPEC-PLACE-001에서 `requestPlanDraft`를 바꿈). 비서가 `features/calls`를 가져오지 않게 하려고 둔 파일(SPEC-ASSIST-001, plan §B 밖) | `features/assistant` |
+| `place_search.dart` | `placesRepositoryProvider`(`kolbi_core` `PlacesRepository`), `locationReaderProvider`(기본 `PlatformLocationReader`, 시험은 가짜) (SPEC-PLACE-001) | `features/places` |
 
 ## 공용 패키지 (`packages/`, SPEC-MODULE-001)
 
 | 패키지 | 파일(`lib/src/`) | 배럴 |
 |---|---|---|
-| `kolbi_core`(순수 Dart) | `models/call_models.dart`, `models/intake_models.dart`, `models/counterparties.dart`, `follow_up.dart`, `approval_comment.dart`(상수·`codePointLength`·`truncateToCodePoints`·`withQuickReply`·`hasSensitiveDigits`), `network/api_client.dart`, `network/live_channel.dart`, `format/formatters.dart`, `format/korean_particle.dart`, `data/calls_repository.dart`(이벤트·`CallsRepository`), `kinds/task_kind.dart`, `kinds/call_kind.dart`, `tasks/task_groups.dart`, `tasks/task_steps.dart` | `lib/kolbi_core.dart` |
+| `kolbi_core`(순수 Dart) | `models/call_models.dart`, `models/intake_models.dart`, `models/counterparties.dart`, `follow_up.dart`, `approval_comment.dart`(상수·`codePointLength`·`truncateToCodePoints`·`withQuickReply`·`hasSensitiveDigits`), `network/api_client.dart`, `network/live_channel.dart`, `format/formatters.dart`, `format/korean_particle.dart`, `data/calls_repository.dart`(이벤트·`CallsRepository`), `models/place_models.dart`·`data/places_repository.dart`·`places/place_intent.dart`(SPEC-PLACE-001), `kinds/task_kind.dart`, `kinds/call_kind.dart`, `tasks/task_groups.dart`, `tasks/task_steps.dart` | `lib/kolbi_core.dart` |
 | `kolbi_ui`(Flutter) | `theme/tokens.dart`, `theme/app_theme.dart`, `theme/fonts.dart`(`registerKolbiFontLicenses`), `theme/immersive_theme.dart`(`KolbiTheme`), `widgets/orb.dart`(`KolbiOrb`, `KolbiOrbState`), `widgets/common.dart`, `widgets/status_chip.dart`(`StatusChip`, `StatusCategory`), `widgets/outcome_card.dart`, `widgets/transcript_view.dart`, `widgets/step_timeline.dart`, `widgets/briefing_card.dart`, `widgets/tab_badge.dart`, `kinds/task_kind_presenter.dart`, `input/code_point_formatter.dart`(`CodePointLengthLimitingFormatter`) | `lib/kolbi_ui.dart` |
 
 `kolbi_ui`의 SPEC-DESIGN-001 추가분:
@@ -191,8 +222,20 @@ SPEC-ASSIST-001 추가분:
 
 테스트(SPEC-ASSIST-001): kolbi_ui `test/orb_test.dart`; 앱 `assistant_test.dart`(받아쓰기 포트, 권한·실패·취소·글로 입력, Android 안내 2건, 접근성), `live_call_test.dart`, `test/support/fake_speech_recognizer.dart`, `architecture_test.dart`의 "speech and permission packages stay inside the assistant feature"·"platform files declare the microphone and speech permissions".
 
+SPEC-PLACE-001 추가분(`kolbi_core`):
+
+| 이름 | 위치 | 내용 |
+|---|---|---|
+| `Place`, `PlacePhoneCheck`, `PlaceSearchSource`, `PlaceSearchResult`, `PlaceSearchStart` | `models/place_models.dart` | `/v1/places/search` 응답 해석. 모르는 `phoneCheck`는 `invalid`, 모르는 `source`는 `unknown`(출처 줄 숨김), 예외 없음. `Place.callable`은 `ok`이고 번호가 있을 때만. `PlaceSearchStart`는 첫 검색어·`nearby`·초안 |
+| `PlacesRepository.search(query, {near})` | `data/places_repository.dart` | `POST /v1/places/search`. 결과를 저장하지 않음 |
+| `placeSearchStartFor(requestText, result)` | `places/place_intent.dart` | 번호가 없고 차단이 아니면 `PlaceSearchStart`, 아니면 `null`. 검색어는 접수 `placeQuery`(공백이 아니면, 30자)가 먼저이고, 없으면(옛 서버) 초안 이름 또는 문장의 대체 규칙. "근처" 여부는 늘 앱이 문장으로 정함. 예시 표는 서버 `domain/placeQuery.ts`와 같음 |
+| `IntakeResult.placeQuery` | `models/intake_models.dart` | 문자열이면 담고 없거나 다른 타입이면 `null`(0.2.0) |
+| `PhoneSource.search` | `models/intake_models.dart` | 앱 전용 출처 값, 표시 "검색 결과" |
+
+테스트(SPEC-PLACE-001): 서버 `places/placeSearch.test.ts`, `places/kakaoLocalPlaceSearch.test.ts`, `http/places.test.ts`(경로 계약, 401·400·502·503, 저장·캐시·로그 금지 증명, 접수 `placeQuery`), `domain/placeQuery.test.ts`(공유 예시 표 24줄), `brain/openaiBrain.test.ts` 끝의 `placeQuery` 시험, `architecture.test.ts` 끝의 규칙 셋; `kolbi_core` `test/places_test.dart`(같은 예시 표, JSON 해석, 저장소 요청, `formatPhone` 대표번호 표); 앱 `places_test.dart`, `test/support/fake_places_repository.dart`, `test/support/fake_location_reader.dart`, `architecture_test.dart`의 "the location package stays inside the places feature"·"platform files declare coarse location only".
+
 테스트(SPEC-DESIGN-001): `packages/kolbi_ui/test/`에 `theme_values_test.dart`(역할·분위기 짝·카드 선·글꼴 값), `tokens_contrast_test.dart`(대비 48쌍 + `#635BFF` 글자 금지), `status_chip_test.dart`(18칸 × 밝은·어두운)가 더해졌고, 앱에는 `app/test/design_contrast_test.dart`(디자인 화면 대비·기기 다크 모드), `app/test/font_overflow_test.dart`(실제 Pretendard로 360x640·글자 2배 넘침 검사)가 더해졌다.
 
 ---
 
-Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452). Updated by /moai sync on 2026-11-28 for SPEC-ASSIST-001 (state at 477dac5).
+Generated by /moai project on 2026-11-20; based on repository state at commit c95953f. Updated by /moai sync on 2026-11-27 for SPEC-UX-001 (state at c2e732d). Updated by /moai sync on 2026-11-27 for SPEC-MODULE-001 (state at 6cdf8af). Updated by /moai sync on 2026-11-27 for SPEC-APPROVAL/INTAKE/FOLLOWUP-001 (state at 8ad8239). Updated by /moai sync on 2026-11-27 for SPEC-DESIGN-001 (state at 5ee6eef). Updated by /moai sync on 2026-11-27 for SPEC-SHELL-001 (state at b67d452). Updated by /moai sync on 2026-11-28 for SPEC-ASSIST-001 (state at 477dac5). Updated by /moai sync on 2026-11-28 for SPEC-PLACE-001 (state at 2d84a91).

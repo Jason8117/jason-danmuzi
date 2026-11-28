@@ -16,7 +16,7 @@ import '../application/calls_controller.dart';
 import '../data/calls_repository.dart';
 
 /// SCR-H01. Requests start in the AI assistant (SPEC-ASSIST-001 REQ-010): today keeps the briefing, the
-/// shortcuts that open the assistant, the task lists and "최근 통화한 곳".
+/// shortcuts that open the assistant, the task lists and "최근 장소".
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -130,7 +130,7 @@ class _LiveIndicator extends ConsumerWidget {
   }
 }
 
-/// "최근 통화한 곳": recent counterparties; tapping one starts a request to it in the assistant (SPEC-INTAKE-001
+/// "최근 장소": recent counterparties; tapping one starts a request to it in the assistant (SPEC-INTAKE-001
 /// REQ-018, SPEC-ASSIST-001 REQ-010).
 class _RecentPlaces extends StatelessWidget {
   const _RecentPlaces({required this.suggestions, required this.onFill});
@@ -144,7 +144,7 @@ class _RecentPlaces extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader('최근 통화한 곳'),
+        const _SectionHeader('최근 장소'),
         for (final counterparty in suggestions)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.xs),
@@ -163,7 +163,7 @@ class _RecentPlaces extends StatelessWidget {
 }
 
 /// SCR-H01 in the order of SPEC-SHELL-001 REQ-015 without the request box (SPEC-ASSIST-001 REQ-010): date and
-/// greeting, briefing, the shortcuts, then 확인이 필요해요 and 진행 중 (first two each), then 최근 통화한 곳.
+/// greeting, briefing, the shortcuts, then 확인이 필요해요 and 진행 중 (first two each), then 최근 장소.
 /// Finished tasks live in the history tab.
 class _TaskList extends ConsumerWidget {
   const _TaskList({required this.tasks, required this.hasProfile, required this.recentPlaces});
