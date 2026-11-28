@@ -2,7 +2,7 @@
 id: SPEC-PLACE-001
 title: "장소 찾기 — 카카오 로컬 검색, 장소 선택·상세, 계획 카드 채우기"
 version: "0.2.1"
-status: implemented
+status: completed
 created: 2026-11-28
 updated: 2026-11-28
 author: jason

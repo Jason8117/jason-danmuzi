@@ -302,8 +302,8 @@ owner_checks_pending: ["M7 화면 재검토(근처 치과 내일 오전 → 치�
 
 ```yaml
 sync_complete_at: 2026-11-28
-sync_commit_sha: pending-backfill   # 이 sync 커밋은 자기 SHA를 적을 수 없음. `git log -1 --format=%h -- .moai/specs/SPEC-PLACE-001/progress.md`로 읽음
-sync_status: implemented   # sync 감사 통과 뒤 오케스트레이터가 completed로 올림(소유자 규칙)
+sync_commit_sha: d29fb4e   # 오케스트레이터가 감사 뒤 채움
+sync_status: completed   # sync 감사 1차 PASS-with-debt 88.2와 후속 수정 뒤 오케스트레이터가 올림(2026-11-28)
 run_start_sha: be92194   # be92194317e2bf3bd49234178ef3aa5d68daf589, 계획 커밋. 코드 기준선은 부모 74a87c3
 run_commit_sha: 2d84a91   # 마지막 구현 커밋(M7 동행 표현 수정). §E.3의 "25a08c7 뒤의 동행 표현 수정 커밋"이 이것. 이 sync 커밋 직전 HEAD
 milestone_commits: [d28343a (M1), fb8ffdb (M2), b9b4096 (M3), 2d6ec54 (M4), 2e3c688 (M5), bee5d2b (M6), 1ec833a (run 증거), 7b87dd2 (계획 개정 0.2.0), d05bb86 (M7), 06497a2 (M7 증거), 72e9d2e (M7 반 시간), 25a08c7 (M7 사람 조사·인용 어미), 2d84a91 (M7 동행 표현·관형형 동사)]
@@ -379,7 +379,9 @@ plan_g_items:
   server/.env.example: "run에서 이미 바뀜(B.1): 값 없는 KAKAO_REST_API_KEY=와 설명, 주석 처리한 KAKAO_LOCAL_BASE_URL"
   formatPhone_app_wide: "structure.md「어디를 고쳐야 하는가」번호 표시 행, modules.md formatters 행, 11_ARCHITECTURE SPEC-PLACE-001 구현 문단, README「장소 찾기」. CHANGELOG.md는 없음"
 project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/03_SERVICE_FEATURE_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
-sync_audit: pending
+sync_audit: "1차 PASS-with-debt, 조화 평균 88.2 (Functionality 90, Security 90, Craft 85, Consistency 88). 보고서 .moai/reports/sync-audit/SPEC-PLACE-001-audit-1.md"
+sync_audit_followup: "S1·S2·I2·I3·I5 수정 54d1162. 오케스트레이터가 54d1162에서 다시 확인: 서버 npm test 449 통과, app flutter test +165 통과, analyze 기존 info 1건, kolbi_core +33 통과"
+sync_audit_open: ["I1 위치 어댑터 커버리지 57.7%(플러그인 경로)", "I4 400 응답의 no-store 시험 없음", "소유자 확인: 실제 카카오 키와 콘솔 로컬 API 설정, 첫 iOS 배포 빌드 strings 0, Android 재요청 동작, 실기기 위치 권한 창, OD-3 법무 해석, 실제 LLM placeQuery 품질"]
 ```
 
 ### sync 감사 1차 후속 수정 (2026-11-28)
