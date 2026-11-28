@@ -1,4 +1,4 @@
-# SPEC-PLACE-001 설계 (0.1.1)
+# SPEC-PLACE-001 설계 (0.2.0)
 
 spec.md의 요구사항이 가리키는 계약·표·규칙을 모은다. 근거는 `research.md`(카카오 공식 문서 R1, 약관 답변 R2, 코드 조사 R3·R4), `docs/product/11_ARCHITECTURE.md` §4.2·§4.3, `docs/planning/04_DESIGN_PLAN.md` §7.2·§7.3·§17.1·§17.8.
 
@@ -160,7 +160,9 @@ H02 ─[번호 직접 입력]→ /assistant/plan (접수 초안 그대로)
 - 접수 결과 판단에는 `missing`이 필요하므로 `requestPlanDraft`(`request_intake.dart:28-46`)를 `IntakeResult?`를 돌려주는 `requestIntake`로 바꾼다. 404 대체는 `IntakeResult(draft: PlanDraft.blank(text))`(빈 `missing`)라서 계획 카드로 간다. 가짜 저장소의 기본 응답도 `missing`이 비어 있어(`fakes.dart:118`) 기존 비서·접수 테스트는 계획 카드로 간다.
 - 고른 후보로 만든 초안: `PlanDraft`에 `copyWith`를 더하지 않고 생성자로 새로 만든다 — 접수 초안의 `goal`·`conditions`·`context`·`language`·`source`는 그대로, `targetName`·`phoneNumber`·`phoneSource: PhoneSource.search`만 바꾸고 `numberBlocked`는 `false`.
 
-## D6. 첫 검색어와 "근처" (REQ-010)
+## D6. 첫 검색어와 "근처" (REQ-010, REQ-023)
+
+0.2.0 개정(소유자 결정 2026-11-28, OD-7): 첫 검색어는 서버 접수가 주는 `placeQuery`(D10)가 먼저다. 아래 문장 규칙은 두 곳에서 같은 규칙·같은 예시로 쓴다 — 서버(`server/src/domain/placeQuery.ts`, LLM이 `placeQuery`를 주지 않을 때)와 앱 대체 규칙(`kolbi_core`, 응답에 `placeQuery`가 없는 옛 서버). 날짜·시각·인원은 검색어에서만 빠지고 부탁 문장(계획 카드 "부탁할 일")에는 그대로 남는다.
 
 `kolbi_core` `src/places/place_intent.dart`:
 
@@ -169,24 +171,36 @@ PlaceSearchStart? placeSearchStartFor(String requestText, IntakeResult result);
 ```
 
 - `result.missing`에 `phoneNumber`가 없거나 `result.draft.numberBlocked`이면 `null`.
-- `nearby`: 문장을 공백으로 나눈 낱말 가운데 `근처`·`주변`이 맨 앞이거나 바로 앞 낱말이 `내`·`여기`·`이`이면, 또는 `가까운`으로 시작하는 낱말이 있으면 `true`. "강남역 근처"처럼 앞에 장소 이름이 있으면 `false`.
-- `keyword`: 초안 `targetName`이 있으면 그 값에서 `근처`·`주변` 낱말을 뺀 것. 없으면 문장 규칙:
+- `keyword`: `result.placeQuery`가 있고 공백을 뺀 뒤 비지 않으면 그 값(30자에서 자름). 없거나 비면 대체 규칙: 초안 `targetName`이 있으면 그 값에서 `근처`·`주변` 낱말을 뺀 것, 없으면 아래 문장 규칙.
+- `nearby`(늘 앱이 정함, 서버는 보내지 않음): 문장을 공백으로 나눈 낱말 가운데 `근처`·`주변`의 바로 앞 낱말들이 시간 낱말(아래 2)뿐이거나 없으면(맨 앞), 또는 그 앞 낱말이 `내`·`여기`·`이`이면, 또는 `가까운`으로 시작하는 낱말이 있으면 `true`. "강남역 근처"처럼 앞에 장소 이름이 있으면 `false`.
+
+문장 규칙:
+
   1. 쉼표 앞까지만 본다.
-  2. 낱말을 앞에서부터 읽으며 날짜·시각·인원 낱말(`오늘`·`내일`·`모레`·`이번`·`다음`, `…요일`, 숫자+`시`·`분`·`명`)과 `근처`·`주변`·`가까운…`·`내`·`여기`는 건너뛴다.
-  3. 요청 낱말(`예약…`·`문의…`·`확인…`·`물어봐…`·`알아봐…`·`전화…`·`찾아…`·`부탁…`·`해`·`해줘`·`해주세요`·`중에`·`있는`·`몇`·`…까지`·`…하는지`·`…있는지`)이나 `줘`·`주세요`로 끝나는 낱말을 만나면 멈춘다.
+  2. 낱말을 앞에서부터 읽으며 시간·인원 낱말과 `근처`·`주변`·`가까운…`·`내`·`여기`는 건너뛴다. 시간 낱말은 끝의 조사 하나(`에서`·`에게`·`에는`·`에`·`엔`·`은`·`는`·`까지`·`부터`)를 뗀 값이 `오늘`·`내일`·`모레`·`이번`·`다음`·`오전`·`오후`·`아침`·`점심`·`저녁`·`밤`·`새벽`·`주말`·`평일`·`이따`·`이따가`·`지금`·`주`·`이번주`·`다음주` 가운데 하나이거나 `…요일`로 끝나는 낱말, 그리고 숫자로 시작해 `시`·`분`·`명`·`일`·`월`·`주`가 붙은 낱말(`7시`, `3시반에`, `24일`, `12월`, `2명`)이다.
+  3. 요청 낱말(`예약…`·`문의…`·`확인…`·`물어봐…`·`알아봐…`·`전화…`·`찾아…`·`부탁…`·`해`·`해줘`·`해주세요`·`중에`·`있는`·`몇`·`…까지`·`…하는지`·`…있는지`)이나 `줘`·`주세요`로 끝나는 낱말을 만나면 멈춘다(2의 시간 낱말 판단이 먼저다: `내일까지`는 건너뜀).
   4. `에서`·`에게`·`에`로 끝나는 낱말은 조사를 떼고 담은 뒤 거기서 멈춘다("꽃집에" → "꽃집", 다음 낱말은 보지 않음).
   5. 담은 낱말 끝의 조사 `의`·`을`·`를`을 떼고 공백 하나로 잇는다. 30자를 넘으면 30자에서 자른다. 비면 빈 문자열.
+  6. 서버만: 번호를 가린 자리(`[전화번호]`)가 든 낱말은 건너뛴다(앱은 번호가 없을 때만 장소 선택을 열어 해당 없음).
 
-| 문장(초안 이름 없음, 번호 없음) | keyword | nearby |
+공유 예시 표(서버 `server/src/domain/placeQuery.test.ts`와 `packages/kolbi_core/test/places_test.dart`가 같은 열을 고정 기대값으로 씀, `nearby` 열은 앱만):
+
+| 문장(초안 이름 없음, 번호 없음) | 검색어(`placeQuery` / 대체 `keyword`) | nearby |
 |---|---|---|
 | 강남역 근처 파스타집, 금요일 7시 2명 예약해 줘 | `강남역 파스타집` | false |
 | 근처 약국 오늘 몇 시까지 하는지 물어봐 줘 | `약국` | true |
 | 내일 치과 예약 바꿔 줘 | `치과` | false |
 | 내 주변 세탁소 문의해 줘 | `세탁소` | true |
 | 가까운 꽃집에 장미 있는지 알아봐 줘 | `꽃집` | true |
-| 해 줘 | (빈 값) | false |
+| 해 줘 | (빈 값 → 서버 `null`) | false |
+| 근처 치과 내일 오전 예약해 줘 | `치과` | true |
+| 근처 미용실 토요일 오후 3시반에 예약해 줘 | `미용실` | true |
+| 다음 주 수요일 저녁에 근처 고깃집 4명 예약해 줘 | `고깃집` | true |
+| 지금 근처 약국 몇 시까지 하는지 물어봐 줘 | `약국` | true |
+| 12월 24일 저녁 강남역 이탈리안 레스토랑 예약해 줘 | `강남역 이탈리안 레스토랑` | false |
+| 주말 아침에 동네 빵집 몇 시에 여는지 물어봐 줘 | `동네 빵집` | false |
 
-여섯 줄 모두 고정 기대값이다. 초안 이름이 있는 경우: 이름 `라 파스타`, 문장 "라 파스타에 금요일 예약해 줘" → (`라 파스타`, false). 규칙이 놓친 검색어는 사용자가 검색칸에서 고친다.
+열두 줄 모두 고정 기대값이다(앞 여섯 줄은 0.1.x 그대로). 초안 이름이 있는 경우: 이름 `라 파스타`, 문장 "라 파스타에 금요일 예약해 줘" → (`라 파스타`, false). 접수가 `placeQuery` `치과`를 준 경우: 문장 "근처 치과 내일 오전 예약해 줘", 대체 규칙이 무엇을 내든 `keyword`는 `치과`, `nearby`는 `true`. 규칙이 놓친 검색어는 사용자가 검색칸에서 고친다.
 
 ## D7. 화면 문구와 상태 (REQ-011~REQ-016)
 
@@ -254,3 +268,35 @@ abstract interface class LocationReader {
 | `+821012345678` | `010-1234-5678`(그대로) |
 
 계획 카드의 번호 줄(`plan_card_screen.dart:194`)은 `formatPhone`을 쓰므로 고칠 곳이 없다. 만들기 요청의 `phoneNumber`는 E.164 `+15880000` 그대로다.
+
+## D10. 접수 응답의 `placeQuery` (REQ-023, REQ-024, 0.2.0)
+
+응답 모양(`POST /v1/intake`, 최상위에 키 하나 더함, 나머지는 SPEC-INTAKE-001 그대로):
+
+```json
+{ "draft": { … }, "missing": ["targetName", "phoneNumber"], "phoneSource": null, "numberIssue": null,
+  "source": "llm", "placeQuery": "치과" }
+```
+
+| 단계 | 규칙 |
+|---|---|
+| 두뇌 내용 | `IntakeContent`에 선택 필드 `placeQuery?: string`. 휴리스틱 두뇌는 채우지 않는다(기존 `heuristicBrain.test.ts` 그대로). |
+| LLM 프롬프트 | `INTAKE_SYSTEM_PROMPT`에 키 하나: `placeQuery (string or null: what to type into a map search to find the place to call — only the place name or category, e.g. "치과", "강남역 파스타집"; never dates, times, head counts, request verbs or "근처"/"주변"; null when the request names no place)` |
+| LLM 스키마 | `placeQuery`는 관대하게 읽는다: 문자열이면 그대로(100자 상한 넘으면 버림), 없음·`null`·다른 타입이면 없는 것으로 친다. 이 필드 때문에 접수 전체가 휴리스틱으로 떨어지지 않는다. 값이 없으면 결과 객체에 키를 넣지 않는다(기존 `openaiBrain.test.ts`의 `toEqual` 그대로). |
+| 서비스 후처리(`CallService.draftIntake`) | 두뇌 값에 `stripPhoneNumbers`, `근처`·`주변` 낱말 빼기, 공백 정리, 30자(유니코드 코드 포인트) 자르기. 결과가 비면 결정적 규칙 `placeQueryFor(maskedText, targetName)`(D6 문장 규칙, `targetName`은 서비스가 최종으로 정한 이름 — 이름이 있으면 이름에서 `근처`·`주변`을 뺀 것). 그래도 비면 `null`. |
+| 앱(`IntakeResult.fromJson`) | `placeQuery`가 문자열이면 담고, 없거나 다른 타입이면 `null`(옛 서버). `placeSearchStartFor`가 D6대로 쓴다. 저장하지 않는다. |
+
+개인정보(REQ-024): `placeQuery`는 접수 응답 본문에만 있다. 작업을 만들지 않으므로 저장소·이벤트에 닿지 않고, 접수 경로의 로그는 요청 URL(`app.ts`의 `req` serializer)과 LLM 실패의 종류·상태(`openaiBrain.ts` `completeJson`)뿐이라 검색어가 들어갈 자리가 없다. 시험 `server/src/http/places.test.ts` — "intake placeQuery never reaches storage, events or logs"가 Fastify 로그 스트림과 두뇌 로거를 붙잡고, 표식 장소 이름이 응답에는 있고 붙잡은 출력·저장소·이벤트에는 없음을 확인한다(LLM 성공·LLM 실패 대체 두 경로). 서버 소스에서 로그 호출(`log.`·`.log.`·`logger.`) 인자에 `placeQuery`가 없음도 grep으로 확인한다.
+
+## D11. iOS `BYPASS_PERMISSION_LOCATION_ALWAYS` (소유자 결정 2026-11-28)
+
+geolocator_apple 2.4.3은 SwiftPM `Package.swift`에서 `ProcessInfo.processInfo.environment["BYPASS_PERMISSION_LOCATION_ALWAYS"]`를 읽어 `cSettings`의 `.define("BYPASS_PERMISSION_LOCATION_ALWAYS", to: "0" | "1")`로 넣는다. 곧 이 값은 Xcode 빌드 설정이 아니라 **패키지 매니페스트를 평가하는 프로세스의 환경 변수**로만 정해진다. 계획 단계에서 실행해 확인함(시뮬레이터 debug 빌드, `strings -a Runner.debug.dylib | grep -c requestAlwaysAuthorization`, 두 아키텍처라 1곳당 2):
+
+| 시도 | 결과 |
+|---|---|
+| 환경 변수 없이(기준) | 2 — 선택자 남음 |
+| `BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ios …`, 증분 빌드 | 2 — 매니페스트·객체 캐시 때문에 다시 컴파일되지 않음(`geolocator_apple.o` 시각 그대로) |
+| 같은 환경 변수, 이 작업 폴더의 DerivedData와 `app/build/ios`를 지운 깨끗한 빌드 | **0** — 선택자 없음 |
+| `ios/Flutter/Debug.xcconfig`에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`과 `GCC_PREPROCESSOR_DEFINITIONS=$(inherited) BYPASS_PERMISSION_LOCATION_ALWAYS=1`, 환경 변수 없음, 깨끗한 빌드 | 2 — 빌드 설정은 패키지 대상에 닿지 않음(시험 뒤 원래대로 되돌림) |
+
+결론: SwiftPM 방식의 이 iOS 프로젝트에서는 빌드 설정(xcconfig·`project.pbxproj`)으로 믿을 만하게 넣을 수 없다. 그래서 **설정 파일을 바꾸지 않고 배포 빌드 절차로 문서화**한다: 배포 빌드는 깨끗한 상태에서 환경 변수를 주고 만든다 — `cd app && flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa`(Xcode에서 Archive할 때도 같은 환경 변수로 Xcode를 띄우고 패키지 캐시를 지운 뒤). 확인은 만든 바이너리에 `strings -a … | grep -c requestAlwaysAuthorization`이 0인지 본다. 자동화(빌드 스크립트·CI 단계)는 배포 파이프라인을 정하는 이후 작업으로 남긴다.

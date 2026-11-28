@@ -1,4 +1,4 @@
-# SPEC-PLACE-001 구현 계획 (0.1.2 — plan-audit 2차 PASS 뒤 정리)
+# SPEC-PLACE-001 구현 계획 (0.2.0 — 소유자 화면 검토 뒤 개정)
 
 검토 순서 안내: 바뀔 가능성이 큰 결정(서버 계약과 저장 금지 증명, 키가 없을 때의 동작, 비서에서 장소 선택으로 가는 조건, 위치 권한 흐름)을 앞에, 화면 문구·권한 선언·기존 테스트 문구 수정 같은 기계적 작업을 뒤에 둔다. 계약과 표는 `design.md`, 근거와 줄 번호는 `research.md`다.
 
@@ -41,6 +41,13 @@
 - `PhoneSource.search('검색 결과')`를 더한다(서버는 보내지 않음, `previousCall`과 같은 앱 전용 값).
 - 언어·내 이름 두 행을 한 줄로 접되 두 글자는 각각 따로 누르게 둔다(OD-10). `plan_card_test.dart:117`, `shell_test.dart:289`가 그대로 통과해야 한다.
 - 묶음 제목 두 곳만 바꾼다(`home_screen.dart:147`, `request_box.dart:93`).
+
+### A.6 접수가 장소 검색어를 준다 (0.2.0, REQ-010·REQ-023·REQ-024)
+
+- 화면 검토(2026-11-28)에서 "근처 치과 내일 오전 예약해 줘" → 검색어 "치과 오전"이 나왔다. 소유자 결정: 서버 AI가 검색어도 뽑는다(OD-7 개정). 날짜·시각은 부탁 문장에 남고 검색어에서만 빠진다.
+- 서버: `IntakeContent.placeQuery?`(선택), LLM 프롬프트·관대한 스키마, 서비스 후처리(번호 지움·`근처` 빼기·30자)와 결정적 대체 규칙(`domain/placeQuery.ts`). 휴리스틱 두뇌 자체는 바꾸지 않고 서비스가 규칙을 적용한다 — 휴리스틱 두뇌·LLM 실패 대체·`draftIntake` 없는 두뇌가 모두 같은 규칙을 지나고, 기존 두뇌 시험의 `toEqual`이 그대로 통과한다.
+- 앱: `IntakeResult.placeQuery`, `placeSearchStartFor`가 `placeQuery`를 먼저 쓰고 없으면 대체 규칙(같은 시간 낱말, "근처" 판단은 시간 낱말 뒤의 `근처`도 인정). 비서 화면은 이미 `placeSearchStartFor(text, result)`를 부르므로 코드 변경이 없다.
+- 시험 먼저(RED): 서버 `domain/placeQuery.test.ts`(공유 예시 표), `places.test.ts`의 접수 블록(경로·후처리·로그 금지), `openaiBrain.test.ts` 끝에 더한 프롬프트·스키마 시험, `app.test.ts:699` 키 목록; 앱 `kolbi_core/test/places_test.dart` 예시 표 확장과 `placeQuery` 우선, `app/test/places_test.dart`의 비서 → 검색어 시험.
 
 ## B. 변경 파일 (74a87c3 기준으로 확인)
 
@@ -108,9 +115,30 @@
 
 합계: 서버 14(새 7, 수정 7), `kolbi_core` 7(새 4, 수정 3), 앱 28(새 11, 수정 16, 잠금 파일 1) — 49개 파일, 그리고 도구가 갱신하는 iOS SwiftPM 산출 파일(최대 3개). 새 로직은 서버 모듈·증명 시험·장소 화면 셋·컨트롤러·위치 포트이고, 나머지는 연결·선언·문구 한 줄이다.
 
-### B.4 손대지 않는 것
+### B.4 0.2.0 개정에서 더하는 변경 (M7)
 
-`server/src/services/**`, `brain/**`, `providers/**`, `store/**`, `domain/**`(가져다 쓰기만), `/v1/intake`·`/v1/config`·WebSocket, `app/lib/features/assistant/speech/**`, `kolbi_ui`, 다른 SPEC 디렉터리, `.moai/harness/*`·`.moai/state/*`, `server/.env`(읽지도 않음).
+| 파일 | 변경 | 이유 |
+|------|------|------|
+| `server/src/domain/types.ts` | 수정(더하기) | `IntakeContent.placeQuery?: string`, `IntakeResult.placeQuery: string \| null`(REQ-023) |
+| `server/src/domain/placeQuery.ts` | 새 파일 | 결정적 규칙 `placeQueryFor(text, targetName)`, `cleanPlaceQuery`(D6·D10) |
+| `server/src/domain/placeQuery.test.ts` | 새 파일 | 공유 예시 표(D6), 후처리 |
+| `server/src/brain/prompts.ts` | 수정 | `INTAKE_SYSTEM_PROMPT`에 `placeQuery` 키(D10) |
+| `server/src/brain/openaiBrain.ts` | 수정 | `IntakeSchema`에 관대한 `placeQuery`, 값이 있을 때만 결과에 넣음 |
+| `server/src/brain/openaiBrain.test.ts` | 수정(파일 끝 더하기만) | 프롬프트·스키마 시험 |
+| `server/src/services/callService.ts` | 수정 | `draftIntake` 후처리와 대체 규칙(D10) |
+| `server/src/http/places.test.ts` | 수정(이 SPEC의 새 파일, 블록 더함) | 접수 경로의 `placeQuery`와 로그·저장 금지(AC-023, AC-024) |
+| `server/src/http/app.test.ts` | 수정(한 줄) | `:699` 응답 키 목록에 `placeQuery`(AC-022 표) |
+| `packages/kolbi_core/lib/src/models/intake_models.dart` | 수정(더하기) | `IntakeResult.placeQuery` |
+| `packages/kolbi_core/lib/src/places/place_intent.dart` | 수정 | `placeQuery` 우선, 시간 낱말, "근처" 판단(D6) |
+| `packages/kolbi_core/test/places_test.dart` | 수정(이 SPEC의 새 파일) | 예시 표 12줄, `placeQuery` 우선·JSON 해석 |
+| `app/test/places_test.dart` | 수정(이 SPEC의 새 파일, 시험 더함) | 비서가 접수 `placeQuery`로 검색 |
+| iOS 배포 빌드 절차 | 문서만(`design.md` D11) | `BYPASS_PERMISSION_LOCATION_ALWAYS=1`은 SwiftPM 매니페스트 환경 변수로만 먹고 빌드 설정으로는 닿지 않음을 실행으로 확인 — 설정 파일 변경 없음. sync에서 README·`tech.md`의 배포 절차에 옮김 |
+
+합계(0.2.0): 서버 9(새 2, 수정 7), `kolbi_core` 3, 앱 1 — 13개 파일. 앱 `lib`는 바뀌지 않는다(`assistant_screen.dart`는 이미 `placeSearchStartFor(text, result)`를 씀).
+
+### B.5 손대지 않는 것
+
+`server/src/providers/**`, `store/**`, `services/**`·`brain/**`·`domain/**`의 B.4 밖 파일, `brain/heuristicBrain.ts`(규칙은 서비스가 적용), `/v1/intake`의 요청과 `placeQuery` 밖 응답, `/v1/config`·WebSocket, `app/lib/features/assistant/speech/**`, `kolbi_ui`, 다른 SPEC 디렉터리, `.moai/harness/*`·`.moai/state/*`, `server/.env`(읽지도 않음).
 
 ## C. 마일스톤 (우선순위 순, 하나씩 순서대로)
 
@@ -138,6 +166,10 @@
 
 접힌 줄, "최근 장소"와 이름 적은 시험 수정, 접근성 지침, 전체 회귀와 범위 확인. AC-019~AC-022.
 
+### M7 — 접수의 장소 검색어 (0.2.0, Priority High)
+
+RED 먼저(서버 규칙 표·경로·두뇌, 앱 예시 표·`placeQuery` 우선·비서 시험, 원문 `.moai/state/verify/SPEC-PLACE-001/red/amend_*.txt`) → 서버 타입·규칙·프롬프트·스키마·서비스 → `kolbi_core` 모델·규칙. iOS `BYPASS_PERMISSION_LOCATION_ALWAYS`는 D11대로 문서. AC-010, AC-022, AC-023, AC-024.
+
 ## D. 위험 요소
 
 | 위험 | 대응 |
@@ -155,13 +187,17 @@
 | 기능 간 import 금지와 위치 안내 시트 중복 | 시트 하나 분량의 중복을 받아들임. 공용화는 `kolbi_ui`로 옮길 때(이후 SPEC) |
 | ROUTINE-001과 오늘 화면 파일 겹침(12 R-5) | PLACE 다음에 ROUTINE run(에픽 순서 그대로) |
 | 시험 환경에 위치·플러그인 없음 | 포트 뒤에 두고 `unavailable`로 처리, 가짜만 씀 |
+| LLM이 `placeQuery`에 시간·요청 낱말을 넣거나 엉뚱한 값을 줌(0.2.0) | 프롬프트로 금지, 서비스가 번호·`근처`를 지우고 30자로 자름, 사용자는 검색칸에서 고침. 비거나 문자열이 아니면 결정적 규칙 |
+| 서버 규칙과 앱 대체 규칙이 어긋남(0.2.0) | 두 언어 구현이 `design.md` D6의 같은 예시 표를 고정 기대값으로 시험. 표를 바꿀 때는 두 시험을 함께 고침 |
+| `placeQuery`가 로그·저장소로 샘(0.2.0) | 접수는 작업을 만들지 않고, 로그는 URL과 실패 종류뿐. AC-024 시험과 로그 호출 grep |
+| 배포 빌드에 `requestAlwaysAuthorization`이 남아 ITMS-90683 경고(0.2.0) | 빌드 설정으로는 막을 수 없음을 확인(D11). 배포 절차를 깨끗한 빌드 + 환경 변수로 문서화하고 `strings` 확인을 완료 정의에 둠. 자동화는 배포 파이프라인 작업에서 |
 
 ## E. 하네스·복잡도 지표
 
 | 지표 | 값 |
 |---|---|
 | Tier | L — 서버 새 모듈과 외부 어댑터, 새 경로, 앱 새 기능(화면 둘·시트 둘·포트), 새 앱 의존, 49개 파일(+ 도구 갱신 iOS 산출 파일), 1,000줄 이상 예상. 에픽 표의 예상(M)보다 크다 |
-| REQ / AC | 22 / 22 (Tier L 상한 25) |
+| REQ / AC | 24 / 24 (Tier L 상한 25, 0.2.0에서 REQ-023·REQ-024 / AC-023·AC-024 더함) |
 | 산출물 | spec.md, plan.md, acceptance.md, design.md, research.md, progress.md |
 | 권장 하네스 | standard(외부 API와 개인정보 경계가 있어 thorough도 고려) |
 | 방법론 | TDD(서버 증명 시험·어댑터·순수 함수·컨트롤러는 시험 먼저) |
@@ -169,9 +205,12 @@
 
 ## F. 자체 검증
 
-run 완료 보고는 다음을 원문 출력과 함께 담는다: AC별 PASS/FAIL 표와 명령, `npm --prefix server test` 마지막 줄들, `npm --prefix server run typecheck`, `cd app && flutter --suppress-analytics test` 마지막 줄, `cd packages/kolbi_core && dart test`, `flutter analyze`, `dart analyze`, `git diff --stat <run_start_sha> -- server/src/services server/src/brain server/src/providers server/src/store server/src/domain`(비어 있음), `git diff <run_start_sha> -- app/test/`(AC-022 표의 줄과 더하기만), M5의 패키지 확인 기록, 도구가 갱신한 iOS SwiftPM 파일 diff, 권한 선언 diff, 서식을 적용한 파일 목록.
+run 완료 보고는 다음을 원문 출력과 함께 담는다: AC별 PASS/FAIL 표와 명령, `npm --prefix server test` 마지막 줄들, `npm --prefix server run typecheck`, `cd app && flutter --suppress-analytics test` 마지막 줄, `cd packages/kolbi_core && dart test`, `flutter analyze`, `dart analyze`, `git diff --stat <run_start_sha> -- server/src/services server/src/brain server/src/providers server/src/store server/src/domain`(0.1.x 범위에서는 비어 있음, 0.2.0 M7 뒤에는 §B.4 표의 파일만), `git diff <run_start_sha> -- app/test/`(AC-022 표의 줄과 더하기만), M5의 패키지 확인 기록, M7 뒤 `grep`으로 서버 로그 호출에 `placeQuery`가 없음, 도구가 갱신한 iOS SwiftPM 파일 diff, 권한 선언 diff, 서식을 적용한 파일 목록.
 
 ## G. sync-phase 문서 항목
+
+- (0.2.0) `/v1/intake` 응답의 `placeQuery`: SPEC-INTAKE-001 계약을 설명하는 문서(`.moai/project/structure.md`의 API 설명, `docs/product/11_ARCHITECTURE.md`의 접수 절)에 한 줄. 앱은 옛 서버에서도 동작(대체 규칙).
+- (0.2.0) iOS 배포 절차(`design.md` D11): README 또는 `.moai/project/tech.md`의 배포 절에 `flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa`와 `strings` 확인.
 
 - `.moai/project/structure.md`: 서버 `places/` 행, `http/app.ts`의 `POST /v1/places/search`, 앱 `features/places`, 경로 `/assistant/places`, `kolbi_core`의 장소 모델·`PlacesRepository`.
 - `.moai/project/tech.md`: 앱 의존 `geolocator`(버전·라이선스), 서버 환경 변수 `KAKAO_REST_API_KEY`·`KAKAO_LOCAL_BASE_URL`, 키가 없을 때의 동작.

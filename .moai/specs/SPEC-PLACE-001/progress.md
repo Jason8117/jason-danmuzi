@@ -6,12 +6,12 @@
 - plan_status_final: plan-audit 2/3차 PASS 0.91 (보고서 `.moai/reports/plan-audit/SPEC-PLACE-001-review-2.md`). 감사 2차 지적 N1~N4는 0.1.2에서 반영
 - kickoff: 소유자 Implementation Kickoff Approval 2026-11-28
 - plan_complete_at: 2026-11-28
-- spec_version: 0.1.2 (계획 감사 2차 PASS 0.91 뒤 N1~N4 정리)
-- spec_version_history: 0.1.0 → 0.1.1(계획 감사 1차 FAIL 0.84 반영, 보고서 `.moai/reports/plan-audit/SPEC-PLACE-001-review-1.md`) → 0.1.2
+- spec_version: 0.2.0 (소유자 화면 검토 뒤 개정 2026-11-28 — `/v1/intake`의 `placeQuery`, 아래 "소유자 화면 검토 후 개정" 절). 이전: 0.1.2 (계획 감사 2차 PASS 0.91 뒤 N1~N4 정리)
+- spec_version_history: 0.1.0 → 0.1.1(계획 감사 1차 FAIL 0.84 반영, 보고서 `.moai/reports/plan-audit/SPEC-PLACE-001-review-1.md`) → 0.1.2 → 0.2.0(소유자 화면 검토 뒤 OD-7 개정)
 - base_sha: 74a87c3 (SPEC-ASSIST-001 병합 직후 `main`. 계획 문서는 아직 커밋 전. run_start_sha는 run에서 기록)
 - tier: L (서버 새 모듈·외부 어댑터·새 경로 + 앱 새 기능·새 의존, 49개 파일(+ 도구가 갱신하는 iOS SwiftPM 산출 파일 최대 3개), 1,000줄 이상 예상. 에픽 개요 §2 표의 예상 M보다 큼 — 에픽 표는 sync에서 갱신하는 관례라 계획 단계에서는 고치지 않음), harness: standard (권장, 외부 API·개인정보 경계로 thorough도 고려), methodology: tdd, mode: serial
 - artifacts: spec.md, plan.md, acceptance.md, design.md, research.md, progress.md
-- counts: 22 REQ / 22 AC (Tier L 상한 25 / 25)
+- counts: 24 REQ / 24 AC (Tier L 상한 25 / 25; 0.1.x는 22 / 22, 0.2.0에서 REQ-023·REQ-024 / AC-023·AC-024 더함)
 - depends_on: SPEC-ASSIST-001 (`completed` 0.3.1, 2026-11-28 — 에픽 개요 §2 표)
 - open_decisions: OD-1~OD-10 모두 **DECIDED**. OD-2·OD-3·OD-6·OD-7은 소유자 결정 2026-11-28(권장 기본값 그대로, OD-2 판정 기준은 조립된 `config.provider` = `realCalls` false이며 `CALL_PROVIDER` 환경 변수 값이 아님, OD-3은 법무 해석을 계속 확인, OD-6은 사람 이름이 카카오 검색어로 나가는 위험을 소유자가 받아들임). OD-1·OD-4·OD-5·OD-8·OD-9·OD-10은 소유자 결정 2026-11-28(Kickoff 승인 때 기본값으로 확정, OD-8의 버전·SwiftPM 확인은 M5 첫 작업)
 - intended test changes: `acceptance.md` AC-022 표(문구 "최근 통화한 곳" → "최근 장소" 7줄, 두 `architecture` 시험 파일은 더하기만). `server/src/http/app.test.ts`와 `plan_card_test.dart`·`shell_test.dart`는 바꾸지 않음
@@ -212,6 +212,31 @@ cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesi
 2. iOS 배포 빌드에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 줄지(App Store ITMS-90683 경고 회피, M5 참조).
 3. 완료 정의의 실제 키 확인 1건(카카오 콘솔의 로컬 API 사용 설정, "강남역 파스타" → 후보 → 계획 카드, 서버 로그에 결과 없음).
 4. Android에서 한 번 거부한 뒤 다시 "근처" 부탁을 하면 사전 안내가 다시 보인다(`checkPermission`의 `denied`를 "아직 안 물음"으로 읽기 때문). OS 창이 다시 뜰지는 OS가 정한다.
+
+### 소유자 화면 검토 후 개정 (2026-11-28)
+
+#### 계기와 결정
+
+- 소유자 화면 검토(2026-11-28): "근처 치과 내일 오전 예약해 줘"의 첫 검색어가 "치과 오전"으로 나옴. 앱 규칙(`place_intent.dart`, D6)이 `오늘`·`내일`·`N시`는 건너뛰지만 `오전`은 건너뛰지 않았다.
+- 소유자에게 날짜·시각은 부탁 문장(계획 카드 "부탁할 일")에 남고 검색어에서만 빠진다고 설명한 뒤, 소유자가 "서버 AI가 검색어도 뽑기"를 골랐다. OD-7(0.1.x: `/v1/intake` 불변, 앱 규칙만)을 뒤집음. 옛 선택지 설명대로 서버 응답 모양과 기존 시험 하나(`app.test.ts:699` 응답 키 고정)가 바뀐다.
+- 소유자 결정: geolocator의 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 iOS 빌드 설정에 지금 넣기(배포 빌드에서 `requestAlwaysAuthorization` 제거 → ITMS-90683 경고 없음). SwiftPM 방식에서 믿을 만하게 안 되면 문서화로 대신하고 그렇게 알림.
+
+#### 계획 개정 (0.1.2 → 0.2.0, manager-spec)
+
+- spec.md: HISTORY 0.2.0, REQ-010·REQ-022 개정, REQ-023(접수 응답 `placeQuery`)·REQ-024(응답 밖으로 내보내지 않음) 신설, §2 범위, OD-7 개정, 추적 표. 22 / 22 → 24 / 24.
+- design.md: D6(공유 예시 표 12줄 — "근처 치과 내일 오전 예약해 줘 → 치과, nearby true"와 0.1.x의 파스타 예시 포함, 시간 낱말, "근처" 판단), D10(`placeQuery` 계약·후처리·개인정보), D11(iOS 설정 확인 결과와 문서화 결론).
+- plan.md: §A.6, §B.4(M7 변경 파일 13개), §B.5, M7, 위험 4행, §E 수, §F, §G.
+- acceptance.md: AC-010 개정, AC-022 표에 `app.test.ts:699`(한 줄)와 `openaiBrain.test.ts` 끝 더하기, AC-023·AC-024, 완료 정의 2행.
+
+#### iOS `BYPASS_PERMISSION_LOCATION_ALWAYS` 확인 (계획 개정 전에 실행, 2026-11-28)
+
+- `geolocator_apple-2.4.3/darwin/geolocator_apple/Package.swift`: `ProcessInfo.processInfo.environment["BYPASS_PERMISSION_LOCATION_ALWAYS"] == "1"`를 `cSettings`의 `.define`으로 넣음. `PermissionHandler.m:79-86`: iOS에서 `#if !BYPASS_PERMISSION_LOCATION_ALWAYS` 안의 `requestAlwaysAuthorization`(macOS 갈래의 `:75`는 iOS에 없음).
+- 측정: `strings -a build/ios/iphonesimulator/Runner.app/Runner.debug.dylib | grep -c requestAlwaysAuthorization`(arm64·x86_64 두 조각이라 남으면 2).
+  - 기준(환경 변수 없음, 기존 빌드): `2`.
+  - `BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ios --simulator --debug`(증분): `✓ Built`, `2` — `geolocator_apple.o` 시각이 19:48 그대로(다시 컴파일 안 됨).
+  - 이 작업 폴더의 DerivedData(`Runner-ayqpeadwacpjlwehdddmglhtjxaj`, `WorkspacePath`가 `wt-place-001/app/ios/Runner.xcworkspace`임을 확인)와 `app/build/ios`를 지우고 같은 환경 변수로 빌드: `✓ Built`, dylib `0`, `geolocator_apple.o` `0`.
+  - `ios/Flutter/Debug.xcconfig`에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`과 `GCC_PREPROCESSOR_DEFINITIONS=$(inherited) BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 임시로 더하고 환경 변수 없이 깨끗한 빌드: `✓ Built`, dylib `2` — 빌드 설정은 SwiftPM 패키지 대상에 닿지 않음. 시험 뒤 xcconfig를 원래대로 되돌림(`git status` 깨끗).
+- 결론: SwiftPM 방식의 이 프로젝트에서는 빌드 설정으로 믿을 만하게 넣을 수 없다 → **설정 파일은 바꾸지 않고 문서화**(`design.md` D11): 배포 빌드는 `cd app && flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa`, 바이너리 `strings` 확인 0. 원문 `.moai/state/verify/SPEC-PLACE-001/final/ios_bypass_*.txt`.
 
 ## §E.3 Run-phase Audit-Ready Signal
 

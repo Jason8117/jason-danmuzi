@@ -1,14 +1,14 @@
 ---
 id: SPEC-PLACE-001
 title: "장소 찾기 — 카카오 로컬 검색, 장소 선택·상세, 계획 카드 채우기"
-version: "0.1.2"
+version: "0.2.0"
 status: in-progress
 created: 2026-11-28
 updated: 2026-11-28
 author: jason
 priority: High
 phase: "v0.5.0 target"
-module: "server/src/places, server/src/http, app/lib/features/places, app/lib/shell, packages/kolbi_core"
+module: "server/src/places, server/src/http, server/src/domain, server/src/brain, server/src/services, app/lib/features/places, app/lib/shell, packages/kolbi_core"
 lifecycle: spec-anchored
 tags: "places, kakao-local, place-search, location-permission, plan-card, no-storage, privacy, flutter, fastify"
 tier: L
@@ -25,6 +25,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 | 0.1.0 | 2026-11-28 | jason (manager-spec) | 최초 작성(draft). 에픽 EPIC-KOLBI-APP의 다섯째 SPEC. 에픽 개요 §4.1 요약, 03 F-PLACE-01~03·F-REQ-07·F-CALL-01, 04 SCR-H02·H03·CMP-05·06·23, 06 DR-4, 설계서 §4.2·§4.3을 전체 문서로 씀. 카카오 로컬 키워드 검색의 요청·응답 필드는 공식 문서로 확인함(`research.md` R1) |
 | 0.1.1 | 2026-11-28 | jason (manager-spec) | plan-audit 1차(FAIL 0.84, `.moai/reports/plan-audit/SPEC-PLACE-001-review-1.md`) 반영. 소유자 결정 2026-11-28: OD-2·OD-3·OD-6·OD-7을 권장 기본값대로 확정(감사 D1), OD-2·REQ-001의 판정 기준을 조립된 `config.provider`로 명시. 검색어 멈춤 낱말과 "해 줘" 예시(감사 D2). 15xx 대표번호 표시를 `formatPhone`에서 고침(감사 D3). 저장 금지 증명에 예상 못 한 예외·형식 오류 경로를 더하고 모든 예외를 원인 없이 감쌈(감사 D4). 시간 제한 주입(감사 D5), 위치 문구 좁힘과 좌표 반올림(감사 D6), 사람 이름 검색어 위험 기록(감사 D7), 카카오 콘솔 활성화 확인(감사 D8), REQ 문구 정리(감사 D9·D16), 마일스톤 순서(감사 D10), 파일 수(감사 D11), 시뮬레이션 거리 순서(감사 D12), `Cache-Control: no-store`(감사 D13), AC 필드 이름(감사 D14), 주석 범위(감사 D15). 요구사항·인수 기준 수(22 / 22)는 그대로 |
 | 0.1.2 | 2026-11-28 | jason (manager-spec) | plan-audit 2차 PASS 0.91(`.moai/reports/plan-audit/SPEC-PLACE-001-review-2.md`) 뒤 정리. 소유자 Implementation Kickoff Approval(2026-11-28): OD-1·OD-4·OD-5·OD-8·OD-9·OD-10을 기본값대로 확정. 소유자 답변: 개발 서버는 실제 통화(KAT)에 쓰이므로 run은 그 서버를 건드리거나 다시 시작하지 않는다(D-11, §4). 감사 2차 N1(AC-005 (9)), N2(`cause` 단언 위치), N3(감사 결함 번호에 "감사" 접두), N4(sync 문서 항목) 반영. 요구사항·인수 기준 수(22 / 22)는 그대로 |
+| 0.2.0 | 2026-11-28 | jason (manager-spec) | 소유자 화면 검토(2026-11-28) 뒤 개정. "근처 치과 내일 오전 예약해 줘"의 첫 검색어가 "치과 오전"으로 나옴(앱 규칙이 `오전`을 건너뛰지 않음). 소유자 결정 2026-11-28: "서버 AI가 검색어도 뽑기" — OD-7을 뒤집어 `/v1/intake` 응답에 `placeQuery`를 더함(REQ-023, REQ-024 신설, REQ-010·REQ-022 개정, `design.md` D6·D10). 날짜·시각은 부탁 문장(계획 카드 "부탁할 일")에 그대로 남고 검색어에서만 빠진다. 앱 대체 규칙에도 같은 시간 낱말을 더함. 기존 시험 변경 `app.test.ts`의 접수 응답 키 고정 줄 하나(AC-022 표). 소유자 결정: geolocator의 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 iOS 배포 빌드에 적용(plan §B.4, 완료 정의). 요구사항·인수 기준 22 / 22 → 24 / 24 |
 
 ## 1. 배경과 목적
 
@@ -37,7 +38,8 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 ## 2. 범위
 
 - 서버: `server/src/places/`(포트 `PlaceSearchProvider`, `SimulatedPlaceSearch`, `KakaoLocalPlaceSearch`, 응답 정규화와 번호 판정), 새 경로 `POST /v1/places/search`(더하기만, D-1), 환경 변수 `KAKAO_REST_API_KEY`(D-9), 조립(`container.ts`), 구조 규칙(`architecture.test.ts`).
-- 공유 패키지 `kolbi_core`: 장소 모델과 JSON 해석, `PlacesRepository`, 검색어·"근처" 판단 순수 함수, `PhoneSource.search`, `formatPhone`의 대표번호 표시.
+- 서버 접수(0.2.0): `/v1/intake` 응답에 선택 필드 `placeQuery`(장소 검색어, 문자열 또는 `null`)를 더함 — LLM 프롬프트·스키마, LLM이 주지 않을 때의 결정적 규칙(`server/src/domain/placeQuery.ts`), 서비스 후처리(`design.md` D10).
+- 공유 패키지 `kolbi_core`: 장소 모델과 JSON 해석, `PlacesRepository`, 검색어·"근처" 판단 순수 함수(접수의 `placeQuery`가 있으면 그것, 없으면 대체 규칙), `IntakeResult.placeQuery`, `PhoneSource.search`, `formatPhone`의 대표번호 표시.
 - 앱: `features/places`(SCR-H02 장소 선택, CMP-05 후보 카드, SCR-H03·CMP-06 장소 상세 시트, CMP-23 위치 사전 안내, 위치 포트), 비서에서 장소 선택으로 가는 분기, 계획 카드 펼침 규칙 일부(04 D-4), "최근 통화한 곳" → "최근 장소"(04 §11.1 C2).
 - 기기 권한 선언: iOS `NSLocationWhenInUseUsageDescription`, Android `ACCESS_COARSE_LOCATION`.
 - 화면 설계: 04 §7.2·§7.3·§17.1·§17.8, 06 DR-4, 승인된 목업 https://claude.ai/artifact/Cp7JpXX81GSaEKh5SVUQ7U. 세부 규칙은 `design.md`, 근거는 `research.md`, 변경 파일은 `plan.md` §B.
@@ -54,7 +56,8 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 
 ### 2.2 제외 범위 (Out of Scope) — 서버와 데이터
 
-- `/v1/intake`의 요청·응답 변경(검색어 필드 추가 포함, OD-7). `GET /v1/config` 응답 변경.
+- `/v1/intake`의 요청 변경과, 응답의 `placeQuery` 하나 밖의 변경(0.2.0 OD-7 개정). `nearby`(근처 여부)는 응답에 넣지 않고 앱이 정한다. `GET /v1/config` 응답 변경.
+- `placeQuery`를 작업·저장소·로그에 남기는 일(REQ-024).
 - 장소 ID나 검색 결과를 작업·별도 저장소에 기록하는 일(OD-3). 작업에는 지금처럼 사용자가 확정한 이름·번호만 남는다.
 - 실제 카카오 API를 부르는 자동 테스트(D-6).
 
@@ -74,7 +77,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 ### 3.2 앱 — 장소 선택으로 가는 길
 
 - **REQ-009** [Event-driven] **When** AI 비서가 부탁을 보내고 `/v1/intake` 결과의 `missing`에 `phoneNumber`가 있으며 번호 차단(앱 모델 `draft.numberBlocked`)이 아니면, 앱은 계획 카드 대신 장소 선택(SCR-H02)을 비서의 자식 경로 `/assistant/places`로 열어야 하며(**shall**), 그 밖의 경우(번호가 있음, 차단 번호, 옛 서버의 404 대체 초안)는 지금처럼 계획 카드를 연다(OD-6). 뒤로 가면 비서로 돌아오고 문장은 그대로다(04 §17.1).
-- **REQ-010** [Ubiquitous] `kolbi_core`의 순수 함수는 부탁 문장과 초안에서 첫 검색어와 "근처" 여부를 정해야 하며(**shall**) 규칙과 예시는 `design.md` D6이다(OD-7). 장소 선택 화면은 이 검색어를 고칠 수 있는 검색칸에 채워 보여 주고, 검색어가 비면 검색하지 않고 검색칸에 초점을 둔다.
+- **REQ-010** [Ubiquitous] `kolbi_core`의 순수 함수는 첫 검색어와 "근처" 여부를 정해야 하며(**shall**), 검색어는 접수 결과의 `placeQuery`가 있고 공백이 아니면 그 값(30자 상한)이고, 없거나 비면(옛 서버 포함) 초안 이름 또는 문장의 대체 규칙으로 정한다. "근처" 여부는 늘 앱이 문장으로 정한다. 대체 규칙(시간 낱말 `오전`·`오후`·`아침`·`점심`·`저녁`·`밤`·`새벽`·`주말`·`평일`·`이따`·`지금`, 숫자+`일`·`월`·`시반` 등 포함)과 예시는 `design.md` D6이다(OD-7). 장소 선택 화면은 이 검색어를 고칠 수 있는 검색칸에 채워 보여 주고, 검색어가 비면 검색하지 않고 검색칸에 초점을 둔다.
 
 ### 3.3 앱 — 장소 선택과 상세
 
@@ -98,7 +101,12 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 ### 3.6 접근성·회귀
 
 - **REQ-021** [Ubiquitous] 장소 선택 화면과 장소 상세 시트는 `androidTapTargetGuideline`, `iOSTapTargetGuideline`, `labeledTapTargetGuideline`, `textContrastGuideline`을 통과하고 360×640·글자 크기 2.0에서 넘침 없이 그려져야 하며(**shall**), 후보 카드는 하나의 읽기 단위로 "{이름}, {분류}, {거리}, {상태 글자}"를 읽고, 결과 문장은 검색이 끝날 때 정중한 수준으로 한 번 알린다.
-- **REQ-022** [Unwanted] 이 SPEC은 기존 `/v1` 경로·요청·응답과 WebSocket 이벤트를 바꿔서는 안 되며(**shall not**, D-1), 기존 테스트는 `acceptance.md` AC-022 표에 이름을 적은 블록 외에는 수정 없이 통과해야 한다(D-2).
+- **REQ-022** [Unwanted] 이 SPEC은 기존 `/v1` 경로·요청·응답과 WebSocket 이벤트를 바꿔서는 안 되며(**shall not**, D-1) — 예외는 `/v1/intake` 응답에 `placeQuery` 키 하나를 더하는 것뿐이다(REQ-023, 0.2.0 OD-7) — 기존 테스트는 `acceptance.md` AC-022 표에 이름을 적은 블록 외에는 수정 없이 통과해야 한다(D-2).
+
+### 3.7 서버 — 접수의 장소 검색어 (0.2.0)
+
+- **REQ-023** [Event-driven] **When** `POST /v1/intake`가 답하면, 서버는 응답 최상위에 `placeQuery`(문자열 또는 `null`)를 넣어야 하며(**shall**), 그 값은 장소 이름이나 분류만이다(날짜·시각·인원·요청 동사·`근처`·`주변` 없음). LLM 두뇌는 접수 프롬프트·스키마로 `placeQuery`를 받고, 서비스가 번호 모양을 지우고 `근처`·`주변` 낱말을 빼고 30자로 자른다. LLM이 주지 않거나 비었거나 문자열이 아니면(휴리스틱 두뇌, LLM 실패 대체, 두뇌에 `draftIntake`가 없음 포함), 서비스는 결정적 규칙(`design.md` D6 문장 규칙과 같은 규칙과 같은 예시, 이름이 있으면 이름)으로 채운다. 그래도 비면 `null`이다. 규칙·계약은 `design.md` D10이다.
+- **REQ-024** [Unwanted] 서버는 `placeQuery`를 접수 응답 밖으로 내보내서는 안 되며(**shall not**) — 작업 저장소·파일·이벤트 버스·로그에 남기지 않는다(에픽 D-8과 같은 규율). 접수 경로의 기존 로그(요청 URL, LLM 실패의 종류·상태)는 그대로이고 검색어를 싣지 않는다는 것을 시험으로 확인한다.
 
 ## 4. 비기능 제약
 
@@ -119,7 +127,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 | OD-4 | 후보 수와 반경 | **DECIDED (소유자 결정 2026-11-28, 기본값)** | 5곳(F-PLACE-02의 3~5곳 상한), 1쪽만. "근처"면 반경 2,000m·거리순, 아니면 좌표를 보내지 않고 정확도순. 더 보기 없음 |
 | OD-5 | 걸 수 있는 후보가 하나도 없을 때 | **DECIDED (소유자 결정 2026-11-28, 기본값)** | 후보는 모두 비활성 상태로 보여 주고(이유 글자 포함) "전화할 수 있는 곳이 없어요" + [다시 찾기]·[번호 직접 입력]. 계획 카드로 저절로 넘기지 않는다 |
 | OD-6 | 장소 선택으로 가는 조건 | **DECIDED (소유자 결정 2026-11-28)** | 접수 결과 `missing`에 `phoneNumber`가 있고 차단이 아니면 이름이 정해져 있어도 장소 선택(이름으로 검색). 404 대체 초안·차단 번호·번호 있음은 계획 카드. 사람 이름("엄마", 연락처 이름)도 검색어로 카카오에 전송되며, 소유자가 이 위험을 받아들였다(`plan.md` §D). [번호 직접 입력]으로 넘어갈 수 있다. 이후 개정 후보: 사람 호칭에 걸리면 자동 검색 없이 검색칸만 연다 |
-| OD-7 | 첫 검색어를 만드는 곳 | **DECIDED (소유자 결정 2026-11-28)** | `kolbi_core` 순수 함수(초안 이름이 있으면 그것, 없으면 문장 규칙) + 고칠 수 있는 검색칸. `/v1/intake`는 바꾸지 않는다. 대안(접수 응답에 `placeQuery` 더함)은 `app.test.ts:699-700`의 응답 키 고정 테스트와 LLM 프롬프트를 바꿔야 해서 뒤로 미룬다 |
+| OD-7 | 첫 검색어를 만드는 곳 | **DECIDED — 개정 (소유자 결정 2026-11-28, 화면 검토 뒤 "서버 AI가 검색어도 뽑기")** | 서버 접수가 `placeQuery`(장소 이름·분류만)를 응답에 더한다: LLM이 프롬프트·스키마로 뽑고, LLM이 없거나 주지 않으면 서비스가 결정적 규칙으로 채운다(시간 낱말 포함, 예시는 앱 규칙과 같음). `nearby`는 앱에 남긴다. 앱은 `placeQuery`가 있으면 그것을, 없으면(옛 서버) `kolbi_core` 대체 규칙(같은 시간 낱말 더함)을 쓴다. 기존 시험 변경: `server/src/http/app.test.ts:699`의 응답 키 고정 줄에 `placeQuery` 더함(AC-022 표). 이전 결정(0.1.x: `/v1/intake` 불변, 앱 규칙만)은 화면 검토에서 "치과 오전" 검색어가 나와 뒤집음 |
 | OD-8 | 위치 패키지 | **DECIDED (소유자 결정 2026-11-28, 기본값 — 버전·SwiftPM은 M5 첫 작업에서 확인)** | `geolocator` 14.1.2(MIT), 대략 위치(`LocationAccuracy.low`)로 한 번만 읽음. 권한은 이 패키지의 API로 묻는다(`permission_handler`는 마이크용으로 비서 기능 안에 남김. 장소 기능에서 `permission_handler`를 쓰면 `app/test/architecture_test.dart:188-205`가 깨진다) |
 | OD-9 | "최근 장소" 문구 범위 | **DECIDED (소유자 결정 2026-11-28, 기본값)** | 오늘과 비서 글로 입력 모드 둘 다 바꾼다(같은 묶음이 두 곳에 있음) |
 | OD-10 | 계획 카드 펼침 규칙(D-4) 범위 | **DECIDED (소유자 결정 2026-11-28, 기본값)** | 번호 출처 "검색 결과"와, 언어·내 이름을 한 줄로 접기만. 각 글자를 누르는 동작은 지금과 같아 `plan_card_test.dart`를 고치지 않는다. 주 버튼 문구·신뢰 줄 개정은 범위 밖 |
@@ -150,3 +158,5 @@ related_specs: [SPEC-INTAKE-001, SPEC-POLICY-001, SPEC-ASSIST-001, SPEC-SHELL-00
 | REQ-020 | AC-020 |
 | REQ-021 | AC-021 |
 | REQ-022 | AC-022 |
+| REQ-023 | AC-023 |
+| REQ-024 | AC-024 |
