@@ -988,4 +988,59 @@ void main() {
       expect(repo.intakeCalls, isEmpty);
     },
   );
+
+  // Sync audit 1, F3: paths no other test reached.
+  testWidgets('[말하기 끝] sends the words heard so far', (tester) async {
+    const words = '내일 오후 3시 미용실 예약';
+    final speech = FakeSpeechRecognizer(
+      sessions: [
+        [const SpeechPartial(words)],
+      ],
+    );
+    final repo = await pumpAssistantApp(
+      tester,
+      speech: speech,
+      setup: (r) => r.intakeResult = IntakeResult(draft: draftFor(words)),
+    );
+    await openFromButton(tester);
+    await settle(tester);
+    expect(find.text(words), findsOneWidget);
+    expect(repo.intakeCalls, isEmpty);
+
+    await tapAndSettle(tester, find.text('말하기 끝'));
+    await settle(tester);
+    expect(speech.stopCalls, 1);
+    expect(repo.intakeCalls, [words]);
+    expect(find.byType(PlanCardScreen), findsOneWidget);
+  });
+
+  testWidgets('without a Korean recognizer the assistant opens in text mode', (
+    tester,
+  ) async {
+    final speech = FakeSpeechRecognizer()..localeId = null;
+    await pumpAssistantApp(tester, speech: speech);
+    await openFromButton(tester);
+    await settle(tester);
+    expect(find.byKey(field), findsOneWidget);
+    expect(find.text('이 기기에서는 말로 부탁하기를 쓸 수 없어요'), findsOneWidget);
+    expect(speech.listenCalls, isEmpty);
+  });
+
+  testWidgets('refused for good in the OS dialog: the settings line', (
+    tester,
+  ) async {
+    final speech = FakeSpeechRecognizer(
+      status: MicPermission.notDetermined,
+      requestResult: MicPermission.permanentlyDenied,
+    );
+    await pumpAssistantApp(tester, speech: speech);
+    await openFromButton(tester);
+    await settle(tester);
+    await tapAndSettle(tester, find.byKey(const Key('mic-consent-continue')));
+    expect(speech.requestCalls, 1);
+    expect(find.textContaining('설정에서 마이크와 음성 인식을 켜면'), findsOneWidget);
+    expect(speech.listenCalls, isEmpty);
+    await tapAndSettle(tester, find.byKey(const Key('open-settings')));
+    expect(speech.settingsCalls, 1);
+  });
 }
