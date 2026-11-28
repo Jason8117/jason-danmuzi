@@ -1,4 +1,9 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadConfig } from "../config.js";
+import { createContainer } from "../container.js";
+import type { Logger } from "../logger.js";
+import { InMemoryTaskStore } from "../store/taskStore.js";
 import { createPlaceSearch } from "./placeSearch.js";
 import { SimulatedPlaceSearch } from "./simulatedPlaceSearch.js";
 import { PlaceSearchError, type PlaceQuery, type PlaceSearchProvider, type ProviderPlace } from "./types.js";
@@ -169,5 +174,47 @@ describe("place search (SPEC-PLACE-001)", () => {
     const other = await search.search({ query: "약국" });
     expect(other.places.map((p) => p.id)).not.toEqual(first.places.map((p) => p.id));
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // AC-001 / REQ-001
+  it("the container picks the place provider from the key and the call provider", () => {
+    const quiet: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+    const kat = {
+      KAT_API_KEY: "k",
+      KAT_GROUP_ID: "g",
+      KAT_FROM_NUMBER: "+827012345678",
+      KAT_WEBHOOK_SECRET: "whsec_x",
+      PUBLIC_BASE_URL: "https://example.test",
+      OPENAI_API_KEY: "sk-test",
+      API_TOKEN: "t",
+    };
+    const key = { KAKAO_REST_API_KEY: "kakao-test-key" };
+    const assemble = (env: Record<string, string>) => {
+      const config = loadConfig(env);
+      return { config, container: createContainer(config, new InMemoryTaskStore(), quiet) };
+    };
+
+    const cases = [
+      { env: { ...key, CALL_PROVIDER: "simulated" }, provider: "simulated", places: "kakao" },
+      { env: { ...key, ...kat }, provider: "kat", places: "kakao" },
+      { env: { CALL_PROVIDER: "simulated" }, provider: "simulated", places: "simulated" },
+      // auto with KAT settings missing is assembled as simulated (config.ts), so it also gets practice places.
+      { env: { CALL_PROVIDER: "auto", KAT_API_KEY: "k" }, provider: "simulated", places: "simulated" },
+      { env: { ...kat }, provider: "kat", places: undefined },
+    ] as const;
+    for (const { env, provider, places } of cases) {
+      const { config, container } = assemble(env);
+      expect(config.provider).toBe(provider);
+      expect(container.places?.source).toBe(places);
+    }
+
+    expect(loadConfig({}).KAKAO_REST_API_KEY).toBeUndefined();
+    expect(loadConfig({ KAKAO_REST_API_KEY: "   " }).KAKAO_REST_API_KEY).toBeUndefined();
+    expect(loadConfig({}).KAKAO_LOCAL_BASE_URL).toBe("https://dapi.kakao.com");
+
+    // The startup log names the place search mode only, never the key.
+    const index = readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+    expect(index).toContain("placeSearch:");
+    expect(index).not.toContain("KAKAO_REST_API_KEY");
   });
 });

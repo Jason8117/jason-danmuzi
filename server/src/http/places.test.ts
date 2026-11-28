@@ -266,4 +266,27 @@ describe("POST /v1/places/search (SPEC-PLACE-001)", () => {
     // Check 6: nothing was published on the event bus.
     expect(events).toBe(0);
   });
+
+  // AC-007 / REQ-007
+  it("without a place provider the route answers 503", async () => {
+    const off = await makeApp(undefined);
+    const res = await search(off, { query: "파스타" });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.json()).toEqual({ error: "place_search_unavailable", message: "Place search is not available" });
+    expect((await search(off, { query: "파스타" }, {})).statusCode).toBe(401);
+
+    const on = await makeApp(createPlaceSearch(new SimulatedPlaceSearch()));
+    for (const app of [off, on]) {
+      expect((await app.inject({ method: "GET", url: "/v1/tasks", headers: auth })).json()).toEqual({ tasks: [] });
+      expect((await app.inject({ method: "GET", url: "/v1/config", headers: auth })).json()).toEqual({
+        provider: "simulated",
+        brain: "heuristic",
+        realCalls: false,
+      });
+    }
+    const intake = (app: FastifyInstance) =>
+      app.inject({ method: "POST", url: "/v1/intake", headers: auth, payload: { text: "라 파스타에 전화해서 금요일 예약해줘" } });
+    expect((await intake(off)).json()).toEqual((await intake(on)).json());
+  });
 });

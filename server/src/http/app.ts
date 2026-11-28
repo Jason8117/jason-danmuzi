@@ -192,13 +192,14 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
 
   // Results are passed through and never kept: no store, cache, event or log (SPEC-PLACE-001 REQ-004).
-  const places = deps.places;
-  if (places) {
-    app.post("/v1/places/search", async (request, reply) => {
-      reply.header("cache-control", "no-store");
-      return places.search(PlaceSearchBody.parse(request.body));
-    });
-  }
+  app.post("/v1/places/search", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    // Switched off by the wiring (OD-2): answered without calling any provider.
+    if (!deps.places) {
+      return reply.status(503).send({ error: "place_search_unavailable", message: "Place search is not available" });
+    }
+    return deps.places.search(PlaceSearchBody.parse(request.body));
+  });
 
   app.post("/v1/tasks/:id/approve-plan", async (request) => {
     const { id } = TaskParams.parse(request.params);

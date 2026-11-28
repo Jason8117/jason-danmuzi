@@ -87,6 +87,12 @@
 - 증명 시험이 실제로 잡는지 변이 확인(되돌림 확인 `diff` 통과): (1) 어댑터가 원래 예외 문자열을 로그에 쓰게 바꾸면 `expected [ '표식예외-e1e1' ] to deeply equal []`로 실패. (2) 검색 경로에서 검색어를 담은 `TypeError`를 감싸지 않고 다시 던지면 500·표식 노출로 실패. (d)의 `TypeError`는 설계 D3대로 어댑터에서 `network`로 바뀌므로 바깥의 `unexpected` 경로만 바꾼 변이는 통과한다(정상).
 - 결과: `npm --prefix server test` → `Tests  407 passed (407)`(기준 387 + 새 20), `npm --prefix server run typecheck` → exit 0.
 
+### M2 — 조립과 꺼짐
+
+- RED: AC-001 시험(`placeSearch.test.ts` "the container picks the place provider from the key and the call provider")과 AC-007 시험(`http/places.test.ts` "without a place provider the route answers 503")을 먼저 더함 → `Tests  2 failed | 10 passed (12)`, `AssertionError: expected 404 to be 503`, `AssertionError: expected undefined to be 'kakao'`. 원문 `red/m2_server_red.txt`.
+- GREEN: `config.ts`에 `KAKAO_REST_API_KEY`(optional, 공백은 없음), `KAKAO_LOCAL_BASE_URL`(기본 `https://dapi.kakao.com`). `container.ts`가 D2 표대로 고름(판정은 `config.provider`, `CALL_PROVIDER=auto`에 KAT 설정이 모자란 경우도 시험에 넣음). `index.ts`는 `places`를 `buildApp`에 넘기고 기동 로그에 `placeSearch: places?.source ?? "off"`만 남김(키 없음). 경로는 `places`가 없으면 제공자를 부르지 않고 503 `place_search_unavailable`·`no-store`. `.env.example`에 값 없는 `KAKAO_REST_API_KEY=`와 설명.
+- 결과: `npm --prefix server test` → `Tests  409 passed (409)`, typecheck exit 0.
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자

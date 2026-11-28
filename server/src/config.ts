@@ -29,6 +29,9 @@ const EnvSchema = z.object({
   APPROVAL_TIMEOUT_SEC: z.coerce.number().int().positive().default(90),
   MAX_CALL_DURATION_SEC: z.coerce.number().int().positive().default(600),
   SIMULATION_SPEED: z.coerce.number().positive().default(1),
+  /** Kakao Local REST API key for place search (SPEC-PLACE-001). Server-side only; never sent to the app or logged. */
+  KAKAO_REST_API_KEY: optional,
+  KAKAO_LOCAL_BASE_URL: z.string().default("https://dapi.kakao.com"),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema> & {
