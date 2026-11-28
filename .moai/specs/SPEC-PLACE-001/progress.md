@@ -136,6 +136,113 @@
 - 서식: `request_box.dart`(HEAD에서 서식 일치, 문자열만 바뀜)와 새 시험만. `plan_card_screen.dart`·`home_screen.dart`는 HEAD에서도 `dart format` 기준과 달라 돌리지 않음.
 - 결과: 전체 `flutter test` → `00:14 +164: All tests passed!`, analyze → 기존 info 1건만.
 
+### 최종 확인 (HEAD bee5d2b, 2026-11-28)
+
+증거 원문은 `.moai/state/verify/SPEC-PLACE-001/final/`.
+
+```
+npm --prefix server test                         -> Test Files  17 passed (17) / Tests  409 passed (409)   (server_test.txt, 기준 387)
+npm --prefix server run typecheck                -> exit 0                                          (server_typecheck.txt)
+cd app && flutter --suppress-analytics test      -> 00:16 +164: All tests passed!                   (app_test.txt, --coverage, 기준 +148)
+cd app && flutter --suppress-analytics analyze   -> 1 issue found. (기존 info test/support/fakes.dart:54:5)  (app_analyze.txt)
+cd packages/kolbi_core && dart test              -> 00:00 +32: All tests passed!                    (core_test.txt, 기준 +27)
+cd packages/kolbi_core && dart analyze           -> No issues found!                                (core_analyze.txt)
+cd packages/kolbi_ui && flutter test             -> 00:01 +72: All tests passed!                    (ui_test.txt, 변경 없음)
+dart test (저장소 루트)                            -> 00:00 +2: All tests passed!                     (root_test.txt)
+cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesimulator/Runner.app   (ios_build.txt)
+```
+
+#### AC 표 (모두 위 실행에 포함)
+
+| AC | 결과 | 시험 |
+|---|---|---|
+| AC-001 | PASS | `server/src/places/placeSearch.test.ts` "the container picks the place provider from the key and the call provider" |
+| AC-002 | PASS | `server/src/http/places.test.ts` "POST /v1/places/search validates and answers in the documented shape", "hands the provider the documented query"; `placeSearch.test.ts` "fills the provider query with limit, radius and rounded coordinates" |
+| AC-003 | PASS | `placeSearch.test.ts` "every candidate number goes through checkTargetNumber"; `packages/kolbi_core/test/places_test.dart` "formatPhone shows Korean representative numbers"; 앱 표시는 AC-015 (4) |
+| AC-004 | PASS | `http/places.test.ts` "place search results never reach storage, cache, events or logs"(확인 1~6 각각 단언); 앱 부분 `app/test/places_test.dart` "choosing a place fills the plan card"(`SharedPreferences` 표식 없음). 변이 두 개로 시험이 실제로 잡는지 확인(M1) |
+| AC-005 | PASS | `server/src/places/kakaoLocalPlaceSearch.test.ts` "kakao keyword search request, mapping and failures"(7개 `it`, (1)~(10)); `placeSearch.test.ts` "search rejects only with a bare PlaceSearchError", "keeps the provider status and kind but nothing else", "times out a provider that never answers", "passes an abort signal that fires on the time limit"; 경로 502는 AC-004 (c)(d)(e) |
+| AC-006 | PASS | `placeSearch.test.ts` "the simulated provider is deterministic and offline" |
+| AC-007 | PASS | `http/places.test.ts` "without a place provider the route answers 503" |
+| AC-008 | PASS | `server/src/architecture.test.ts` "places module stays stateless and out of store, brain and services", "http layer does not know concrete place providers", "no any for place provider data"; `grep -rn "KAKAO_REST_API_KEY" app/lib app/test app/ios/Runner app/android/app/src packages` → 출력 없음(exit 1) |
+| AC-009 | PASS | `app/test/places_test.dart` "the assistant opens place selection only when the number is missing" |
+| AC-010 | PASS | `kolbi_core/test/places_test.dart` "place search start vectors"; `app/test/places_test.dart` "the search field starts from the request" |
+| AC-011 | PASS | "place selection follows the wireframe order" |
+| AC-012 | PASS | "loading, empty, failure and nothing callable" |
+| AC-013 | PASS | "uncallable candidates cannot be chosen" |
+| AC-014 | PASS | "place detail sheet" |
+| AC-015 | PASS | "choosing a place fills the plan card" |
+| AC-016 | PASS | "nearby asks for location with a purpose first"; 더해서 "without a location plugin a nearby request asks for the neighbourhood", "a forced platform reader without a plugin reports unavailable, never throws" |
+| AC-017 | PASS | "location stays out of storage and other requests"; `app/test/architecture_test.dart` "the location package stays inside the places feature" |
+| AC-018 | PASS | `architecture_test.dart` "platform files declare coarse location only"(기존 마이크·음성 선언 시험도 통과) |
+| AC-019 | PASS | "the plan card folds defaults into one line"; `plan_card_test.dart`·`shell_test.dart` 무수정 통과 |
+| AC-020 | PASS | AC-022 표의 수정 블록 5개(+ "no tasks yet") 통과; `grep -rn "최근 통화한 곳" app/lib` → 출력 없음(exit 1) |
+| AC-021 | PASS(test-after) | "place screens meet the accessibility guidelines" |
+| AC-022 | PASS | 아래 범위 확인 |
+
+#### 범위·경계 (`final/boundaries.txt`)
+
+- `git diff --stat 74a87c3 -- server/src/services server/src/brain server/src/providers server/src/store server/src/domain server/src/http/app.test.ts app/test/plan_card_test.dart app/test/shell_test.dart app/test/unit_test.dart packages/kolbi_ui app/lib/features/assistant/speech` → 출력 없음(바뀐 것 없음).
+- `git diff --stat 74a87c3 -- app/test/` → `accessibility_test.dart 2 +-`, `architecture_test.dart 45 ++`, `assistant_test.dart 8 +-`, `intake_flow_test.dart 4 +-`, `today_test.dart 4 +-`, 새 파일 `places_test.dart 828`, `support/fake_location_reader.dart 56`, `support/fake_places_repository.dart 78` — `8 files changed, 1016 insertions(+), 9 deletions(-)`. 지운 9줄은 모두 "최근 통화한 곳" → "최근 장소"(단언 7, 주석 2, 원문 `final/existing_test_changes.diff`). `support/fakes.dart` diff 0줄. 두 `architecture` 시험 파일의 삭제 줄 0.
+- 서버 `places/` 모듈의 import: `../domain/phone.js`, `./types.js`, `../logger.js`(타입), `zod`뿐.
+- `permission_handler`·`speech_to_text` import는 `app/lib/features/assistant/speech/platform_speech_recognizer.dart` 하나, `geolocator` import는 `app/lib/features/places/location/platform_location_reader.dart` 하나. `const allowedCrossFeature = <String>{};` 그대로.
+- iOS 빌드 뒤 `project.pbxproj`·`Package.resolved` 변경 없음(`git status`).
+
+#### 커버리지
+
+- 앱(`flutter test --coverage`, lcov 집계): `place_card.dart` 93/93 100%, `place_detail_sheet.dart` 52/52 100%, `location_consent_sheet.dart` 14/14 100%, `place_search_controller.dart` 72/73 98.6%, `place_search_screen.dart` 142/145 97.9%, `shell/place_search.dart` 3/4 75.0%, `location/platform_location_reader.dart` 15/26 57.7%(실제 플러그인 경로는 시험 호스트에서 돌 수 없음), 합계 391/407 **96.1%**.
+- 서버: **측정 못 함(Gap)**. `server/node_modules/@vitest/`에 `mocker`, `spy`만 있고 커버리지 제공자(`@vitest/coverage-v8` 등)가 없다. 새 의존 설치는 이 run 범위 밖이라 하지 않았다. 대신 `places/` 네 파일의 분기마다 시험이 있음을 AC-001~AC-008 표로 둔다.
+- kolbi_core: 측정하지 않음(Gap). 새 함수는 `places_test.dart` 5개 시험이 예시 표·JSON·저장소 요청으로 다룬다.
+
+#### 린트
+
+- 서버: 린터 설정 없음(`package.json`에 lint 스크립트 없음). `tsc --noEmit` exit 0.
+- 앱: 기준선과 같음(info 1건, 새 경고 0). kolbi_core: `No issues found!`.
+
+#### 계획과 다른 점
+
+- 파일: 계획 §B의 49개를 모두 바꾸거나 만들었고 계획 밖 파일은 없다. iOS SwiftPM 산출 파일 3개는 도구가 바꾸지 않아 커밋하지 않았다.
+- `createPlaceSearch`는 결과를 5곳으로 자르지 않는다(AC-003이 여섯을 기대). 상한은 `limit: 5`가 맡는다.
+- 컨트롤러는 Riverpod `Notifier` 대신 화면이 소유하는 `ValueNotifier`(M4 참조).
+- AC-010의 앱 부분은 M3이 아니라 M4에서 시험.
+- `PlatformLocationReader`에 `supported` 검사(비서 음성 어댑터와 같은 방식)를 더함(M5 참조).
+
+#### 소유자 확인이 필요한 것
+
+1. 화면 검토: 장소 선택(SCR-H02), 후보 카드, 상세 시트, 위치 사전 안내, 동네 이름 칸, 계획 카드의 접힌 줄. 시뮬레이터에서는 따로 띄운 시뮬레이션 서버로 확인해야 한다(D-11, `server/.env` 쓰지 않음).
+2. iOS 배포 빌드에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 줄지(App Store ITMS-90683 경고 회피, M5 참조).
+3. 완료 정의의 실제 키 확인 1건(카카오 콘솔의 로컬 API 사용 설정, "강남역 파스타" → 후보 → 계획 카드, 서버 로그에 결과 없음).
+4. Android에서 한 번 거부한 뒤 다시 "근처" 부탁을 하면 사전 안내가 다시 보인다(`checkPermission`의 `denied`를 "아직 안 물음"으로 읽기 때문). OS 창이 다시 뜰지는 OS가 정한다.
+
+## §E.3 Run-phase Audit-Ready Signal
+
+```yaml
+run_complete_at: 2026-11-28
+run_start_sha: be92194
+code_base_sha: 74a87c3
+run_commit_sha: bee5d2b   # 마지막 구현 커밋. 이 절을 담은 커밋은 증거 기록용
+milestone_commits: [d28343a (M1), fb8ffdb (M2), b9b4096 (M3), 2d6ec54 (M4), 2e3c688 (M5), bee5d2b (M6)]
+pushed: false
+run_status: complete
+ac_pass_count: 22
+ac_fail_count: 0
+server_tests: "409 통과 (기준 387)"
+server_typecheck: "exit 0"
+app_tests: "+164 통과 (기준 +148)"
+app_analyze: "info 1건 (기존 fakes.dart:54)"
+kolbi_core_tests: "+32 (기준 +27)"
+kolbi_core_analyze: "No issues found!"
+kolbi_ui_tests: "+72 (변경 없음)"
+root_workspace_test: "+2"
+ios_simulator_build: "✓ Built Runner.app"
+coverage_app_places: "96.1% (391/407 lines)"
+coverage_server_places: "not measured — no vitest coverage provider installed"
+new_dependencies: "geolocator 14.1.2 (MIT) + 13 transitive packages"
+existing_test_changes: "AC-022 표의 9줄만 (단언 7 + 주석 2), architecture 시험 둘은 더하기만"
+red_evidence: ".moai/state/verify/SPEC-PLACE-001/red/{m1_server,m2_server,m3_core,m3_app,m4_app,m5_app,m6_app}_red.txt; AC-021은 test-after"
+d11: "server/.env 읽지 않음, 서버 띄우지 않음, npm run dev/start 쓰지 않음"
+owner_checks_pending: ["화면 검토", "BYPASS_PERMISSION_LOCATION_ALWAYS 배포 빌드 여부", "실제 카카오 키 1건 확인", "Android 재요청 동작 확인"]
+```
+
 ## §F Phase 4 Mode Selection
 
 - kickoff: 소유자가 구현 시작을 승인함(2026-11-28, "기본값으로 시작"). OD-1~OD-10 모두 결정됨. 진행은 자율 실행 뒤 소유자가 화면을 보고 sync·감사·PR, 병합은 소유자
