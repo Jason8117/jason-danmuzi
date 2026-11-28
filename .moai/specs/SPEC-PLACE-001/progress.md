@@ -209,7 +209,7 @@ cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesi
 #### 소유자 확인이 필요한 것
 
 1. 화면 검토: 장소 선택(SCR-H02), 후보 카드, 상세 시트, 위치 사전 안내, 동네 이름 칸, 계획 카드의 접힌 줄. 시뮬레이터에서는 따로 띄운 시뮬레이션 서버로 확인해야 한다(D-11, `server/.env` 쓰지 않음).
-2. iOS 배포 빌드에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 줄지(App Store ITMS-90683 경고 회피, M5 참조).
+2. iOS 배포 빌드에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 줄지(App Store ITMS-90683 경고 회피, M5 참조). → 소유자 결정 2026-11-28: 적용. 빌드 설정으로는 안 됨을 확인해 배포 절차로 문서화(아래 개정 절, `design.md` D11).
 3. 완료 정의의 실제 키 확인 1건(카카오 콘솔의 로컬 API 사용 설정, "강남역 파스타" → 후보 → 계획 카드, 서버 로그에 결과 없음).
 4. Android에서 한 번 거부한 뒤 다시 "근처" 부탁을 하면 사전 안내가 다시 보인다(`checkPermission`의 `denied`를 "아직 안 물음"으로 읽기 때문). OS 창이 다시 뜰지는 OS가 정한다.
 
@@ -238,34 +238,61 @@ cd app && flutter build ios --simulator --debug  -> ✓ Built build/ios/iphonesi
   - `ios/Flutter/Debug.xcconfig`에 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`과 `GCC_PREPROCESSOR_DEFINITIONS=$(inherited) BYPASS_PERMISSION_LOCATION_ALWAYS=1`을 임시로 더하고 환경 변수 없이 깨끗한 빌드: `✓ Built`, dylib `2` — 빌드 설정은 SwiftPM 패키지 대상에 닿지 않음. 시험 뒤 xcconfig를 원래대로 되돌림(`git status` 깨끗).
 - 결론: SwiftPM 방식의 이 프로젝트에서는 빌드 설정으로 믿을 만하게 넣을 수 없다 → **설정 파일은 바꾸지 않고 문서화**(`design.md` D11): 배포 빌드는 `cd app && flutter clean && BYPASS_PERMISSION_LOCATION_ALWAYS=1 flutter build ipa`, 바이너리 `strings` 확인 0. 원문 `.moai/state/verify/SPEC-PLACE-001/final/ios_bypass_*.txt`.
 
+#### M7 구현 (manager-develop, TDD)
+
+- RED(서버, `red/amend_server_red.txt`): `npm --prefix server test -- --run src/domain/placeQuery.test.ts src/http/places.test.ts src/brain/openaiBrain.test.ts src/http/app.test.ts` → `Test Files  4 failed (4)`, `Tests  5 failed | 99 passed (104)`. 내용: `Cannot find module './placeQuery.js'`, `intake reads placeQuery leniently`(키 없음), `app.test.ts` 키 목록 `(1)`·`(2)`, `intake answers with a place query` — `근처 치과 내일 오전 예약해 줘: expected undefined to be '치과'`, `intake placeQuery never reaches storage, events or logs` — `[ 'llm', undefined ]`.
+- RED(`kolbi_core`): 먼저 `red/amend_core_red.txt`(`IntakeResult`에 `placeQuery` 매개변수가 없어 시험 파일 불러오기 실패), 모델 필드만 더한 뒤 `red/amend_core_red2.txt` — `place search start vectors` `Expected: '치과' / Actual: '치과 오전'`(소유자가 본 결함 재현), `place search start prefers the intake placeQuery` `Actual: (치과 오전, true)`.
+- RED(앱, `red/amend_app_red.txt`): `the assistant searches with the intake placeQuery` — `test/places_test.dart:242:7: Error: No named parameter with the name 'placeQuery'.`(컴파일 실패 단계 RED).
+- GREEN: 서버 `domain/placeQuery.ts`(새, `placeQueryFor`·`cleanPlaceQuery`), `domain/types.ts`(`IntakeContent.placeQuery?`, `IntakeResult.placeQuery`), `brain/prompts.ts`(접수 프롬프트에 `placeQuery`), `brain/openaiBrain.ts`(`z.string().max(100).optional().catch(undefined)`, 값이 있을 때만 결과에 넣음), `services/callService.ts`(정리 → 비면 결정적 규칙). `kolbi_core` `intake_models.dart`(`IntakeResult.placeQuery`), `place_intent.dart`(`placeQuery` 우선, 시간 낱말·조사·숫자+`일`·`월`·`주`, 시간 낱말 뒤의 `근처`도 "근처"). 앱 `lib`는 바뀌지 않음(`assistant_screen.dart`가 이미 `placeSearchStartFor(text, result)`를 씀). 휴리스틱 두뇌는 바꾸지 않음(규칙은 서비스가 적용).
+- 처음 GREEN에서 `z.unknown().transform(...)`이 zod 4에서 키가 없는 응답을 스키마 불일치로 만들어 기존 `openaiBrain.test.ts` 세 줄이 깨짐 → `.optional().catch(undefined)`로 바꿔 해결(기존 시험은 고치지 않음).
+- 기존 시험 변경(AC-022 표 그대로): `server/src/http/app.test.ts:699` 한 줄(키 목록에 `"placeQuery"`). `git diff 1ec833a -- server/src/http/app.test.ts`의 `-`/`+` 한 쌍뿐. `server/src/brain/openaiBrain.test.ts`는 `git diff --numstat` `28 0`(파일 끝 더하기만). 그 밖의 기존 시험 변경 없음. 이 SPEC이 만든 시험 파일 셋(`server/src/http/places.test.ts`, `packages/kolbi_core/test/places_test.dart`, `app/test/places_test.dart`)은 블록을 더하고 `makeApp`에 `brain` 선택지·`afterEach`에 `vi.unstubAllGlobals()`를 더함.
+- 범위: `git diff --stat 1ec833a -- server/src/services server/src/brain server/src/providers server/src/store server/src/domain` → 7개 파일(`openaiBrain.test.ts 28`, `openaiBrain.ts 6`, `prompts.ts 4`, `placeQuery.test.ts 39`, `placeQuery.ts 71`, `types.ts 4`, `callService.ts 5`), `155 insertions(+), 2 deletions(-)` — plan §B.4 표 안. `providers`·`store` 변경 없음.
+- 서식: `dart format`을 HEAD에서 서식이 깨끗했던 `place_intent.dart`, `kolbi_core/test/places_test.dart`, `app/test/places_test.dart`에만 적용. `intake_models.dart`는 HEAD부터 서식이 깨끗하지 않아(HEAD 사본에 `--set-exit-if-changed` → 1) 적용하지 않음. 서버는 서식 도구 설정 없음.
+- 개인정보 grep: `grep -rnE "(log|logger|console)\.(info|warn|error|debug|trace|fatal)\(" server/src --include='*.ts' | grep -v '\.test\.ts' | grep -ic placequery` → `0`. 비시험 서버 소스의 `placeQuery`는 스키마·프롬프트·타입·`callService.ts:303`·`:318`(응답 객체)뿐.
+- 커밋: `7b87dd2`(계획 개정 0.2.0), `d05bb86`(M7 구현).
+
+#### M7 최종 확인 (HEAD d05bb86, 2026-11-28)
+
+- `npm --prefix server test` → `Test Files  18 passed (18)`, `Tests  426 passed (426)`(이전 409). 원문 `final/amend_server_test.txt`.
+- `npm --prefix server run typecheck` → exit 0(`final/amend_server_tsc.txt`).
+- `cd app && flutter --suppress-analytics test` → `00:14 +165: All tests passed!`(이전 +164).
+- `cd app && flutter --suppress-analytics analyze` → `info • … test/support/fakes.dart:54:5 • use_null_aware_elements`, `1 issue found.`(기준선과 같은 info 1건).
+- `cd packages/kolbi_core && dart test` → `00:00 +33: All tests passed!`(이전 +32), `dart analyze` → `No issues found!`.
+- `cd packages/kolbi_ui && flutter test` → `00:01 +72: All tests passed!`. 저장소 루트 `dart test` → `00:00 +2: All tests passed!`.
+- `cd app && flutter build ios --simulator --debug` → `✓ Built build/ios/iphonesimulator/Runner.app`(`final/amend_ios_build.txt`). `git status`에 iOS 추적 파일 변경 없음.
+- AC-010·AC-022·AC-023·AC-024 PASS(위 실행에 포함: `place search start vectors`, `place search start prefers the intake placeQuery`, `the assistant searches with the intake placeQuery`, `place query vectors shared with the app`, `intake answers with a place query`, `intake reads placeQuery leniently`, `intake placeQuery never reaches storage, events or logs`). AC-001~AC-009·AC-011~AC-021은 회귀 없음(전체 시험 통과).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 ```yaml
 run_complete_at: 2026-11-28
 run_start_sha: be92194
 code_base_sha: 74a87c3
-run_commit_sha: bee5d2b   # 마지막 구현 커밋. 이 절을 담은 커밋은 증거 기록용
-milestone_commits: [d28343a (M1), fb8ffdb (M2), b9b4096 (M3), 2d6ec54 (M4), 2e3c688 (M5), bee5d2b (M6)]
+run_commit_sha: d05bb86   # 마지막 구현 커밋(0.2.0 M7). 이 절을 담은 커밋은 증거 기록용
+milestone_commits: [d28343a (M1), fb8ffdb (M2), b9b4096 (M3), 2d6ec54 (M4), 2e3c688 (M5), bee5d2b (M6), 7b87dd2 (계획 개정 0.2.0), d05bb86 (M7)]
+spec_version: 0.2.0
 pushed: false
 run_status: complete
-ac_pass_count: 22
+ac_pass_count: 24
 ac_fail_count: 0
-server_tests: "409 통과 (기준 387)"
+server_tests: "426 통과 (기준 387, 0.1.x 끝 409)"
 server_typecheck: "exit 0"
-app_tests: "+164 통과 (기준 +148)"
+app_tests: "+165 통과 (기준 +148, 0.1.x 끝 +164)"
 app_analyze: "info 1건 (기존 fakes.dart:54)"
-kolbi_core_tests: "+32 (기준 +27)"
+kolbi_core_tests: "+33 (기준 +27, 0.1.x 끝 +32)"
 kolbi_core_analyze: "No issues found!"
 kolbi_ui_tests: "+72 (변경 없음)"
 root_workspace_test: "+2"
 ios_simulator_build: "✓ Built Runner.app"
-coverage_app_places: "96.1% (391/407 lines)"
+coverage_app_places: "96.1% (391/407 lines, 0.1.x 측정 — M7 뒤 다시 재지 않음)"
 coverage_server_places: "not measured — no vitest coverage provider installed"
-new_dependencies: "geolocator 14.1.2 (MIT) + 13 transitive packages"
-existing_test_changes: "AC-022 표의 9줄만 (단언 7 + 주석 2), architecture 시험 둘은 더하기만"
-red_evidence: ".moai/state/verify/SPEC-PLACE-001/red/{m1_server,m2_server,m3_core,m3_app,m4_app,m5_app,m6_app}_red.txt; AC-021은 test-after"
+new_dependencies: "geolocator 14.1.2 (MIT) + 13 transitive packages (M7은 새 의존 없음)"
+existing_test_changes: "AC-022 표: 0.1.x 9줄(단언 7 + 주석 2) + 0.2.0 app.test.ts:699 한 줄, architecture 시험 둘과 openaiBrain.test.ts는 더하기만"
+red_evidence: ".moai/state/verify/SPEC-PLACE-001/red/{m1_server,m2_server,m3_core,m3_app,m4_app,m5_app,m6_app}_red.txt, amend_server_red.txt, amend_core_red.txt, amend_core_red2.txt, amend_app_red.txt; AC-021은 test-after"
+place_query_log_grep: "0 (서버 로그 호출에 placeQuery 없음)"
+ios_bypass_location_always: "빌드 설정으로는 패키지에 닿지 않음을 실행으로 확인(design.md D11) → 설정 파일 변경 없이 배포 절차로 문서화"
 d11: "server/.env 읽지 않음, 서버 띄우지 않음, npm run dev/start 쓰지 않음"
-owner_checks_pending: ["화면 검토", "BYPASS_PERMISSION_LOCATION_ALWAYS 배포 빌드 여부", "실제 카카오 키 1건 확인", "Android 재요청 동작 확인"]
+owner_checks_pending: ["M7 화면 재검토(근처 치과 내일 오전 → 치과)", "첫 배포 빌드에서 BYPASS 환경 변수 + strings 확인 0", "실제 카카오 키 1건 확인", "Android 재요청 동작 확인", "실제 LLM으로 placeQuery 품질 확인(시험은 가짜 fetch만)"]
 ```
 
 ## §F Phase 4 Mode Selection
