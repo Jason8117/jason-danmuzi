@@ -99,3 +99,71 @@ _<pending sync-phase>_
 - Files: `assistant_controller.dart` (phase `speechServiceNotice`, `acceptSpeechServiceNotice`, injected need/acknowledge callbacks), `assistant_screen.dart`, `mic_consent_sheet.dart` (`SpeechServiceNotice`, `MicConsentSheet.withSpeechService`), `test/assistant_test.dart` (base `profile` now marks the notice seen because flutter_test runs as Android; two new tests).
 - RED (feature disabled with `false &&`, then restored): `Expected: exactly one matching candidate / Actual: _TextWidgetFinder:<Found 0 widgets with text "Android에서는 구글 음성 인식 서비스가 …` — `.moai/state/verify/SPEC-ASSIST-001/red/android_notice_red.txt`. Note: the test was written after the code (test-after), then checked against the disabled feature.
 - GREEN: `cd app && flutter test` → `00:11 +132: All tests passed!`; analyze → baseline info only; root `dart test` +2; kolbi_ui +72; `git diff --stat 7b32f44 -- server/` empty.
+
+### M6 and final verification (orchestrator, 2026-11-28, HEAD f5ab61b)
+
+The run agent stopped at the weekly usage limit after M5; the orchestrator committed M4 (dd3e451), the Android notice (f5ab61b) and ran M6 checks. M6 needed no code change: the structure rule tests landed in M1/M2.
+
+Final measurements (this tree):
+```
+cd app && flutter --suppress-analytics test        -> 00:11 +132: All tests passed!   (.moai/state/verify/SPEC-ASSIST-001/notice_app_test.txt)
+cd app && flutter --suppress-analytics analyze     -> 1 issue found. (baseline info test/support/fakes.dart:54:5)
+dart test (repo root)                              -> 00:00 +2: All tests passed!
+cd packages/kolbi_ui && flutter test               -> 00:01 +72: All tests passed!
+cd packages/kolbi_core && dart test                -> +27 All tests passed!
+npm --prefix server test                           -> Tests 387 passed (387)
+cd app && flutter build ios --simulator --debug    -> ✓ Built build/ios/iphonesimulator/Runner.app (ios_build.txt)
+git diff --stat 7b32f44 -- server/                 -> (empty)
+grep -rln "speech_to_text\|permission_handler" app/lib packages/*/lib -> app/lib/features/assistant/speech/platform_speech_recognizer.dart only
+app/test/architecture_test.dart:8                  -> const allowedCrossFeature = <String>{};
+git diff 7b32f44 -- app/test/support/fakes.dart | grep "^-" (excluding header) -> (no removed lines)
+```
+
+AC-015 diff (`git diff --stat 7b32f44 -- <the ten listed files>`): only `app/test/font_overflow_test.dart | 3 ++-` — the owner-approved probe change (AC-016 table extension, 2026-11-28); the other nine files are unchanged.
+
+AC-016 diff (`git diff --stat 7b32f44 -- app/test/`): accessibility_test 10, approval_flow_test 5, architecture_test +36, assistant_test (new) 928, font_overflow_test 3, intake_flow_test 8, live_call_test (new) 308, shell_test 8, support/fake_speech_recognizer (new) 113, support/fakes +30, today_test 11 — 11 files, 1442+/18-.
+
+AC matrix (all in the +132 run above):
+
+| AC | Result | Test |
+|---|---|---|
+| AC-001 | PASS | assistant_test "assistant screen follows the immersive layout" |
+| AC-002 | PASS | assistant_test "orb state is shown in words and announced"; kolbi_ui orb_test |
+| AC-003 | PASS | "dictation fills the request and opens the plan card", "an older server keeps the blank-plan fallback" |
+| AC-004 | PASS | "only the final text reaches Kolbi" |
+| AC-005 | PASS | "microphone permission is asked with a purpose first" (+ Android notice tests) |
+| AC-006 | PASS | "recognition failures never loop or send an empty request" |
+| AC-007 | PASS | "stopping or leaving cancels dictation; inactive does not" |
+| AC-008 | PASS | "text mode carries the whole request box" |
+| AC-009 | PASS | "missing profile and intake errors keep the request" |
+| AC-010 | PASS | "today hands requests to the assistant" |
+| AC-011 | PASS | live_call_test "live call screen shows captions, hang-up and approvals", "finishing the call returns to the task screen", "approval alerts from the live and assistant screens" |
+| AC-012 | PASS | live_call_test "task screen links to the live call" |
+| AC-013 | PASS | architecture_test "speech and permission packages stay inside the assistant feature"; grep above |
+| AC-014 | PASS | assistant_test + live_call_test "immersive screens meet the accessibility guidelines" |
+| AC-015 | PASS (with owner-approved font_overflow probe change) | diff above |
+| AC-016 | PASS | server diff empty; test diff above matches the AC-016 table + the 2026-11-28 extension |
+
+## §E.3 Run-phase Audit-Ready Signal
+
+```yaml
+run_complete_at: 2026-11-28
+run_start_sha: 7b32f44
+run_commit_sha: f5ab61b   # last implementation commit; the commit carrying this section is evidence-only
+milestone_commits: [7623909 (M1), b39c48d (M2), afa4fa8 (M3), 013df8c (M5), dd3e451 (M4), f5ab61b (Android notice)]
+run_status: complete
+ac_pass_count: 16
+ac_fail_count: 0
+app_tests: "+132 passed (baseline +109)"
+app_analyze: "1 info (baseline fakes.dart:54)"
+kolbi_ui_tests: "+72"
+kolbi_core_tests: "+27"
+root_workspace_test: "+2"
+server_tests: "387 passed (unchanged, server not modified)"
+ios_simulator_build: "✓ Built Runner.app (Xcode 27.2, iOS 27.2 SDK)"
+new_dependencies: "speech_to_text 7.5.0, permission_handler 13.0.2 (+ platform packages, json_annotation 4.12.0)"
+owner_decisions: ["font_overflow_test probe → '전화 대신하기' (2026-11-28)", "Android speech-service notice up front (OD-2 deviation, 2026-11-28)"]
+red_evidence: "M1-M3, M5 by the run agent (.moai/state/verify/SPEC-ASSIST-001/red/); M4 probe failures recorded; Android notice test-after, checked against the disabled feature (red/android_notice_red.txt)"
+device_check: pending   # real permission dialogs, on-device recognition error codes, Korean locale id, actual speech-to-text
+run_agent_note: "run agent stopped at the weekly usage limit after M5; orchestrator completed M4 commit, Android notice, M6 checks and this record"
+```
