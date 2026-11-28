@@ -1,10 +1,10 @@
 ---
 id: SPEC-ASSIST-001
 title: "AI 비서와 받아쓰기 — 몰입형 비서 화면, Orb 상태, 음성 부탁, 통화 중 화면"
-version: "0.3.0"
-status: in-progress
+version: "0.3.1"
+status: implemented
 created: 2026-11-26
-updated: 2026-11-26
+updated: 2026-11-28
 author: jason
 priority: High
 phase: "v0.4.0 target"
@@ -25,6 +25,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-UX-001, SPEC-SHELL-001, SPEC-PLACE-001, SP
 | 0.1.0 | 2026-11-26 | jason | 최초 작성 (draft). 에픽 EPIC-KOLBI-APP의 셋째 SPEC. 디자인 검토 반영 결정 06 DR-9·DR-10·DR-11과 에픽 개요 §4.0 요약을 전체 문서로 씀 |
 | 0.2.0 | 2026-11-26 | jason | plan-audit 1차(FAIL 0.71, `.moai/reports/plan-audit/SPEC-ASSIST-001-review-1.md`) 반영. 글로 입력 모드를 지금의 입력 상자 전체를 옮긴 것으로 정의(D2·D3), 예시 칩은 채우기만(지금 동작), 개인정보 문구 범위 좁힘(D4), 권한 패키지 허용(D5), 기기 안 인식 실패 시 한 번 대체(D6), 배경 전환 기준(D7), 오류 경로(D9), 업무 실행 화면 대화 기록은 접지 않음(D10), 가짜 저장소 추가 변경 허용(D11), 길게 누르기 삭제(D8) |
 | 0.3.0 | 2026-11-26 | jason | plan-audit 2차(FAIL 0.77, `.moai/reports/plan-audit/SPEC-ASSIST-001-review-2.md`) 반영. 비서에서 나가는 화면을 모두 `/assistant` 자식 경로로(N2, SHELL research R1-G3), 통화 중 화면은 셸 밖 경로이고 끝나면 닫기(N3, D11), 음성 인식을 쓸 수 없으면 글로 입력 모드로 시작(N4), 글로 입력 모드에서 숨기는 요소(N1), 승인 알림 처리(N3), AC-016 표 보완(D2, N5), 문서 정리(N6, N7), 권장 수정(D8~D10, D12) |
+| 0.3.1 | 2026-11-28 | jason (manager-spec) | sync 단계 주석. 소유자 결정 2026-11-28 두 건을 기록함. (1) `acceptance.md` AC-016 표에 한 행을 더함: `font_overflow_test.dart:73`의 표식을 '직접 입력하기'에서 '전화 대신하기'로 바꿈(원인 REQ-010, 검사 의도 홈·360×640·2배 글자·실제 Pretendard는 그대로). 이에 따라 AC-015의 "수정 없이" 목록에서 `font_overflow_test.dart`는 이 한 행만 바뀐 채 통과하면 됨 (2) OD-2 Android 편차: speech_to_text 7.5.0이 Android에서 기기 안 인식을 쓸 수 없으면 알리지 않고 네트워크 인식기로 넘어가므로(`SpeechToTextPlugin.kt` 620-640), Android는 첫 받아쓰기 전에 안내를 한 번 미리 보이고 `androidSpeechServiceNoticeAcknowledged`(SharedPreferences)에 기록함. iOS는 계획대로 이벤트가 올 때 안내함. plan §B 밖에서 더한 파일 `app/lib/shell/request_intake.dart`와 `shell/navigation.dart`의 `/assistant/settings` 도우미는 `progress.md` §E.2 계획 갱신 표에 있음. 요구사항·인수 기준 수(16 / 16)는 그대로 |
 
 ## 1. 배경과 목적
 
@@ -91,7 +92,7 @@ related_specs: [SPEC-INTAKE-001, SPEC-UX-001, SPEC-SHELL-001, SPEC-PLACE-001, SP
 | ID | 결정 사항 | 상태 | 결정 내용 |
 |----|-----------|------|-----------|
 | OD-1 | 받아쓰기 방식 | **DECIDED (2026-11-26, 10 OD-K8)** | 기기 음성 인식, 서버로는 글만 |
-| OD-2 | 기기 안 인식을 쓸 수 없는 기기에서 | **DEFAULT (pending owner review)** | 받아쓰기는 허용하되, 일반 인식으로 넘어가기 직전에 "이 기기에서는 애플(또는 구글)의 음성 인식 서비스가 말을 글로 바꿔요. 콜비는 음성을 저장하지 않아요."를 한 번 보이고 [계속]/[글로 입력]을 고르게 한다. 제공자 이름은 플랫폼으로 정한다(iOS 애플, Android 구글). 음성이 국외 제공자에게 처리될 수 있어 법률 검토(03 NFR-LAW) 항목에 추가 |
+| OD-2 | 기기 안 인식을 쓸 수 없는 기기에서 | **DEFAULT (iOS) · Android 편차 결정 (소유자 결정 2026-11-28)** | 받아쓰기는 허용하되, 일반 인식으로 넘어가기 직전에 "이 기기에서는 애플(또는 구글)의 음성 인식 서비스가 말을 글로 바꿔요. 콜비는 음성을 저장하지 않아요."를 한 번 보이고 [계속]/[글로 입력]을 고르게 한다. 제공자 이름은 플랫폼으로 정한다(iOS 애플, Android 구글). 음성이 국외 제공자에게 처리될 수 있어 법률 검토(03 NFR-LAW) 항목에 추가. **Android 편차(소유자 결정 2026-11-28)**: speech_to_text 7.5.0은 Android에서 기기 안 인식을 쓸 수 없으면 실패하지 않고 기본(네트워크) 인식기를 조용히 쓴다(`SpeechToTextPlugin.kt` 620-640). 그래서 "넘어가기 직전" 안내가 Android에서는 뜰 수 없다. Android는 첫 받아쓰기 전에 "Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요."를 한 번 보이고(권한을 아직 묻지 않았으면 목적 안내 안에, 이미 있으면 [글로 입력]/[계속] 카드로), 본 여부를 SharedPreferences `androidSpeechServiceNoticeAcknowledged`에 저장한다. iOS는 위 기본값대로 이벤트가 올 때 안내한다 |
 | OD-3 | 화면을 열면 바로 듣기 시작할지 | **DEFAULT (pending owner review)** | 마이크 권한이 이미 허용되어 있으면 바로 듣는다. 처음이면 사전 안내부터(REQ-005). 이 때문에 04 DOD-11의 "길게 누르면 바로 듣기"는 짧게 누르기와 차이가 없어 만들지 않는다(plan-audit D8) |
 | OD-4 | 비서의 음성 응답(소리로 말하기) | **DEFAULT (pending owner review)** | 이 SPEC 범위 밖. "응답 중" 상태는 Orb 컴포넌트에만 두고 통화 중 화면에서 쓴다 |
 | OD-5 | 업무 실행 화면의 대화 기록 | **DEFAULT (pending owner review)** | 접지 않고 지금 그대로 둔다(REQ-012). 접으면 기존 자막 따라가기 테스트(`accessibility_test.dart:189-232`)가 깨지고, 통화 중 화면이 따로 생겨 접을 이유가 작다(plan-audit D10). 목업(T02에 대화 없음)과의 차이는 이후 화면 정리 SPEC에서 다룬다 |

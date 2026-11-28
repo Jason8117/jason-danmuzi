@@ -1,6 +1,6 @@
 # 에픽 EPIC-KOLBI-APP — 콜비 앱의 모듈화와 확장 기반
 
-작성: 2026-11-26, jason (manager-spec). 상태: 계획 단계(SPEC-MODULE-001 `implemented`(2026-11-27), DESIGN-001 `implemented`(2026-11-27), SHELL-001 `implemented`(2026-11-27), ASSIST-001 `draft`, 나머지 네 SPEC은 요약만 있음). plan-audit 1차(2026-11-26): MODULE 0.77·SHELL 0.70·ASSIST 0.71 모두 FAIL → 반영 후 2차 대기, DESIGN-001은 SHELL에서 나뉘어 새로 씀.
+작성: 2026-11-26, jason (manager-spec). 상태: 계획 단계(SPEC-MODULE-001 `implemented`(2026-11-27), DESIGN-001 `implemented`(2026-11-27), SHELL-001 `implemented`(2026-11-27), ASSIST-001 `implemented`(2026-11-28), 나머지 네 SPEC은 요약만 있음). plan-audit 1차(2026-11-26): MODULE 0.77·SHELL 0.70·ASSIST 0.71 모두 FAIL → 반영 후 2차 대기, DESIGN-001은 SHELL에서 나뉘어 새로 씀.
 
 개정: 2026-11-26 디자인 검토 반영(`docs/planning/06_DESIGN_DECISIONS.md`). 3탭 → 5칸 셸, Midnight Indigo 토큰, SPEC-ASSIST-001 추가(SPEC 6개 → 7개), 공통 결정 D-13~D-15.
 
@@ -38,7 +38,7 @@ SPEC-MODULE-001 ──► SPEC-DESIGN-001 ──► SPEC-SHELL-001 ──► SPE
 | 1 | SPEC-MODULE-001 워크스페이스와 패키지 분리 | implemented(0.2.2, 2026-11-27) | High | SPEC-UX-001(sync 완료) | spec·plan·acceptance·progress | M |
 | 2 | SPEC-DESIGN-001 Midnight Indigo 디자인 시스템(토큰·Pretendard·상태 칩 범주·선 카드) | implemented(0.2.1, 2026-11-27) | High | SPEC-MODULE-001 | spec·plan·acceptance·progress | M |
 | 3 | SPEC-SHELL-001 5칸 셸·작업 종류 등록부·업무 실행 단계 | implemented(0.3.2, 2026-11-27) | High | SPEC-MODULE-001, SPEC-DESIGN-001 | spec·plan·acceptance·design·research·progress | L |
-| 4 | SPEC-ASSIST-001 AI 비서와 받아쓰기 | draft(0.2.0) | High | SPEC-SHELL-001, SPEC-DESIGN-001 | spec·plan·acceptance·progress | M |
+| 4 | SPEC-ASSIST-001 AI 비서와 받아쓰기 | implemented(0.3.1, 2026-11-28) | High | SPEC-SHELL-001, SPEC-DESIGN-001 | spec·plan·acceptance·progress | M |
 | 5 | SPEC-PLACE-001 장소 찾기 | 요약(§4.1) | High | SPEC-ASSIST-001 | 이 문서 | M |
 | 6 | SPEC-ROUTINE-001 반복 알림과 바로 열기 | 요약(§4.2) | Medium | SPEC-SHELL-001(실행은 PLACE-001 다음) | 이 문서 | M |
 | 7 | SPEC-HUB-001 허브·A2A 포트와 인증 경계 | 요약(§4.3) | Medium | SPEC-PLACE-001 | 이 문서 | L |

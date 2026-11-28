@@ -154,7 +154,71 @@ untracked_note: "iOS 빌드가 만든 SwiftPM 상태 파일(app/ios/Runner.xcode
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+```yaml
+sync_complete_at: 2026-11-28
+sync_commit_sha: pending-backfill   # 이 sync 커밋은 자기 SHA를 적을 수 없음. `git log -1 --format=%h -- .moai/specs/SPEC-ASSIST-001/progress.md`로 읽음
+sync_status: implemented   # sync 감사 통과 뒤 오케스트레이터가 completed로 올림(소유자 규칙 2026-11-27)
+run_start_sha: 7b32f44   # 7b32f44b644c587d6756be7028e27e25217bb0e5
+run_commit_sha: f5ab61b   # 마지막 구현 커밋(M1 7623909, M2 b39c48d, M3 afa4fa8, M5 013df8c, M4 dd3e451, Android 안내 f5ab61b)
+run_evidence_commit_sha: 477dac5   # run 증거 커밋(6025987 뒤 한국어로 다시 쓴 기록). 이 sync 커밋 직전 HEAD
+route: B   # 작업 폴더 /Users/jason/Documents/Jason-Danmuzi/wt-assist-001의 feat/SPEC-ASSIST-001, PR은 아직(병합은 소유자)
+pushed_state: not-pushed
+measured_by: "오케스트레이터가 f5ab61b 트리에서 측정(§E.2 M6과 최종 확인, 2026-11-28). manager-docs는 다시 돌리지 않음. sync는 문서만 바꿈"
+app_tests_at_sync: "cd app && flutter --suppress-analytics test -> 00:11 +132: All tests passed!"
+app_analyze_at_sync: "flutter analyze -> 1 issue found. (기존 info test/support/fakes.dart:54:5)"
+root_workspace_test_at_sync: "dart test -> 00:00 +2: All tests passed!"
+kolbi_ui_tests_at_sync: "flutter test -> 00:01 +72: All tests passed!"
+kolbi_core_tests_at_sync: "dart test -> +27 All tests passed!"
+server_tests_at_sync: "npm --prefix server test -> Tests 387 passed (387)"
+protected_paths_diff_at_sync: "git diff --stat 7b32f44 -- server/ -> 비어 있음; app/test/ = 파일 11개, 1442줄 추가 / 18줄 삭제"
+speech_package_grep_at_sync: 'grep -rln "speech_to_text\|permission_handler" app/lib packages/*/lib -> app/lib/features/assistant/speech/platform_speech_recognizer.dart 하나뿐'
+cross_feature_allowlist_at_sync: "app/test/architecture_test.dart:8 -> const allowedCrossFeature = <String>{};"
+acceptance_distinct_ac_ids: 16   # grep -oE 'AC-([A-Z0-9]+-)*[0-9]+' .moai/specs/SPEC-ASSIST-001/acceptance.md | sort -u | wc -l -> 16 (AC-001..AC-016). 접미 ID 없음. 0.3.1 주석 뒤에도 REQ/AC 16/16 그대로
+frontmatter_status_transitions:
+  spec.md: in-progress -> implemented   # updated 2026-11-26 -> 2026-11-28, version 0.3.0 -> 0.3.1 (아래 manager-spec 주석)
+spec_body_annotation:   # manager-spec 역할로, 소유자 결정 2026-11-28 두 건만 기록. 그 밖의 본문 수정 없음
+  spec.md: "HISTORY 0.3.1 행; §5 OD-2 행에 Android 편차(SpeechToTextPlugin.kt 620-640, 미리 보이는 안내 문구, SharedPreferences androidSpeechServiceNoticeAcknowledged, iOS는 계획대로)"
+  acceptance.md: "AC-016 표 + 1행(font_overflow_test.dart:73 표식 '직접 입력하기' -> '전화 대신하기', 원인 REQ-010, 검사 의도 그대로, 소유자 결정 2026-11-28)과 표 확장 문단; AC-015 Then에 font_overflow_test 예외 한 문장; AC-006 아래 OD-2 Android 편차와 테스트 이름 2개; 완료 정의의 테스트 변경 줄"
+changelog_entry_position: not-applicable   # 저장소에 CHANGELOG.md 없음
+mx_scan: skipped
+coverage: not-measured
+divergence:
+  planned_vs_changed_files: "plan.md §B 33개(묶음 행 6개 포함); git diff --name-only 7b32f44..f5ab61b -> 39개 = 계획 31 + 계획 밖 8. 계획했으나 바뀌지 않음: app/ios/Podfile(SwiftPM이라 필요 없음, §E.2 M1), app/test/inbox_test.dart(SHELL 키를 새 화면이 그대로 써서 고칠 필요 없음, §E.2 실행 상태)"
+  unplanned_files:
+    - "app/lib/shell/request_intake.dart: 비서가 features/calls의 접수·템플릿·최근 통화한 곳을 직접 가져오지 않게 셸이 넘김(SHELL task_feed.dart와 같은 방식, 기능 간 허용 목록 비어 있음 유지; §E.2 계획 갱신 표)"
+    - "app/lib/shell/navigation.dart: 비서 자식 경로 도우미와 /assistant/settings를 고르는 openSettings, submitFromAssistant 삭제, closeAssistant·openLiveCall·closeLiveCall·liveCallLocation (plan-audit debt N10; §E.2 계획 갱신 표)"
+    - "app/lib/features/calls/presentation/plan_card_screen.dart: 프로필 링크(:270)가 /settings 대신 openSettings를 부름(비서 위에서 탭 경로를 쌓지 않게, R1-G)"
+    - "app/test/font_overflow_test.dart: 표식 한 줄 변경(AC-016 표 확장, 소유자 결정 2026-11-28)"
+    - "packages/kolbi_ui/lib/src/widgets/transcript_view.dart: 선택 인자 agentName(기본 'AI 비서'), 통화 중 화면이 '콜비'를 넘김(REQ-011)"
+    - "pubspec.lock: 새 항목 10개, 기존 항목 무변경(§E.2 M1)"
+    - ".moai/specs/SPEC-ASSIST-001/spec.md, progress.md: run 시작 상태 변경과 run 기록"
+  owner_deviations:
+    - "AC-016 표 확장: font_overflow_test.dart:73 표식 -> '전화 대신하기'(REQ-010, 2026-11-28). AC-015의 수정 없음 목록에 이 한 파일만 승인된 예외"
+    - "OD-2 Android 편차: 첫 받아쓰기 전 'Android에서는 구글 음성 인식 서비스가 말을 글로 바꿀 수 있어요. 콜비는 음성을 저장하지 않아요.' 한 번, SharedPreferences androidSpeechServiceNoticeAcknowledged, iOS는 이벤트가 올 때 안내(2026-11-28). 코드 app/lib/features/assistant/{assistant_controller.dart, assistant_screen.dart, mic_consent_sheet.dart}, 테스트 app/test/assistant_test.dart 2개(test-after, 기능을 끈 RED 기록 있음)"
+debt_carried:
+  - "OD-3·OD-4·OD-5 계획 기본값 그대로(소유자 검토 대기). OD-2 iOS 쪽 문구도 기본값이며 법률 검토(03 NFR-LAW) 대상"
+  - "실기기 확인(완료 정의 항목): 실제 권한 창, 기기 안 인식 오류 코드, 한국어 로캘 ID, 말로 부탁 -> 계획 카드 한 번"
+  - "Android 안내는 test-after로 썼음(RED는 기능을 끈 상태의 실패로 대신 확인)"
+  - "app/ios의 SwiftPM Package.resolved 두 개가 커밋되지 않음(아래 untracked_handling)"
+debt_closed:
+  - "SHELL-001 sync-audit F1: /assistant를 첫 화면으로 열 때 닫기는 오늘로(closeAssistant), 비서가 여는 화면은 자식 경로라 /assistant 위에 탭 경로를 push하지 않음"
+  - "plan-audit debt N10(navigation.dart와 자식 경로 이름), N12(SHELL AC-005 행은 무변경으로 통과), N14(실패 규칙과 대체 기억은 AssistantMemory)"
+simulator_check: done   # 오케스트레이터, iPhone 18 Pro(iOS 27.2) 시뮬레이터에 debug 빌드 설치·실행, 오늘 화면에 입력 상자 없이 빈 브리핑 확인. Simulator 창이 없어 탭 조작은 못 함
+browser_check: done   # 오케스트레이터, web 빌드와 시뮬레이션 서버(.env 없음), 2026-11-28
+browser_check_observations: "AI 비서 -> 계획 카드 -> 작업 -> 통화 중 화면까지 웹에서 걸어 봄. 콘솔 오류 없음. 웹에서는 어댑터가 받아쓰기를 쓰지 않으므로(kIsWeb -> MicPermission.unavailable, 글로 입력 모드) 마이크·음성 흐름은 이 확인에 들어가지 않음"
+device_check: pending   # 소유자: 실기기(iOS 또는 Android 한 대)에서 권한 창, 받아쓰기 -> 계획 카드, Android 안내, 기기 안 인식 불가 시 동작
+untracked_handling: "flutter build ios가 만든 app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/, app/ios/Runner.xcworkspace/xcshareddata/swiftpm/(각각 Package.resolved 하나, CwlCatchException 2.2.1 고정)은 이 sync 커밋에 넣지 않음. .gitignore·app/.gitignore(.swiftpm/만)·app/ios/.gitignore 어느 것도 이 경로를 무시하지 않고, SHELL에는 앞선 예가 없어(SHELL 때는 SwiftPM 원격 의존이 없었음) .gitignore도 고치지 않음. 처리 방식은 소유자 결정"
+pre_commit_hook_note: "이 sync 커밋은 pre-commit 훅(moai gate)을 정상 실행함"
+plan_g_items:
+  .moai/project/structure.md: "features/assistant 트리(포트·어댑터 포함), shell/request_intake.dart, assistant_placeholder 삭제, 경로 표에 /assistant 자식 셋과 /calls/:id/live, 이동 규칙(자식 경로, closeAssistant, closeLiveCall), architecture_test 행, 어디를 고쳐야 하는가 2행"
+  docs/planning/06_DESIGN_DECISIONS.md: "§7 Q-3 닫음(기기 음성 인식, 패키지와 버전, OD-2·Android 편차, 남은 실기기·법률 검토)"
+  docs/product/10_PRODUCT_PLAN.md: "가정 A-7 문서 확인 결과(로캘, onDevice, iOS 오류·Android 조용한 대체), 실기기 시험은 대기"
+  README.md: "'말로 부탁하기' 단락(Orb·상태 글자, 글로 입력, 권한, 음성은 서버로 보내지 않음, Android 안내, 권한 문구 위치, 웹은 글로 입력), 화면 구성의 오늘·비서·통화 중 화면 문장, 폴더 트리에 assistant/"
+  codemaps: "modules.md(features/assistant 표, shell request_intake·navigation·routes, calls의 live_call_screen·call_timer·[통화 보기], kolbi_ui KolbiOrb·KolbiTheme·TranscriptView agentName, 테스트); entry-points.md(승인 알림이 통화 중 화면에서도 조용함, 경로 표에 비서 자식 셋과 /calls/:id/live, /calls/new·/plan 진입 변경); dependencies.md(speech_to_text·permission_handler 사용 파일, shared_preferences의 안내 기록, mermaid에 assistant·request_intake·speech 노드)"
+  extra_docs: "tech.md(앱 패키지 표 2행, 받아쓰기·권한·SwiftPM 제약), docs/product/11_ARCHITECTURE.md(§2.5 표·이동 규칙, SPEC-ASSIST-001 구현 문단, AD-10, 개정 이력), .moai/specs/EPIC-KOLBI-APP/overview.md(ASSIST-001 implemented 0.3.1)"
+project_docs_synced: [README.md, .moai/project/structure.md, .moai/project/tech.md, .moai/project/codemaps/modules.md, .moai/project/codemaps/entry-points.md, .moai/project/codemaps/dependencies.md, docs/product/11_ARCHITECTURE.md, docs/planning/06_DESIGN_DECISIONS.md, docs/product/10_PRODUCT_PLAN.md, .moai/specs/EPIC-KOLBI-APP/overview.md]
+sync_audit: pending
+```
 
 ## §F Phase 4 Mode Selection
 

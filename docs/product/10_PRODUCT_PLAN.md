@@ -319,4 +319,4 @@
 | A-4 | 기기 로컬 알림 패키지로 일·주·월 반복 알림을 예약할 수 있다 | SPEC-ROUTINE-001 착수 시 패키지 문서 확인 |
 | A-5 | 카카오 로컬 키워드 검색 응답에 전화번호가 있다(01 §5.2) | 개발 키로 실제 응답 확인(SPEC-PLACE-001) |
 | A-6 | Pretendard 가변 글꼴을 넣어도 앱 용량 증가가 약 2MB 안팎이다 | SPEC-SHELL-001에서 빌드 크기 비교(06 Q-2) |
-| A-7 | Flutter용 기기 음성 인식 패키지가 한국어 받아쓰기를 iOS·Android 모두 지원한다 | SPEC-ASSIST-001 착수 시 패키지 문서와 기기 시험 |
+| A-7 | Flutter용 기기 음성 인식 패키지가 한국어 받아쓰기를 iOS·Android 모두 지원한다. **문서 확인(2026-11-28, SPEC-ASSIST-001 M1)**: `speech_to_text` 7.5.0은 iOS·Android 모두 OS 인식기를 쓰며 `locales()`로 한국어 로캘(iOS `ko-KR`, Android `ko_KR`/`ko-KR`)을 고를 수 있고, `onDevice` 옵션으로 기기 안 인식을 요청한다. iOS는 기기 안 인식이 없으면 오류를 내고, Android는 SDK 31 미만이거나 기기 안 서비스가 없으면 알리지 않고 기본(네트워크) 인식기를 쓴다. 실기기 시험은 아직이다(SPEC-ASSIST-001 `device_check: pending`) | SPEC-ASSIST-001 착수 시 패키지 문서와 기기 시험 |
